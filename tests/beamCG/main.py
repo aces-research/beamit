@@ -33,9 +33,9 @@ def main():
     # all DOFs fixed on the left most node
     solver.bctypes[0:1, 0:6] = 0
     # constant unit force applied on the right most node
-    solver.bcvalues[1:2, 0:1] = 1.0
+    solver.bcvalues[1:2, 0:3] = 1.0
     # solve the nonlinear static problem and update the nodal position in system 
-    solver.solve(10)
+    solver.solve(1, 1.0E-05)
 
 # run main function
 main()
