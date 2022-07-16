@@ -31,4 +31,16 @@ class System:
         # assemble residual
         self.assemble_residual(f, solution, nodal_loads, element_loads_info)
     
-    # add an function to update the nodal co-ordinates
+    # Function to update the node positions (nodal co-ordinates)
+    def update_node_positions(self, solution):
+        solution_matrix = np.reshape(solution, [self.weak_form.function_space.N, \
+                                self.weak_form.function_space.dof])
+        # first three columns in the solution matrix are the new positions
+        self.nodal_coordinates = solution_matrix[:, 0:3]
+        pass
+
+    # Function to update the attributes of the system
+    def update(self, solution):
+        # update the node positions
+        self.update_node_positions(solution)
+        pass
