@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from lib.sgi import WeakForm
+from beamit import WeakForm
 
 class System:
     

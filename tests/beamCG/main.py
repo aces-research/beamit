@@ -1,8 +1,8 @@
-from lib.sgi import FunctionSpace
-from lib.sgi import Material
-from lib.sgi import System
-from lib.sgi import WeakForm
-from lib.sgi import Solver
+from beamit import FunctionSpace
+from beamit import Material
+from beamit import System
+from beamit import WeakForm
+from beamit import Solver
 import numpy as np
 
 def main():
