@@ -18,7 +18,6 @@ class WeakFormCG:
         rp_dot_rpp = np.sum(rp*rpp, axis=1, keepdims=True)
         rpp_dot_rpp = np.sum(rpp*rpp, axis=1, keepdims=True)
         t1 = (rp*(rp_L2 - 1.0))/rp_L2
-        # A SIGN PROBLEM HERE!!!
         t2 = (2.0*rp*((rp_dot_rpp**2.0)/(rp_L2**6.0))) - ((rp*rpp_dot_rpp)/(rp_L2**4.0)) - ((rpp*rp_dot_rpp)/(rp_L2**4.0))
         t3 = (rpp/(rp_L2**2.0)) - (rp*rp_dot_rpp)/(rp_L2**4.0)
         axial_integrand = self.material.E*self.material.A*np.matmul(np.transpose(Np, axes=(0, 2, 1)), t1)
