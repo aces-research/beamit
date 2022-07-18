@@ -13,8 +13,8 @@ class NewtonRaphsonSolver:
         self.solution = np.zeros([system.nequations, 1])
         # initialize the unknowns in the system
         self.initialize()
-        # boundary condition types (0 = Dirichlet, 1 = Neumann) matrix
-        self.bctypes = np.ones([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof], dtype=np.int64)
+        # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+        self.bctypes = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof], dtype=np.int64)
         # boundary condition values matrix
         self.bcvalues = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
 
@@ -37,8 +37,8 @@ class NewtonRaphsonSolver:
     def create_dof_arrays(self):
         bctypes_vec = np.reshape(self.bctypes, [self.system.nequations, 1])
         global_dofs = np.arange(0, self.system.nequations, 1)
-        Dirichlet_dofs = global_dofs[(bctypes_vec == 0).flatten()]
-        Neumann_dofs = global_dofs[(bctypes_vec == 1).flatten()]
+        Neumann_dofs = global_dofs[(bctypes_vec == 0).flatten()]
+        Dirichlet_dofs = global_dofs[(bctypes_vec == 1).flatten()]
         return Dirichlet_dofs, Neumann_dofs
     
     # Function to apply the Dirichlet boundary conditions by static condensation
