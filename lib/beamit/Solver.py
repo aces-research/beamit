@@ -72,12 +72,8 @@ class NewtonRaphsonSolver:
                 # not enough fixity in the system
                 if (np.linalg.det(self.A) == 0.0):
                     sys.exit("\nSystem is not fixed properly.")
-                # if loads are applied on the system
-                # include a check for elemental loads later!!!
-                elif (np.linalg.norm(nodal_loads, ord=2) == 0.0):
-                    sys.exit("\nSystem is not loaded.")
-                else:
-                    print("\nStarting the Newton-Raphson iterations!!!")
+                # report
+                print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
