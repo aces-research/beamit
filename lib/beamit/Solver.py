@@ -25,6 +25,7 @@ class NewtonRaphsonSolver:
         dofs = self.system.weak_form.function_space.dof
         for i in range(0, nodes_x.shape[0]):
             self.solution[dofs*i:(dofs*i)+1, :] = nodes_x[i:i+1, :]
+            self.solution[(dofs*i)+3:(dofs*i)+4, :] = 1.0
         pass
     
     # Function to reset the linear system
