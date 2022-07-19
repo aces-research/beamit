@@ -34,7 +34,7 @@ def test_clamp():
     # clamp first node (position zero, tangent along x-axis)
     solver.bctypes[0, 0:6] = 1
     solver.bcvalues[0, 0:6] = 0
-    solver.bcvalues[0, 3] = 1
+    solver.bcvalues[0, 3] = 0
 
     # solve the nonlinear static problem and update the nodal position in system 
     solver.solve(1, 1.0E-05)
@@ -114,9 +114,11 @@ def test_fix_tangent():
     # apply the boundary conditions
     # all the tangents are [1,0,0] 
     solver.bctypes[0, 3:6] = 1
-    solver.bcvalues[0, 3] = 1
+    solver.bcvalues[0, 3] = 0
     solver.bctypes[1, 3:6] = 1
-    solver.bcvalues[1, 3] = 1
+    solver.bcvalues[1, 3] = 0
+    solver.bctypes[1, 0:3] = 1
+    solver.bcvalues[1, 0] = 0
 
     # solve the nonlinear static problem and update the nodal position in system 
     solver.solve(1, 1.0E-05)
