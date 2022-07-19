@@ -23,6 +23,19 @@ class NewtonRaphsonSolver:
         self.solution = np.reshape(self.system.state, [self.system.nequations, 1])
         pass
     
+    # Function to set the boundary conditions types (Dirichlet and Neumann) and values
+    # for each pair (node, dof) of the beam
+    def set_boundary_conditions(self, bctypes, bcvalues):
+        self.bctypes = bctypes
+        # loop on node
+        for n in range(0, self.bcvalues.shape[0]):
+            # loop on nodal degrees of freedom
+            for d in range(0, self.bcvalues.shape[1]):
+                # if Dirichlet bcs
+                if(bctypes[n, d] == 1):
+                    # shift the Dirichlet conditions to obtain the incremental boundary conditions
+                    self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
+
     # Function to reset the linear system
     def reset_system(self):
         self.A = np.zeros([self.system.nequations, self.system.nequations])

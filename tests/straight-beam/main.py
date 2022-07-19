@@ -30,18 +30,26 @@ def test_clamp():
     # the solver
     solver = Solver.NewtonRaphsonSolver(system)
 
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
     # apply the boundary conditions
     # clamp first node (position zero, tangent along x-axis)
-    solver.bctypes[0, 0:6] = 1
-    solver.bcvalues[0, 0:6] = 0
-    solver.bcvalues[0, 3] = 0
+    bctypes[0, 0:6] = 1
+    bcvalues[0, 0:6] = 0
+    bcvalues[0, 3] = 1
+
+    # set the boundary conditions
+    solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
     solver.solve(1, 1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
-        np.array([0.,0.,0.,1.,0.,0.,1.,0.,0.,1.,0.,0.])
+        np.array([0.,0.,0.,1.,0.,0.,L,0.,0.,1.,0.,0.])
         ==0))
 
 
@@ -70,19 +78,28 @@ def test_fix_position():
     # the solver
     solver = Solver.NewtonRaphsonSolver(system)
 
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
     # apply the boundary conditions
     # all displacement DOFs fixed to undeformed 
-    solver.bctypes[0, 0:3] = 1
-    solver.bcvalues[0, 0:3] = 0
-    solver.bctypes[1, 0:3] = 1
-    solver.bcvalues[1, 0:3] = 0
+    bctypes[0, 0:3] = 1
+    bcvalues[0, 0:3] = 0
+    bctypes[1, 0:3] = 1
+    bcvalues[1, 0] = L
+    bcvalues[1, 1:3] = 0
+
+    # set the boundary conditions
+    solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
     solver.solve(1, 1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
-        np.array([0.,0.,0.,1.,0.,0.,1.,0.,0.,1.,0.,0.])
+        np.array([0.,0.,0.,1.,0.,0.,L,0.,0.,1.,0.,0.])
         ==0))
 
 
@@ -111,19 +128,29 @@ def test_fix_tangent():
     # the solver
     solver = Solver.NewtonRaphsonSolver(system)
 
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
     # apply the boundary conditions
     # all the tangents are [1,0,0] 
-    solver.bctypes[0, 3:6] = 1
-    solver.bcvalues[0, 3] = 0
-    solver.bctypes[1, 3:6] = 1
-    solver.bcvalues[1, 3] = 0
-    solver.bctypes[1, 0:3] = 1
-    solver.bcvalues[1, 0] = 0
+    bctypes[0, 3:6] = 1
+    bcvalues[0, 3] = 1
+    bctypes[1, 3:6] = 1
+    bcvalues[1, 3] = 1
+
+    # fix the right end
+    bctypes[1, 0:3] = 1
+    bcvalues[1, 0] = L
+
+    # set the boundary conditions
+    solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
     solver.solve(1, 1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
-        np.array([0.,0.,0.,1.,0.,0.,1.,0.,0.,1.,0.,0.])
+        np.array([0.,0.,0.,1.,0.,0.,L,0.,0.,1.,0.,0.])
         ==0))
