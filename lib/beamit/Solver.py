@@ -46,7 +46,7 @@ class NewtonRaphsonSolver:
     def apply_static_condensation(self, Neumann_dofs):
         self.A = self.A[np.ix_(Neumann_dofs, Neumann_dofs)]
         self.f = self.f[Neumann_dofs]
-    
+
     def solve(self, Nmax = 10, tol = 1.0E-05):
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
@@ -70,15 +70,15 @@ class NewtonRaphsonSolver:
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
-                if (np.linalg.det(self.A) == 0.0):
+                if (np.linalg.det(self.A) <= 1.0E-10):
                     sys.exit("\nSystem is not fixed properly.")
                 # report
                 print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
-                if (np.linalg.det(self.A) == 0.0):
-                    sys.exit("\nSystem is unstable.")
+                if (np.linalg.det(self.A) <= 1.0E-10):
+                    sys.exit("\nInstability encountered in the system.")
             # solve the linear system
             solution_increment = np.linalg.solve(self.A, self.f)
             # update the overall solution vector
