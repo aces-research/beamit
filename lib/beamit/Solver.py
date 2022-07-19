@@ -27,6 +27,7 @@ class NewtonRaphsonSolver:
     # for each pair (node, dof) of the beam
     def set_boundary_conditions(self, bctypes, bcvalues):
         self.bctypes = bctypes
+        self.bcvalues = bcvalues
         # loop on node
         for n in range(0, self.bcvalues.shape[0]):
             # loop on nodal degrees of freedom
