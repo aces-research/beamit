@@ -34,14 +34,22 @@ def main():
     # boundary condition values matrix
     bcvalues = np.zeros([function_space.N, function_space.dof])
 
-    # apply the boundary conditions
-    # clamp left node
-    bctypes[0, 0:6] = 1
-    bcvalues[0, 3] = 1
+    # clamp left node (a clamp fixes both the position and the direction of the tangent)
+    # Note that the tangent vector r' is a unit vector if and only if the axial strain is zero.
+    # Therefore imposing that the tangent vector is [1, 0, 0] implies that both 
+    # 1) the tangent is horizontal, and 
+    # 2) the strain at the clamped end is zero
+    # However, in general we want to only impose condition 1) as we do not know the strain at the 
+    # clamped end a priori. Therefore imposing a horizontal tangent (e.g. aligned with the x-axis) 
+    # is achieved by imposing that the y and z component of the tangent be fixed and equal to 0,
+    # whereas the x component of the tangent is free (zero Neumann boundary condition). 
+    # See also Meier 2014, CMAME for more details.  
+    bctypes[0, 0:3] = 1
+    bctypes[0, 4:6] = 1
     # apply constant unit force on right most node  
     bcvalues[1, 0] = 1.0
 
-    # set the boundary conditions
+    # apply the boundary conditions
     solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
