@@ -28,13 +28,26 @@ def main():
 
     # the solver
     solver = Solver.NewtonRaphsonSolver(system)
+
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
     # apply the boundary conditions
-    # all DOFs fixed on the left most node
-    solver.bctypes[0:1, 0:6] = 1
-    # constant unit force applied on the right most node
-    solver.bcvalues[1:2, 0:3] = 1.0
+    # clamp left node
+    bctypes[0, 0:6] = 1
+    bcvalues[0, 3] = 1
+    # apply constant unit force on right most node  
+    bcvalues[1, 0] = 1.0
+
+    # set the boundary conditions
+    solver.set_boundary_conditions(bctypes, bcvalues)
+
     # solve the nonlinear static problem and update the nodal position in system 
-    solver.solve(1, 1.0E-05)
+    solver.solve(10, 1.0E-05)
+
+    print(solver.solution)
 
 # run main function
 main()
