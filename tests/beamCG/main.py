@@ -18,7 +18,7 @@ def main():
     # length of beam
     L = 1
     # number of elements
-    Nel = 1
+    Nel = 2
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
@@ -47,7 +47,7 @@ def main():
     bctypes[0, 0:3] = 1
     bctypes[0, 4:6] = 1
     # apply constant unit force on right most node  
-    bcvalues[1, 0] = 1.0
+    bcvalues[Nel, 0] = 1.0
 
     # apply the boundary conditions
     solver.set_boundary_conditions(bctypes, bcvalues)
