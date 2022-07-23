@@ -30,10 +30,23 @@ class FunctionSpace:
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
             self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+
             # not using for now!!!
             self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
+            print('global', self.global_connectivity)
+        elif (self.discretization_type == "DG"):
+            # Number of nodes is two times the number of elements this time
+            self.N = E * 2
+            # Generate a vector with 6 DOFS for every node, this stays the same as CG
+            global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
+            dofspel = self.npel*self.dof
+            local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
+            # not using for now!!!
+            self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
+            # Global connectivity does not have overlapping values now
+            self.global_connectivity  = np.reshape(global_dofs, (-1, self.dof * self.npel))
         else:
             sys.exit("\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
