@@ -35,7 +35,7 @@ class FunctionSpace:
             self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
-            print('global', self.global_connectivity)
+
         elif (self.discretization_type == "DG"):
             # Number of nodes is two times the number of elements this time
             self.N = E * 2
