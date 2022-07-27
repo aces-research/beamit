@@ -7,6 +7,8 @@ import numpy as np
 
 def test_clamp():
 
+    # density of the material
+    rho = 1
     # elastic modulus of beam
     E = 1
     # area of cross section
@@ -14,7 +16,7 @@ def test_clamp():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(E, A, I)
+    material = Material.Material(rho, E, A, I)
 
     # length of beam
     L = 1
@@ -55,6 +57,8 @@ def test_clamp():
 
 def test_fix_position():
 
+    # density of the material
+    rho = 1
     # elastic modulus of beam
     E = 1
     # area of cross section
@@ -62,7 +66,7 @@ def test_fix_position():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(E, A, I)
+    material = Material.Material(rho, E, A, I)
 
     # length of beam
     L = 1
@@ -105,6 +109,8 @@ def test_fix_position():
 
 def test_fix_tangent():
 
+    # density of the material
+    rho = 1
     # elastic modulus of beam
     E = 1
     # area of cross section
@@ -112,7 +118,7 @@ def test_fix_tangent():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(E, A, I)
+    material = Material.Material(rho, E, A, I)
 
     # length of beam
     L = 1

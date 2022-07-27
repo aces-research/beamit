@@ -6,6 +6,8 @@ import numpy as np
 
 def main():
 
+    # density of the material
+    rho = 1
     # elastic modulus of beam
     E = 1
     # area of cross section
@@ -13,7 +15,7 @@ def main():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(E, A, I)
+    material = Material.Material(rho, E, A, I)
 
     # length of beam
     L = 1
