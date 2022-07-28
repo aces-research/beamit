@@ -57,6 +57,8 @@ class NewtonRaphsonSolver:
         self.f = self.f[Neumann_dofs]
 
     def solve(self, Nmax = 10, tol = 1.0E-05):
+        # reset linear system before solving
+        self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         # If Dirichlet boundary conditions are not available
