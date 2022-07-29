@@ -91,3 +91,14 @@ class WeakFormCG:
             element_unknowns = system_unknowns[global_element_dofs]
             A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_internal_stiffness(element_unknowns)
         pass
+    
+    # Function to compute the system mass
+    def compute_system_mass(self, M):
+        Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
+        mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)
+        # the element mass matrix
+        M_el = np.sum(mass_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            M[np.ix_(global_element_dofs, global_element_dofs)] += M_el
+        pass
