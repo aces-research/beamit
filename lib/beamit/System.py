@@ -43,6 +43,10 @@ class System:
         f += updated_nodal_loads
         pass
 
+    def assemble_mass(self, M):
+        self.weak_form.compute_system_mass(M)
+        pass
+
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
         # assemble stiffness
         self.assemble_stiffness(A, solution)
