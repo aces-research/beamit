@@ -30,12 +30,10 @@ class FunctionSpace:
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
             self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
-
             # not using for now!!!
             self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
-
         elif (self.discretization_type == "DG"):
             # Number of nodes is two times the number of elements this time
             self.N = E * 2
@@ -53,8 +51,8 @@ class FunctionSpace:
         self.nodes = np.zeros([self.N, self.dim])
         # assuming the elements are of equal length!!!
         self.elL = (self.s1 - self.s0)/self.E
-        # the number of quadrature points (Gauss quadrature, degree of exactness 4)
-        self.Q = 3
+        # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
+        self.Q = 4
         # the number of shape functions per element (2 nodal displacements, 2 nodal tangents)
         self.S = 4
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
