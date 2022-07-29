@@ -109,3 +109,104 @@ class NewtonRaphsonSolver:
                 self.reset_system()
         # update the system attributes
         self.system.update(self.solution)
+
+class NewmarkSolver(NewtonRaphsonSolver):
+
+    def __init__(self, system):
+        # invoke the parent (NewtonRaphsonSolver) class
+        NewtonRaphsonSolver.__init__(self, system)
+        # initialize and assemble the mass matrix
+        self.M = np.zeros([system.nequations, system.nequations])
+        self.system.assemble_mass(self.M)
+        # the "velocity" (linear velocities and time derivative of the tangents)
+        self.velocity = np.zeros([system.nequations, 1])
+        # the "acceleration" (linear accelerations and double time derivative of the tangents)
+        self.acceleration = np.zeros([system.nequations, 1])
+    
+    # Function to set the "linear" initial conditions (initial velocity and acceleration) of the system
+    def set_linear_initial_conditions(self, linear_velocity, linear_acceleration):
+        initial_velocity = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
+        initial_acceleration = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
+        initial_velocity[:, 0:3] += linear_velocity
+        initial_acceleration[:, 0:3] += linear_acceleration
+        initial_velocity.reshape([self.system.nequations, 1])
+        initial_acceleration.reshape([self.system.nequations, 1])
+        self.velocity = initial_velocity
+        self.acceleration = initial_acceleration
+    
+    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05):
+        # constants in the time integration scheme
+        c0 = 1.0/(beta*(dt**2.0))
+        c1 = 1.0/(beta*dt)
+        c2 = (1.0/(2.0*beta)) - 1.0
+        c3 = (1.0-gamma)*dt
+        c4 = gamma*dt
+        # reset the stiffness matrix and force vector before solving
+        self.reset_system()
+        # create the Dirichlet and Neumann global dof arrays
+        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        # If Dirichlet boundary conditions are not available
+        if (Dirichlet_dofs.size == 0):
+            sys.exit("\nDirichlet boundary conditions are not found.")
+        else:
+            # generate the nodal load vector
+            nodal_loads = np.zeros([self.system.nequations, 1])
+            nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+            # generate the Dirichlet solution vector
+            Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
+            # add the Dirichlet solution to the overall solution vector
+            self.solution[Dirichlet_dofs] += Dirichlet_solution
+            # initialize total solution increment in the current step
+            solution_step = np.zeros([Neumann_dofs.shape[0], 1])
+            # velocity and acceleration from the previous step
+            velocity_prev = self.velocity[Neumann_dofs]
+            acceleration_prev = self.acceleration[Neumann_dofs]
+        # Newton-Raphson iterations
+        for i in range(0, Nmax):
+            # assemble the stiffness matrix and force vector
+            self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
+            # mass matrix contribution to the left hand side matrix
+            self.A += c0*self.M
+            # inertial force contribution to the right hand side vector
+            if (i == 0): # in the first iteration
+                self.f += (c1*np.matmul(self.M, self.velocity)) + (c2*np.matmul(self.M, self.acceleration))
+            else: # from the second iteration
+                self.f -= np.matmul(self.M, self.acceleration)
+            # apply the Dirichlet BCs
+            self.apply_static_condensation(Neumann_dofs)
+            # checks in the first iteration
+            if (i == 0):
+                # not enough fixity in the system
+                if (np.linalg.det(self.A) == 0.0):
+                    sys.exit("\nSystem is not fixed properly.")
+                # report
+                print("\nStarting the Newton-Raphson iterations!!!")
+            # checks after the first iteration
+            else:
+                # instability in the system
+                if (np.linalg.det(self.A) == 0.0):
+                    sys.exit("\nInstability encountered in the system.")
+            # solve the linear system
+            solution_increment = np.linalg.solve(self.A, self.f)
+            # update the total solution increment in the current step
+            solution_step += solution_increment
+            # update the overall solution, velocity and acceleration vectors
+            self.solution[Neumann_dofs] += solution_increment
+            self.acceleration[Neumann_dofs] = (c0*solution_step) - (c1*velocity_prev) - (c2*acceleration_prev)
+            self.velocity[Neumann_dofs] = velocity_prev + (c3*acceleration_prev) + (c4*self.acceleration[Neumann_dofs])
+            # assess convergence
+            # the current residual (= f_external - f_internal - f_inertial)
+            updated_residual = np.zeros([self.system.nequations, 1])
+            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
+            updated_residual -= np.matmul(self.M, self.acceleration)
+            # the residual norm at all the NEUMANN NODES
+            res_L2_norm = np.linalg.norm(updated_residual[Neumann_dofs], ord=2)
+            print("\nIteration:",i+1,", Residual L2-norm = %.2e" % (res_L2_norm))
+            if (res_L2_norm <= tol):
+                print("\nSolver converged!!!")
+                break
+            else:
+                # reset the stiffness matrix and force vector
+                self.reset_system()
+        # update the system attributes
+        self.system.update(self.solution)
