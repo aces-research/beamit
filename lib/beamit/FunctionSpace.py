@@ -103,7 +103,8 @@ class FunctionSpace:
         # subdivision of domain (reference configuration)
         # assuming the "initially straight" beam is along the x-direction!!!
         self.nodes[0:1, 0:1] = self.s0
-        for i in range(1, self.N):
+        self.nodes[self.N-1:self.N, 0:1] = self.s1
+        for i in range(1, self.N-1):
             self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
 
         # quadrature rule on reference element
