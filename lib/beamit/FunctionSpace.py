@@ -15,8 +15,6 @@ class FunctionSpace:
             self.discretization_type = discretization_type
         else:
             sys.exit("\nUnknown discretization type in the function space.")
-        # the number of nodes
-        self.N = E + 1
         # the number of degrees of freedom per node (3 positions, 3 rotations)
         self.dof = 6
         # the number of dimensions in the problem
@@ -24,8 +22,10 @@ class FunctionSpace:
         # no. of nodes per element
         self.npel = 2
         # assuming the elements are connected like a simple chain!!!
-        # global connectivity (element number -> global dof number), global connectivity (element number -> local dof number)
+        # global connectivity (element number -> global dof number), local connectivity (element number -> local dof number)
         if (self.discretization_type == "CG"):
+            # number of nodes in the discretization
+            self.N = self.E + 1
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
@@ -35,16 +35,16 @@ class FunctionSpace:
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
         elif (self.discretization_type == "DG"):
-            # Number of nodes is two times the number of elements this time
-            self.N = E * 2
-            # Generate a vector with 6 DOFS for every node, this stays the same as CG
+            # number of nodes in the discretization
+            self.N = self.E*self.npel
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
+            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
             # not using for now!!!
             self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
-            # Global connectivity does not have overlapping values now
-            self.global_connectivity  = np.reshape(global_dofs, (-1, self.dof * self.npel))
+            for i in range(0, self.E):
+                self.global_connectivity[i:i+1, :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
         else:
             sys.exit("\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
@@ -104,8 +104,13 @@ class FunctionSpace:
         # assuming the "initially straight" beam is along the x-direction!!!
         self.nodes[0:1, 0:1] = self.s0
         self.nodes[self.N-1:self.N, 0:1] = self.s1
-        for i in range(1, self.N-1):
-            self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
+        if (self.discretization_type == "CG"):
+            for i in range(1, self.N-1):
+                self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
+        elif (self.discretization_type == "DG"):
+            for i in range(1, self.N-1, 2):
+                self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
+                self.nodes[i+1:i+2, 0:1] = self.nodes[i:i+1, 0:1]
 
         # quadrature rule on reference element
         integration_points, integration_weights = np.polynomial.legendre.leggauss(self.Q)
