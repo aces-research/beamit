@@ -136,7 +136,9 @@ class NewmarkSolver(NewtonRaphsonSolver):
         self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
         initial_acceleration = np.linalg.solve(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs])
         self.acceleration[Neumann_dofs] = initial_acceleration
-    
+        # update the system attributes
+        self.system.update(self.solution)
+
     def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05):
         # constants in the time integration scheme
         c0 = 1.0/(beta*(dt**2.0))
@@ -214,7 +216,7 @@ class NewmarkSolver(NewtonRaphsonSolver):
                 print("\nSolver converged!!!")
                 break
             else:
-                # reset the stiffness matrix and force vector
+                # reset the linear system
                 self.reset_system()
         # update the system attributes
         self.system.update(self.solution)
