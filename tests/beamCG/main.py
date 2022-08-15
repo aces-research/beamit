@@ -95,7 +95,7 @@ def dynamic_main():
     # length of beam
     L = 1
     # number of elements
-    Nel = 5
+    Nel = 2
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
@@ -114,10 +114,10 @@ def dynamic_main():
     bcvalues = np.zeros([function_space.N, function_space.dof])
 
     # applied loads and tolerances
+    FORCE_X_CB = -5.0E05
     FORCE_Y = -1.0E04
     FORCE_Z = -1.0E04
-    MOMENT_Z = 1.0E07
-    FORCE_X_CB = -5.0E05
+    MOMENT_Z = 1.0E03
     PERTURB_CB = 100.0
     SPATIAL_TOLERANCE = 1.0E-05
       
@@ -147,6 +147,18 @@ def dynamic_main():
                 # apply moment on right node
                 elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bcvalues[i, 5] = load_level*MOMENT_Z
+            elif(load_case == 2):
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
+                # roller at the right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 1:3] = 1
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                # apply force at the center
+                elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bcvalues[i, 1] = load_level*FORCE_Y
             elif(load_case == 3):
                 # pin at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
@@ -160,22 +172,17 @@ def dynamic_main():
                 # perturbation force at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bcvalues[i, 1] = PERTURB_CB
-            elif(load_case == 14):
-                # pin at left end
-                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bctypes[i, 0:3] = 1
-                    bcvalues[i, 0:3] = initial_state[i, 0:3]
-                # roller at the right end
-                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bctypes[i, 1:3] = 1
-                    bcvalues[i, 1:3] = initial_state[i, 1:3]
-                # apply force at the center
-                elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bcvalues[i, 1] = load_level*FORCE_Y
 
     # the load case
     load_case = 3
 
+    # set boundary and initial conditions
+    update_BCs(bctypes, bcvalues, load_case, load_level = 0.0)
+    solver.set_boundary_conditions(bctypes, bcvalues)
+    initial_position = initial_state
+    initial_velocity = np.zeros([function_space.N, function_space.dof])
+    solver.set_initial_conditions(initial_position, initial_velocity)
+    
     # create a VTK directory or clear it
     if not os.path.isdir("VTK"):
         os.mkdir("VTK")
