@@ -15,6 +15,8 @@ class System:
             sys.exit("\nWeak form of the discretization is not available.")
         # the initial state of the system
         self.state = self.initialize_state()
+        # the internal forces of the system
+        self.internal_forces = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
         # the number of equations
         self.nequations = self.weak_form.function_space.N*self.weak_form.function_space.dof
 
@@ -58,8 +60,23 @@ class System:
         # assemble residual
         self.assemble_residual(f, solution, nodal_loads, element_loads_info)
 
-    # Function to update the state of the system
+    # Function to update the variables in the system
     def update(self, solution):
+        # update the state of the system
         self.state = np.reshape(solution, [self.weak_form.function_space.N, \
+                                self.weak_form.function_space.dof])
+        internal_force_vector = np.zeros([self.nequations, 1])
+        self.weak_form.compute_system_internal_forces(internal_force_vector, solution)
+        # compute the cross-product for the moments
+        updated_internal_force_vector = np.zeros([self.nequations, 1])
+        dofs = self.weak_form.function_space.dof
+        for i in range(0, self.weak_form.function_space.N):
+            updated_internal_force_vector[dofs*i:(dofs*i)+3, :] += internal_force_vector[dofs*i:(dofs*i)+3, :]
+            nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
+            t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
+            updated_internal_force_vector[(dofs*i)+3:(dofs*i)+6, :] += \
+                np.cross(internal_force_vector[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, axisa=0, axisb=0, axisc=0)
+        self.internal_forces = np.reshape(updated_internal_force_vector, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
         pass
