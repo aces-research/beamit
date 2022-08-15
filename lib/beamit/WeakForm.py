@@ -84,6 +84,14 @@ class WeakFormCG:
                 f[global_element_dofs] -= self.compute_element_internal_forces(element_unknowns)
         pass
 
+    # Function to compute the system internal forces
+    def compute_system_internal_forces(self, f, system_unknowns):
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            f[global_element_dofs] += self.compute_element_internal_forces(element_unknowns)
+        pass
+
     # Function to compute the system stiffness
     def compute_system_stiffness(self, A, system_unknowns):
         for i in range(0, self.function_space.E):
