@@ -123,16 +123,19 @@ class NewmarkSolver(NewtonRaphsonSolver):
         # the "acceleration" (linear accelerations and double time derivative of the tangents)
         self.acceleration = np.zeros([system.nequations, 1])
     
-    # Function to set the "linear" initial conditions (initial velocity and acceleration) of the system
-    def set_linear_initial_conditions(self, linear_velocity, linear_acceleration):
-        initial_velocity = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
-        initial_acceleration = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
-        initial_velocity[:, 0:3] += linear_velocity
-        initial_acceleration[:, 0:3] += linear_acceleration
-        initial_velocity.reshape([self.system.nequations, 1])
-        initial_acceleration.reshape([self.system.nequations, 1])
-        self.velocity = initial_velocity
-        self.acceleration = initial_acceleration
+    # Function to set the initial conditions (position and velocity) of the system
+    def set_initial_conditions(self, initial_position, initial_velocity):
+        self.solution = np.reshape(initial_position, [self.system.nequations, 1])
+        self.velocity = np.reshape(initial_velocity, [self.system.nequations, 1])
+        # compute initial accelerations
+        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        if (Dirichlet_dofs.size == 0):
+            sys.exit("\nSet the boundary conditions before the initial conditions.")
+        nodal_loads = np.zeros([self.system.nequations, 1])
+        nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+        self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
+        initial_acceleration = np.linalg.solve(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs])
+        self.acceleration[Neumann_dofs] = initial_acceleration
     
     def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05):
         # constants in the time integration scheme
@@ -141,6 +144,7 @@ class NewmarkSolver(NewtonRaphsonSolver):
         c2 = (1.0/(2.0*beta)) - 1.0
         c3 = (1.0-gamma)*dt
         c4 = gamma*dt
+        c5 = (0.5-beta)*(dt**2.0)
         # reset the stiffness matrix and force vector before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -154,13 +158,17 @@ class NewmarkSolver(NewtonRaphsonSolver):
             nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
             # generate the Dirichlet solution vector
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
-            # add the Dirichlet solution to the overall solution vector
+            # update the solution, velocity and acceleration of Dirichlet Dofs
+            acceleration_prev_Dirichlet = self.acceleration[Dirichlet_dofs]
+            velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
+            self.acceleration[Dirichlet_dofs] = (Dirichlet_solution - (dt*velocity_prev_Dirichlet) - (c5*acceleration_prev_Dirichlet))*c0
+            self.velocity[Dirichlet_dofs] = velocity_prev_Dirichlet + (c3*acceleration_prev_Dirichlet) + (c4*self.acceleration[Dirichlet_dofs])
             self.solution[Dirichlet_dofs] += Dirichlet_solution
             # initialize total solution increment in the current step
             solution_step = np.zeros([Neumann_dofs.shape[0], 1])
-            # velocity and acceleration from the previous step
-            velocity_prev = self.velocity[Neumann_dofs]
-            acceleration_prev = self.acceleration[Neumann_dofs]
+            # velocity and acceleration of the Neumann Dofs from the previous step
+            velocity_prev_Neumann = self.velocity[Neumann_dofs]
+            acceleration_prev_Neumann = self.acceleration[Neumann_dofs]
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -190,10 +198,10 @@ class NewmarkSolver(NewtonRaphsonSolver):
             solution_increment = np.linalg.solve(self.A, self.f)
             # update the total solution increment in the current step
             solution_step += solution_increment
-            # update the overall solution, velocity and acceleration vectors
+            # update the overall solution, velocity and acceleration vectors of the Neumann Dofs
             self.solution[Neumann_dofs] += solution_increment
-            self.acceleration[Neumann_dofs] = (c0*solution_step) - (c1*velocity_prev) - (c2*acceleration_prev)
-            self.velocity[Neumann_dofs] = velocity_prev + (c3*acceleration_prev) + (c4*self.acceleration[Neumann_dofs])
+            self.acceleration[Neumann_dofs] = (c0*solution_step) - (c1*velocity_prev_Neumann) - (c2*acceleration_prev_Neumann)
+            self.velocity[Neumann_dofs] = velocity_prev_Neumann + (c3*acceleration_prev_Neumann) + (c4*self.acceleration[Neumann_dofs])
             # assess convergence
             # the current residual (= f_external - f_internal - f_inertial)
             updated_residual = np.zeros([self.system.nequations, 1])
