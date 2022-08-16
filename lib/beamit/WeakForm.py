@@ -85,11 +85,19 @@ class WeakFormCG:
         pass
 
     # Function to compute the system internal forces
+    # Computed by approaching every node from the left side!!!
     def compute_system_internal_forces(self, f, system_unknowns):
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
-            f[global_element_dofs] += self.compute_element_internal_forces(element_unknowns)
+            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
+            f[global_element_dofs_right_node] += self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
+            # Assuming the elements are connected like a simple chain!!!
+            if (i == 0): # only for the first element
+                global_element_dofs_left_node = global_element_dofs[0:dofs]
+                f[global_element_dofs_left_node] -= self.compute_element_internal_forces(element_unknowns)[0:dofs]
         pass
 
     # Function to compute the system stiffness
