@@ -44,12 +44,16 @@ def static_main():
     # boundary condition values matrix
     bcvalues = np.zeros([function_space.N, function_space.dof])
 
-    # the load case
-    load_case = 2
+    # the load case and output
+    load_case = 4
+    load_steps = 1000
+    save_step = 1
 
     # applied loads and tolerances
     FORCE_Y = -1.0E04
     MOMENT_Z = 1.0E04
+    PERTURB_FORCE = 100.0
+    DISP_CB = -0.01
     SPATIAL_TOLERANCE = 1.0E-05
 
     # clamp left node (a clamp fixes both the position and the direction of the tangent)
@@ -62,7 +66,7 @@ def static_main():
     # is achieved by imposing that the y and z component of the tangent be fixed and equal to 0,
     # whereas the x component of the tangent is free (zero Neumann boundary condition). 
     # See also Meier 2014, CMAME for more details.
-    def get_BCs(bctypes, bcvalues, load_case):
+    def get_BCs(bctypes, bcvalues, load_case, load_level = 0.0):
         for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
             x_coord = nodal_coordinates[i, 0]
             y_coord = nodal_coordinates[i, 1]
@@ -117,6 +121,20 @@ def static_main():
                 # apply moment at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bcvalues[i, 5] = MOMENT_Z
+            elif (load_case == 4): # MODE-I COLUMN BUCKLING WITH DISPLACEMENT CONTROL LOADING
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
+                # roller and axial displacement at the right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                    bcvalues[i, 0] = initial_state[i, 0] + load_level*DISP_CB
+                # perturbation force at the center
+                elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bcvalues[i, 1] = PERTURB_FORCE
+
 
     # create a VTK directory or clear it
     if not os.path.isdir("VTK"):
@@ -128,13 +146,26 @@ def static_main():
     # write the initial displacements
     PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
 
-    # apply the boundary conditions
-    get_BCs(bctypes, bcvalues, load_case)
-    solver.set_boundary_conditions(bctypes, bcvalues)
-
-    # solve the nonlinear static problem and update the system 
-    solver.solve(Nmax = 20, tol = 1.0E-03)
-    PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
+    # incremental computation of the load path
+    if (load_case == 4):
+        for i in range(0, load_steps):
+            print("\nCurrent load step:", i+1,"out of", load_steps, "load steps.")
+            load_level = (i+1)/load_steps
+            # apply the boundary conditions
+            get_BCs(bctypes, bcvalues, load_case, load_level)
+            solver.set_boundary_conditions(bctypes, bcvalues)
+            # solve the nonlinear static problem and update the system 
+            solver.solve(Nmax = 20, tol = 1.0E-03)
+            if ((i+1) % save_step == 0):
+                output_file = "./VTK/output-" + str(i+1)
+                PostProcess.write_displacements_forces_vtk(output_file, system)
+    else:
+        # apply the boundary conditions
+        get_BCs(bctypes, bcvalues, load_case)
+        solver.set_boundary_conditions(bctypes, bcvalues)
+        # solve the nonlinear static problem and update the system 
+        solver.solve(Nmax = 20, tol = 1.0E-03)
+        PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
 
 def dynamic_main():
 
@@ -305,7 +336,6 @@ def dynamic_main():
     simulation_time = 0.0
     for i in range(0, time_steps):
         print("\nCurrent time step:", i+1,"out of", time_steps, "time steps.")
-        output_file = "./VTK/output-" + str(i+1)
         load_level = (i+1)/time_steps
         simulation_time += dt
         update_BCs(bctypes, bcvalues, load_case, load_level, simulation_time)
@@ -313,8 +343,9 @@ def dynamic_main():
         solver.set_boundary_conditions(bctypes, bcvalues)
         solver.solve(dt, Nmax = 20, tol = 1.0E-03)
         if ((i+1) % save_time == 0):
+            output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_displacements_forces_vtk(output_file, system)
 
 # run main functions
-# static_main()
-dynamic_main()
+static_main()
+# dynamic_main()
