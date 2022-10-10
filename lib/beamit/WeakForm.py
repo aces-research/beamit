@@ -127,16 +127,36 @@ class WeakFormDG(WeakFormCG):
     def __init__(self, function_space, material):
         # invoke the parent (WeakFormCG) class
         WeakFormCG.__init__(self, function_space, material)
-        # the DG penalty parameter
-        self.beta = 10.0
+        # DG "position jump" penalty parameter
+        self.betaP = 10.0
+    
+    # Helper function to compute 't_i' vectors in the residual
+    def compute_residual_vectors(self, rp, rpp, rppp):
+        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
+        rp_dot_rpp = np.sum(rp*rpp, axis=0, keepdims=True)
+        rpp_dot_rpp = np.sum(rpp*rpp, axis=0, keepdims=True)
+        rp_dot_rppp = np.sum(rp*rppp, axis=0, keepdims=True)
+        t1 = (rp*(rp_L2 - 1.0))/rp_L2
+        t2 = (2.0*rp*((rp_dot_rpp**2.0)/(rp_L2**6.0))) - ((rp*rpp_dot_rpp)/(rp_L2**4.0)) - ((rpp*rp_dot_rpp)/(rp_L2**4.0))
+        t3 = (rpp/(rp_L2**2.0)) - (rp*rp_dot_rpp)/(rp_L2**4.0)
+        t4 = rp/(rp_L2**2.0)
+        t5 = ((2.0*rpp*rp_dot_rpp)/(rp_L2**4.0)) - ((2.0*rp*(rp_dot_rpp**2.0))/(rp_L2**6.0)) + ((rp*rp_dot_rppp)/(rp_L2**4.0)) - (rppp/(rp_L2**2.0))
+        return t1, t2, t3, t4, t5
     
     # Function to compute the overall system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info):
         # compute system residual using the function in WeakFormCG
         super().compute_system_residual(f, system_unknowns, element_loads_info)
-        # add the contributions of the jumps at the interfaces to the residual
-        dofs = self.function_space.dof
-        dofspel = self.function_space.dof*self.function_space.npel
+        # add the contributions of jump terms at the interfaces to the residual
+        # shape functions and their derivatives at the interfaces (left (-) & right (+))
+        N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
+        Np_left_interface = Nxi_left_interface*(1.0/self.function_space.jacobian)
+        Npp_left_interface = Nxixi_left_interface*((1.0/self.function_space.jacobian)**2.0)
+        Nppp_left_interface = Nxixixi_left_interface*((1.0/self.function_space.jacobian)**3.0)
+        N_right_interface, Nxi_right_interface, Nxixi_right_interface, Nxixixi_right_interface = self.function_space.compute_shapes(-1.0)
+        Np_right_interface = Nxi_right_interface*(1.0/self.function_space.jacobian)
+        Npp_right_interface = Nxixi_right_interface*((1.0/self.function_space.jacobian)**2.0)
+        Nppp_right_interface = Nxixixi_right_interface*((1.0/self.function_space.jacobian)**3.0)
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
@@ -145,32 +165,33 @@ class WeakFormDG(WeakFormCG):
             # unknowns of the left and right elements
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
-            # unknowns of the left and right elements at the interface
-            element_unknowns_left_interface = element_unknowns_left[dofs:dofspel, :]
-            element_unknowns_right_interface = element_unknowns_right[0:dofs, :]
-            # internal forces of the left and right elements at the interface
-            internal_forces_left_interface = self.compute_element_internal_forces(element_unknowns_left)[dofs:dofspel, :]
-            internal_forces_right_interface = self.compute_element_internal_forces(element_unknowns_right)[0:dofs, :]
-            # global dof numbering of the current interface
-            interface_global_dofs = np.concatenate([global_element_dofs_left[dofs:dofspel], global_element_dofs_right[0:dofs]])
-            # internal "loads" (= f) and moments (= m) at the interface - CHECK!!!
-            internal_loads_left_interface = internal_forces_left_interface[0:dofs/2, :]
-            internal_loads_right_interface = internal_forces_right_interface[0:dofs/2, :]
-            internal_moments_left_interface = internal_forces_left_interface[dofs/2:dofs, :]
-            internal_moments_right_interface = internal_forces_right_interface[dofs/2:dofs, :]
-            # computing the average internal "loads" (= <f>) at the interface
-            average_loads_interface = (internal_loads_left_interface + internal_loads_right_interface)/2.0
-            # positions and tangents at the interface
-            positions_left_interface = element_unknowns_left_interface[0:dofs/2, :]
-            positions_right_interface = element_unknowns_right_interface[0:dofs/2, :]
-            tangents_left_interface = element_unknowns_left_interface[dofs/2:dofs, :]
-            tangents_right_interface = element_unknowns_right_interface[dofs/2:dofs, :]
-            # unit tangents and 't4's at the interface
-            tangents_left_interface_L2 = np.linalg.norm(tangents_left_interface, ord=2, axis=0, keepdims=True)
-            tangents_right_interface_L2 = np.linalg.norm(tangents_right_interface, ord=2, axis=0, keepdims=True)
-            t4_left_interface = tangents_left_interface/(tangents_left_interface_L2**2.0)
-            t4_right_interface = tangents_right_interface/(tangents_right_interface_L2**2.0)
-            # computing the average internal moments (= <m x t_4>) at the interface
-            mxt4_left_interface = np.cross(internal_moments_left_interface, t4_left_interface, axisa=0, axisb=0, axisc=0)
-            mxt4_right_interface = np.cross(internal_moments_right_interface, t4_right_interface, axisa=0, axisb=0, axisc=0)
-            average_moments_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
+            # parameterizations at the interface
+            r_left_interface = np.matmul(N_left_interface, element_unknowns_left)
+            r_right_interface = np.matmul(N_right_interface, element_unknowns_right)
+            rp_left_interface = np.matmul(Np_left_interface, element_unknowns_left)
+            rp_right_interface = np.matmul(Np_right_interface, element_unknowns_right)
+            rpp_left_interface = np.matmul(Npp_left_interface, element_unknowns_left)
+            rpp_right_interface = np.matmul(Npp_right_interface, element_unknowns_right)
+            rppp_left_interface = np.matmul(Nppp_left_interface, element_unknowns_left)
+            rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
+            rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
+            rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
+            t1_left_interface, _, _, t4_left_interface, t5_left_interface = self.compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
+            t1_right_interface, _, _, t4_right_interface, t5_right_interface = self.compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
+            # position jump at the interface
+            r_jump_interface = r_right_interface - r_left_interface
+            # forces at the interface
+            if (element_loads_info == None): # No element loads
+                forces_left_interface = (self.material.E*self.material.A*t1_left_interface) + (self.material.E*self.material.I*t5_left_interface)
+                forces_right_interface = (self.material.E*self.material.A*t1_right_interface) + (self.material.E*self.material.I*t5_right_interface)
+            average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
+            # moments at the interface
+            moments_left_interface = self.material.E*self.material.I*(cross_op(rp_left_interface, rpp_left_interface, 0, 0, 0)/(rp_left_interface_L2**2.0))
+            moments_right_interface = self.material.E*self.material.I*(cross_op(rp_right_interface, rpp_right_interface, 0, 0, 0)/(rp_right_interface_L2**2.0))
+            mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
+            mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
+            average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
+            # adding the contributions of the current interface to the system residual
+            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_left_interface), r_jump_interface)))
+            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_right_interface), r_jump_interface)))
+        pass
