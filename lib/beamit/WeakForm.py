@@ -1,5 +1,8 @@
 import numpy as np
 
+def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
+    return np.cross(arr1,arr2,axisa=a,axisb=b,axisc=c)
+
 class WeakFormCG:
     
     def __init__(self, function_space, material):
@@ -70,7 +73,7 @@ class WeakFormCG:
         t4 = rp/(rp_L2**2.0)
         force_integrand = np.matmul(Nt, el_dist_forces)
         r_el_dist_forces = np.sum(force_integrand*self.function_space.JxW, axis=0, keepdims=False)
-        mdist_cross_t4 = np.cross(el_dist_moments, t4, axisa=1, axisb=0, axisc=1)
+        mdist_cross_t4 = cross_op(el_dist_moments, t4, 1, 0, 1)
         moment_integrand = np.matmul(Npt, mdist_cross_t4)
         r_el_dist_moments = np.sum(moment_integrand*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_dist_forces + r_el_dist_moments

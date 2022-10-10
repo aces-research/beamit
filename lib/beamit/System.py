@@ -2,6 +2,9 @@ import sys
 import numpy as np
 from beamit import WeakForm
 
+def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
+    return np.cross(arr1,arr2,axisa=a,axisb=b,axisc=c)
+
 class System:
     
     def __init__(self, function_space, material):
@@ -45,7 +48,7 @@ class System:
                 t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
                 # compute the cross-product for the nodal moments
                 updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += \
-                        np.cross(nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, axisa=0, axisb=0, axisc=0)
+                        cross_op(nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
             f += updated_nodal_loads
         pass
 
@@ -76,7 +79,7 @@ class System:
             nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
             t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
             updated_internal_force_vector[(dofs*i)+3:(dofs*i)+6, :] += \
-                np.cross(internal_force_vector[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, axisa=0, axisb=0, axisc=0)
+                cross_op(internal_force_vector[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
         self.internal_forces = np.reshape(updated_internal_force_vector, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
         pass
