@@ -81,6 +81,10 @@ class FunctionSpace:
         Nt1_xixi = -(1.0 - xi) + 0.50*(1.0 + xi)
         Nd2_xixi = -(1.0 + xi) + 0.50*(2.0 - xi)
         Nt2_xixi = (1.0 + xi) - 0.50*(1.0 - xi)
+        Nd1_xixixi = 1.50
+        Nt1_xixixi = 1.50
+        Nd2_xixixi = -1.50
+        Nt2_xixixi = 1.50
 
         L = self.elL # length of the elements
 
@@ -96,8 +100,12 @@ class FunctionSpace:
         shape_second_gradients = np.array([[Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0, 0.0], \
                                     [0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0], \
                                     [0.0, 0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi]])
+
+        shape_third_gradients = np.array([[Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0, 0.0], \
+                                    [0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0], \
+                                    [0.0, 0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi]])
         
-        return shape_functions, shape_first_gradients, shape_second_gradients
+        return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
     def discretize(self):
         # subdivision of domain (reference configuration)
@@ -117,7 +125,7 @@ class FunctionSpace:
 
         # evaluate shape functions, their gradients and weights at the quadrature points
         for i in range(0, self.Q):
-            el_shape_functions, el_shape_first_gradients, el_shape_second_gradients = \
+            el_shape_functions, el_shape_first_gradients, el_shape_second_gradients, _ = \
                                     self.compute_shapes(integration_points[i])
             self.shape_functions[i:i+1, :, :] = el_shape_functions
             self.shape_first_gradients[i:i+1, :, :] = el_shape_first_gradients
