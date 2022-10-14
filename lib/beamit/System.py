@@ -37,19 +37,18 @@ class System:
         pass
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads_info):
-        if (self.weak_form.function_space.discretization_type == "CG"):
-            dofs = self.weak_form.function_space.dof
-            self.weak_form.compute_system_residual(f, solution, element_loads_info)
-            updated_nodal_loads = np.zeros(nodal_loads.shape)
-            for i in range(0, self.weak_form.function_space.N):
-                updated_nodal_loads[dofs*i:(dofs*i)+3, :] += nodal_loads[dofs*i:(dofs*i)+3, :]
-                nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
-                nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
-                t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
-                # compute the cross-product for the nodal moments
-                updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += \
+        dofs = self.weak_form.function_space.dof
+        self.weak_form.compute_system_residual(f, solution, element_loads_info)
+        updated_nodal_loads = np.zeros(nodal_loads.shape)
+        for i in range(0, self.weak_form.function_space.N):
+            updated_nodal_loads[dofs*i:(dofs*i)+3, :] += nodal_loads[dofs*i:(dofs*i)+3, :]
+            nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
+            t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
+            # compute the cross-product for the nodal moments
+            updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += \
                         cross_op(nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
-            f += updated_nodal_loads
+        f += updated_nodal_loads
         pass
 
     def assemble_mass(self, M):
