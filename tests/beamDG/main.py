@@ -23,7 +23,7 @@ def static_main():
     # length of beam
     L = 10.0
     # number of elements
-    Nel = 2
+    Nel = 10
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
@@ -45,7 +45,7 @@ def static_main():
     bcvalues = np.zeros([function_space.N, function_space.dof])
 
     # the load case and output
-    load_case = 0
+    load_case = 4
     load_steps = 1000
     save_step = 1
 
@@ -53,7 +53,7 @@ def static_main():
     FORCE_Y = -1.0E04
     MOMENT_Z = 1.0E04
     PERTURB_FORCE = 100.0
-    DISP_CB = -0.01
+    DISP_CB = -0.005
     SPATIAL_TOLERANCE = 1.0E-05
 
     # Function to generate the boundary conditions
@@ -126,15 +126,15 @@ def static_main():
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bcvalues[i, 1] = PERTURB_FORCE
 
-    # # create a VTK directory or clear it
-    # if not os.path.isdir("VTK"):
-    #     os.mkdir("VTK")
-    # else:
-    #     for item in os.listdir("VTK"):
-    #         os.remove(os.path.join("VTK", item))
+    # create a VTK directory or clear it
+    if not os.path.isdir("VTK"):
+        os.mkdir("VTK")
+    else:
+        for item in os.listdir("VTK"):
+            os.remove(os.path.join("VTK", item))
     
-    # # write the initial displacements
-    # PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
+    # write the initial displacements
+    PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
 
     # incremental computation of the load path
     if (load_case == 4):
@@ -145,19 +145,17 @@ def static_main():
             get_BCs(bctypes, bcvalues, load_case, load_level)
             solver.set_boundary_conditions(bctypes, bcvalues)
             # solve the nonlinear static problem and update the system 
-            solver.solve(Nmax = 20, tol = 1.0E-03)
-            # if ((i+1) % save_step == 0):
-            #     output_file = "./VTK/output-" + str(i+1)
-            #     PostProcess.write_displacements_forces_vtk(output_file, system)
+            solver.solve(Nmax = 50, tol = 1.0E-03)
+            if ((i+1) % save_step == 0):
+                output_file = "./VTK/output-" + str(i+1)
+                PostProcess.write_displacements_forces_vtk(output_file, system)
     else:
         # apply the boundary conditions
         get_BCs(bctypes, bcvalues, load_case)
         solver.set_boundary_conditions(bctypes, bcvalues)
         # solve the nonlinear static problem and update the system 
         solver.solve(Nmax = 10, tol = 1.0E-03)
-        # PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
-    
-    print(solver.solution)
+        PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
 
 # run main functions
 static_main()
