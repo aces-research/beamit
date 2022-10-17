@@ -129,6 +129,8 @@ class WeakFormDG(WeakFormCG):
         WeakFormCG.__init__(self, function_space, material)
         # DG "position jump" penalty parameter
         self.betaP = (10.0*self.material.E*self.material.A)/self.function_space.elL
+        # DG "tangent jump" penalty parameter
+        self.betaT = (10.0*self.material.E*self.material.I)/self.function_space.elL
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -180,6 +182,7 @@ class WeakFormDG(WeakFormCG):
             t1_right_interface, _, _, t4_right_interface, t5_right_interface = self.compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
             # position jump at the interface
             r_jump_interface = r_right_interface - r_left_interface
+            rp_jump_interface = rp_right_interface - rp_left_interface
             # forces at the interface
             if (element_loads_info == None): # No element loads
                 forces_left_interface = (self.material.E*self.material.A*t1_left_interface) + (self.material.E*self.material.I*t5_left_interface)
@@ -192,8 +195,8 @@ class WeakFormDG(WeakFormCG):
             mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
             average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
             # adding the contributions of the current interface to the system residual
-            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_left_interface), r_jump_interface)))
-            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_right_interface), r_jump_interface)))
+            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
+            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
         pass
     
     # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
@@ -266,9 +269,27 @@ class WeakFormDG(WeakFormCG):
             average_dt3dd_interface = (dt3dd_left_interface + dt3dd_right_interface)/2.0
             average_dt5dd_interface = (dt5dd_left_interface + dt5dd_right_interface)/2.0
             # penalty term contribution at the current interface to the system stiffness
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.betaP*np.matmul(np.transpose(N_left_interface), N_left_interface))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.betaP*np.matmul(np.transpose(N_right_interface), N_right_interface))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += ((self.betaP*np.matmul(np.transpose(N_left_interface), N_left_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), Np_left_interface)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((self.betaP*np.matmul(np.transpose(N_right_interface), N_right_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), Np_right_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((self.betaP*np.matmul(np.transpose(N_left_interface), N_right_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), Np_right_interface)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= ((self.betaP*np.matmul(np.transpose(N_right_interface), N_left_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), Np_left_interface)))
             # adding 't_i' vector gradient contributions at the current interface to the system stiffness
             A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= ((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), average_dt1dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), average_dt5dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), average_dt3dd_interface)))
             A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), average_dt1dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), average_dt5dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), average_dt3dd_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), average_dt1dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), average_dt5dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), average_dt3dd_interface)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += ((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), average_dt1dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), average_dt5dd_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), average_dt3dd_interface)))
+        pass
+
+    # Function to compute the system internal forces
+    # Computed by approaching every node from the left side!!!
+    def compute_system_internal_forces(self, f, system_unknowns):
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            global_element_dofs_left_node = global_element_dofs[0:dofs]
+            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
+            f[global_element_dofs_left_node] -= self.compute_element_internal_forces(element_unknowns)[0:dofs]
+            f[global_element_dofs_right_node] += self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
         pass
