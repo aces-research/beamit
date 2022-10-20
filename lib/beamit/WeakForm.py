@@ -96,11 +96,11 @@ class WeakFormCG:
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
-            f[global_element_dofs_right_node] += self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
+            f[global_element_dofs_right_node] -= self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
             # Assuming the elements are connected like a simple chain!!!
             if (i == 0): # only for the first element
                 global_element_dofs_left_node = global_element_dofs[0:dofs]
-                f[global_element_dofs_left_node] -= self.compute_element_internal_forces(element_unknowns)[0:dofs]
+                f[global_element_dofs_left_node] += self.compute_element_internal_forces(element_unknowns)[0:dofs]
         pass
 
     # Function to compute the system stiffness
@@ -290,6 +290,6 @@ class WeakFormDG(WeakFormCG):
             element_unknowns = system_unknowns[global_element_dofs]
             global_element_dofs_left_node = global_element_dofs[0:dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
-            f[global_element_dofs_left_node] -= self.compute_element_internal_forces(element_unknowns)[0:dofs]
-            f[global_element_dofs_right_node] += self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
+            f[global_element_dofs_left_node] += self.compute_element_internal_forces(element_unknowns)[0:dofs]
+            f[global_element_dofs_right_node] -= self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
         pass
