@@ -6,8 +6,11 @@ from beamit import PostProcess
 import numpy as np
 import os
 import copy
+import time
 
 def static_main():
+
+    start_time = time.time()
 
     # density of the material
     rho = 7850.0
@@ -71,9 +74,10 @@ def static_main():
                 elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 1:3] = 1
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
-                # apply load at the center
+                # apply force at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bcvalues[i, 1] = FORCE_Y
+                    # apply equal forces on interface nodes
+                    bcvalues[i, 1] = 0.50*FORCE_Y
             elif (load_case == 1): # CANTILEVER BEAM WITH POINT MOMENT AT THE RIGHT END
                 # clamp left node
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
@@ -99,7 +103,8 @@ def static_main():
                     bcvalues[i, 4:6] = initial_state[i, 4:6]
                 # apply force at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bcvalues[i, 1] = FORCE_Y
+                    # apply equal forces on interface nodes
+                    bcvalues[i, 1] = 0.50*FORCE_Y
             elif (load_case == 3): # SIMPLY SUPPORTED BEAM WITH POINT MOMENT AT THE CENTER
                 # pin at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
@@ -111,7 +116,8 @@ def static_main():
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
                 # apply moment at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bcvalues[i, 5] = MOMENT_Z
+                    # apply equal moments on interface nodes
+                    bcvalues[i, 5] = 0.50*MOMENT_Z
             elif (load_case == 4): # MODE-I COLUMN BUCKLING WITH DISPLACEMENT CONTROL LOADING
                 # pin at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
@@ -124,7 +130,8 @@ def static_main():
                     bcvalues[i, 0] = initial_state[i, 0] + load_level*DISP_CB
                 # perturbation force at the center
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                    bcvalues[i, 1] = PERTURB_FORCE
+                    # apply equal forces on interface nodes
+                    bcvalues[i, 1] = 0.50*PERTURB_FORCE
 
     # create a VTK directory or clear it
     if not os.path.isdir("VTK"):
@@ -153,9 +160,13 @@ def static_main():
         # apply the boundary conditions
         get_BCs(bctypes, bcvalues, load_case)
         solver.set_boundary_conditions(bctypes, bcvalues)
-        # solve the nonlinear static problem and update the system 
+        # solve the nonlinear static problem and update the system
         solver.solve(Nmax = 10, tol = 1.0E-03)
         PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
+
+    simulation_time = time.time() - start_time
+
+    print("\nTotal simulation time = %.2f sec." % (simulation_time))
 
 # run main functions
 static_main()
