@@ -1,4 +1,6 @@
 import numpy as np
+import scipy.sparse.linalg as spla
+from scipy.sparse import csc_matrix
 import sys
 
 class NewtonRaphsonSolver:
@@ -56,7 +58,35 @@ class NewtonRaphsonSolver:
         self.A = self.A[np.ix_(Neumann_dofs, Neumann_dofs)]
         self.f = self.f[Neumann_dofs]
 
-    def solve(self, Nmax = 10, tol = 1.0E-05):
+    # Function to solve the linear system Ax = f using different methods
+    def linear_system_solver(self, A, f, solver_type = None, precon_type = None, tol = 1.0E-06, maxiter = None):
+        # the compressed sparse column version of A
+        A_csc = csc_matrix(A, dtype=np.float64)
+        # preconditioners
+        if (precon_type == "aINV"): # approximate inverse
+            A_z = lambda z: spla.spsolve(A_csc, z)
+            precon = spla.LinearOperator(A.shape, A_z)
+        elif (precon_type == "iLU"): # ILU
+            A_iLU = spla.spilu(A_csc)
+            precon = spla.LinearOperator(A.shape, A_iLU.solve)
+        else: # Identity
+            precon = None
+        # solve the linear system
+        if (solver_type == "spsolve"):
+            x = spla.spsolve(A_csc, f).reshape([A.shape[1],1])
+        elif (solver_type == "cg"):
+            x = spla.cg(A_csc, f, tol=tol, maxiter=maxiter, M=precon)[0].reshape([A.shape[1],1])
+        elif (solver_type == "bicg"):
+            x = spla.bicg(A_csc, f, tol=tol, maxiter=maxiter, M=precon)[0].reshape([A.shape[1],1])
+        elif (solver_type == "bicgstab"):
+            x = spla.bicgstab(A_csc, f, tol=tol, maxiter=maxiter, M=precon)[0].reshape([A.shape[1],1])
+        elif (solver_type == "gmres"):
+            x = spla.gmres(A_csc, f, tol=tol, maxiter=maxiter, M=precon)[0].reshape([A.shape[1],1])
+        else:
+            x = np.linalg.solve(A, f)
+        return x
+    
+    def solve(self, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # reset linear system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -91,7 +121,7 @@ class NewtonRaphsonSolver:
                 if (np.linalg.det(self.A) == 0.0):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
-            solution_increment = np.linalg.solve(self.A, self.f)
+            solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # update the overall solution vector
             self.solution[Neumann_dofs] += solution_increment
             # assess convergence
@@ -134,12 +164,13 @@ class NewmarkSolver(NewtonRaphsonSolver):
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
-        initial_acceleration = np.linalg.solve(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs])
+        # MODIFY!!!
+        initial_acceleration = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs])
         self.acceleration[Neumann_dofs] = initial_acceleration
         # update the system attributes
         self.system.update(self.solution)
 
-    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05):
+    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # constants in the time integration scheme
         c0 = 1.0/(beta*(dt**2.0))
         c1 = 1.0/(beta*dt)
@@ -197,7 +228,7 @@ class NewmarkSolver(NewtonRaphsonSolver):
                 if (np.linalg.det(self.A) == 0.0):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
-            solution_increment = np.linalg.solve(self.A, self.f)
+            solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # update the total solution increment in the current step
             solution_step += solution_increment
             # update the overall solution, velocity and acceleration vectors of the Neumann Dofs
