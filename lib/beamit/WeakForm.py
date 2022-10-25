@@ -97,10 +97,14 @@ class WeakFormCG:
             element_unknowns = system_unknowns[global_element_dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
             f[global_element_dofs_right_node] -= self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
+            # correcting the sign of axial forces
+            f[np.array([global_element_dofs_right_node[0]])] *= -1.0
             # Assuming the elements are connected like a simple chain!!!
             if (i == 0): # only for the first element
                 global_element_dofs_left_node = global_element_dofs[0:dofs]
                 f[global_element_dofs_left_node] += self.compute_element_internal_forces(element_unknowns)[0:dofs]
+                # correcting the sign of axial forces
+                f[np.array([global_element_dofs_left_node[0]])] *= -1.0
         pass
 
     # Function to compute the system stiffness
@@ -180,7 +184,7 @@ class WeakFormDG(WeakFormCG):
             rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
             t1_left_interface, _, _, t4_left_interface, t5_left_interface = self.compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
             t1_right_interface, _, _, t4_right_interface, t5_right_interface = self.compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
-            # position jump at the interface
+            # position and tangent jumps at the interface
             r_jump_interface = r_right_interface - r_left_interface
             rp_jump_interface = rp_right_interface - rp_left_interface
             # forces at the interface
@@ -290,4 +294,7 @@ class WeakFormDG(WeakFormCG):
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
             f[global_element_dofs_left_node] += self.compute_element_internal_forces(element_unknowns)[0:dofs]
             f[global_element_dofs_right_node] -= self.compute_element_internal_forces(element_unknowns)[dofs:dofspel]
+            # correcting the sign of axial forces
+            f[np.array([global_element_dofs_left_node[0]])] *= -1.0
+            f[np.array([global_element_dofs_right_node[0]])] *= -1.0
         pass
