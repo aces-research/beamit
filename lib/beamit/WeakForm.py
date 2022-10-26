@@ -128,13 +128,13 @@ class WeakFormCG:
 
 class WeakFormDG(WeakFormCG):
 
-    def __init__(self, function_space, material):
+    def __init__(self, function_space, material, betaP, betaT):
         # invoke the parent (WeakFormCG) class
         WeakFormCG.__init__(self, function_space, material)
-        # DG "position jump" penalty parameter
-        self.betaP = (10.0*self.material.E*self.material.A)/self.function_space.elL
-        # DG "tangent jump" penalty parameter
-        self.betaT = (10.0*self.material.E*self.material.I)/self.function_space.elL
+        # DG position jump penalty parameter
+        self.betaP = betaP
+        # DG tangent jump penalty parameter
+        self.betaT = betaT
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -199,8 +199,8 @@ class WeakFormDG(WeakFormCG):
             mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
             average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
             # adding the contributions of the current interface to the system residual
-            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
-            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
+            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
+            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
         pass
     
     # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
@@ -270,10 +270,10 @@ class WeakFormDG(WeakFormCG):
             dt5dd_left_interface = np.matmul(dt5dd_Np_left_interface, Np_left_interface) + np.matmul(dt5dd_Npp_left_interface, Npp_left_interface) + np.matmul(dt5dd_Nppp_left_interface, Nppp_left_interface)
             dt5dd_right_interface = np.matmul(dt5dd_Np_right_interface, Np_right_interface) + np.matmul(dt5dd_Npp_right_interface, Npp_right_interface) + np.matmul(dt5dd_Nppp_right_interface, Nppp_right_interface)
             # penalty term contribution at the current interface to the system stiffness
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += ((self.betaP*np.matmul(np.transpose(N_left_interface), N_left_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), Np_left_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((self.betaP*np.matmul(np.transpose(N_right_interface), N_right_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), Np_right_interface)))
-            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((self.betaP*np.matmul(np.transpose(N_left_interface), N_right_interface)) + (self.betaT*np.matmul(np.transpose(Np_left_interface), Np_right_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= ((self.betaP*np.matmul(np.transpose(N_right_interface), N_left_interface)) + (self.betaT*np.matmul(np.transpose(Np_right_interface), Np_left_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_left_interface)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_right_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_right_interface)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_left_interface)))
             # adding 't_i' vector gradient contributions at the current interface to the system stiffness
             # works only when there are no elemental loads!!!
             A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_left_interface)))
