@@ -1,4 +1,5 @@
 import numpy as np
+from beamit import Material
 
 def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
     return np.cross(arr1,arr2,axisa=a,axisb=b,axisc=c)
@@ -135,6 +136,10 @@ class WeakFormDG(WeakFormCG):
         self.betaP = betaP
         # DG tangent jump penalty parameter
         self.betaT = betaT
+        # store internal variables (of CZM) at all the interfaces
+        # first column = binary operator to indicate damage status (0.0 -> damage 'not' initiated, 1.0 -> damage initiated) at the interface
+        # second column = maximum effective separation at an interface in the entire loading history
+        self.internal_variables = np.zeros([self.function_space.E-1, 2])
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -163,6 +168,7 @@ class WeakFormDG(WeakFormCG):
         Np_right_interface = Nxi_right_interface*(1.0/self.function_space.jacobian)
         Npp_right_interface = Nxixi_right_interface*((1.0/self.function_space.jacobian)**2.0)
         Nppp_right_interface = Nxixixi_right_interface*((1.0/self.function_space.jacobian)**3.0)
+        # loop over the interfaces
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
@@ -198,9 +204,31 @@ class WeakFormDG(WeakFormCG):
             mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
             mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
             average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
+            # initialize interface forces
+            interface_forces = np.zeros(average_forces_interface.shape)
+            # perform CZM checks and calculations in the case of a cohesive interface material
+            if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
+                # damage not yet initiated at the interface
+                if ((self.internal_variables[i:i+1, 0:1] == 0.0) and (self.internal_variables[i:i+1, 1:2] == 0.0)):
+                    # evaluate the damage initiation criterion
+                    if (self.material.evaluate_damage_initiation_criterion(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)):
+                        # damage just initiated at the interface
+                        self.internal_variables[i:i+1, 0:1] = 1.0
+                        # evaluate interface forces according to the TSL
+                        interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 1:2])
+                    # else - No damage at the interface (do nothing)!!!
+                # elif - damage after recontact at the interface!!!
+                else: # damage already initiated at the interface
+                    # if - recontact after damage at the interface!!!
+                    # evaluate interface forces according to the TSL
+                    interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 1:2])
             # adding the contributions of the current interface to the system residual
-            f[global_element_dofs_left] += (np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
-            f[global_element_dofs_right] -= (np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
+            # DG FLUX AND COMPATIBILITY TERMS
+            f[global_element_dofs_left] += ((1.0-self.internal_variables[i:i+1, 0:1])*(np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface))))
+            f[global_element_dofs_right] -= ((1.0-self.internal_variables[i:i+1, 0:1])*(np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface))))
+            # INTERFACE FORCES FROM THE CZM
+            f[global_element_dofs_left] += (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_left_interface), interface_forces)))
+            f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_right_interface), interface_forces)))
         pass
     
     # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
@@ -244,6 +272,7 @@ class WeakFormDG(WeakFormCG):
         Np_right_interface = Nxi_right_interface*(1.0/self.function_space.jacobian)
         Npp_right_interface = Nxixi_right_interface*((1.0/self.function_space.jacobian)**2.0)
         Nppp_right_interface = Nxixixi_right_interface*((1.0/self.function_space.jacobian)**3.0)
+        # loop over the interfaces
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
@@ -253,12 +282,15 @@ class WeakFormDG(WeakFormCG):
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
             # parameterizations at the interface
+            r_left_interface = np.matmul(N_left_interface, element_unknowns_left)
+            r_right_interface = np.matmul(N_right_interface, element_unknowns_right)
             rp_left_interface = np.matmul(Np_left_interface, element_unknowns_left)
             rp_right_interface = np.matmul(Np_right_interface, element_unknowns_right)
             rpp_left_interface = np.matmul(Npp_left_interface, element_unknowns_left)
             rpp_right_interface = np.matmul(Npp_right_interface, element_unknowns_right)
             rppp_left_interface = np.matmul(Nppp_left_interface, element_unknowns_left)
             rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
+            # FLUX AND COMPATIBILITY TERM DERIVATIVES
             # coefficients of 't_i' vector gradients at the interface
             dt1dd_Np_left_interface, dt3dd_Np_left_interface, dt3dd_Npp_left_interface, dt5dd_Np_left_interface, dt5dd_Npp_left_interface, dt5dd_Nppp_left_interface = self.compute_jump_stiffness_coefficients(rp_left_interface, rpp_left_interface, rppp_left_interface)
             dt1dd_Np_right_interface, dt3dd_Np_right_interface, dt3dd_Npp_right_interface, dt5dd_Np_right_interface, dt5dd_Npp_right_interface, dt5dd_Nppp_right_interface = self.compute_jump_stiffness_coefficients(rp_right_interface, rpp_right_interface, rppp_right_interface)
@@ -269,17 +301,48 @@ class WeakFormDG(WeakFormCG):
             dt3dd_right_interface = np.matmul(dt3dd_Np_right_interface, Np_right_interface) + np.matmul(dt3dd_Npp_right_interface, Npp_right_interface)
             dt5dd_left_interface = np.matmul(dt5dd_Np_left_interface, Np_left_interface) + np.matmul(dt5dd_Npp_left_interface, Npp_left_interface) + np.matmul(dt5dd_Nppp_left_interface, Nppp_left_interface)
             dt5dd_right_interface = np.matmul(dt5dd_Np_right_interface, Np_right_interface) + np.matmul(dt5dd_Npp_right_interface, Npp_right_interface) + np.matmul(dt5dd_Nppp_right_interface, Nppp_right_interface)
+            # initialize the force derivative coefficients at the interface
+            dft1dd_N_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dft1dd_Np_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dft2dd_Np_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            # perform CZM checks and calculations in the case of a cohesive interface material
+            if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
+                # only if the interface is already damaged
+                if (self.internal_variables[i:i+1, 0:1] == 1.0):
+                    dft1dd_N_coeff, dft1dd_Np_coeff, dft2dd_Np_coeff = self.material.compute_cohesive_force_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 1:2])
+                    # effective separation at the interface
+                    delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                    # update the maximum effective separation
+                    new_delta_max = self.material.compute_effective_maximum_separation(delta, self.internal_variables[i:i+1, 1:2])
+                    self.internal_variables[i:i+1, 1:2] = new_delta_max
             # penalty term contribution at the current interface to the system stiffness
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_left_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_right_interface)))
-            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_right_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= ((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_left_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += ((1.0-self.internal_variables[i:i+1, 0:1])*((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_left_interface))))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((1.0-self.internal_variables[i:i+1, 0:1])*((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_right_interface))))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((1.0-self.internal_variables[i:i+1, 0:1])*((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_right_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_right_interface))))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= ((1.0-self.internal_variables[i:i+1, 0:1])*((self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), N_left_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), Np_left_interface))))
             # adding 't_i' vector gradient contributions at the current interface to the system stiffness
             # works only when there are no elemental loads!!!
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_left_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_left_interface)))
-            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_right_interface)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_right_interface)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= ((1.0-self.internal_variables[i:i+1, 0:1])*0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_left_interface))))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += ((1.0-self.internal_variables[i:i+1, 0:1])*0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_left_interface))))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= ((1.0-self.internal_variables[i:i+1, 0:1])*0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_right_interface))))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += ((1.0-self.internal_variables[i:i+1, 0:1])*0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_right_interface))))
+            # INTERFACE FORCE DERIVATIVES FROM THE CZM
+            dft1dd_term1_left = np.matmul(dft1dd_N_coeff, N_left_interface)
+            dft1dd_term1_right = np.matmul(dft1dd_N_coeff, N_right_interface)
+            dft1dd_term2_left = np.matmul(dft1dd_Np_coeff, Np_left_interface)
+            dft1dd_term2_right = np.matmul(dft1dd_Np_coeff, Np_right_interface)
+            dft2dd_left = np.matmul(dft2dd_Np_coeff, Np_left_interface)
+            dft2dd_right = np.matmul(dft2dd_Np_coeff, Np_right_interface)
+            # first set of terms
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.internal_variables[i:i+1, 0:1]*np.matmul(np.transpose(N_left_interface), dft1dd_term1_left))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 0:1]*np.matmul(np.transpose(N_right_interface), dft1dd_term1_right))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 0:1]*np.matmul(np.transpose(N_left_interface), dft1dd_term1_right))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 0:1]*np.matmul(np.transpose(N_right_interface), dft1dd_term1_left))
+            # second set of terms
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_left_interface), dft1dd_term2_left) + np.matmul(np.transpose(N_left_interface), dft2dd_left)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_right_interface), dft1dd_term2_left) + np.matmul(np.transpose(N_right_interface), dft2dd_left)))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_left_interface), dft1dd_term2_right) + np.matmul(np.transpose(N_left_interface), dft2dd_right)))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 0:1]*(np.matmul(np.transpose(N_right_interface), dft1dd_term2_right) + np.matmul(np.transpose(N_right_interface), dft2dd_right)))
         pass
 
     # Function to compute the system internal forces
