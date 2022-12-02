@@ -168,5 +168,104 @@ def static_main():
 
     print("\nTotal simulation time = %.2f sec." % (simulation_time))
 
+def CZM_static_main():
+
+    start_time = time.time()
+
+    # density of the material
+    rho = 3690.0
+    # elastic modulus of beam
+    E = 2.60E11
+    # area of cross section
+    A = 3.14159E-02
+    # area moment of inertia
+    I = 7.85398E-05
+    # critical effective cohesive strength
+    Sc = 400.0E06
+    # effective fracture energy
+    Gc = 34.0
+    # physical information (material parameters)
+    material = Material.CohesiveInterfaceMaterial(rho, E, A, I, Sc, Gc)
+
+    # length of beam
+    L = 10.0
+    # number of elements
+    Nel = 2
+    # geometric information (domain, no. of elements)
+    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space.discretize()
+    # to avoid creating reference to the object attributes
+    # a better idea is to create private attributes and use accessors
+    nodal_coordinates = copy.deepcopy(function_space.nodes)
+
+    # a system binding the function_space (math) and the material (physics) 
+    system = System.System(function_space, material)
+    # to avoid creating reference to the object attributes
+    initial_state = copy.deepcopy(system.state)
+
+    # the solver
+    solver = Solver.NewtonRaphsonSolver(system)
+
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
+    # the load case and output
+    load_case = 0
+    load_steps = 1000
+    save_step = 1
+
+    # applied loads and tolerances
+    DISP_MIC = 0.02
+    SPATIAL_TOLERANCE = 1.0E-05
+
+    # Function to generate the boundary conditions
+    def get_BCs(bctypes, bcvalues, load_case, load_level = 0.0):
+        for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+            x_coord = nodal_coordinates[i, 0]
+            y_coord = nodal_coordinates[i, 1]
+            z_coord = nodal_coordinates[i, 2]
+            if (load_case == 0): # MODE-I CRACKING WITH DISPLACEMENT CONTROL LOADING
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
+                # roller and axial displacement at the right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                    bcvalues[i, 0] = initial_state[i, 0] + load_level*DISP_MIC
+    
+
+    # create a VTK directory or clear it
+    if not os.path.isdir("VTK"):
+        os.mkdir("VTK")
+    else:
+        for item in os.listdir("VTK"):
+            os.remove(os.path.join("VTK", item))
+    
+    # write the initial displacements
+    PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
+
+    # incremental computation of the load path
+    if (load_case == 0):
+        for i in range(0, load_steps):
+            print("\nCurrent load step:", i+1,"out of", load_steps, "load steps.")
+            load_level = (i+1)/load_steps
+            # apply the boundary conditions
+            get_BCs(bctypes, bcvalues, load_case, load_level)
+            solver.set_boundary_conditions(bctypes, bcvalues)
+            # solve the nonlinear static problem and update the system 
+            solver.solve(Nmax = 10, tol = 1.0E-03)
+            if ((i+1) % save_step == 0):
+                output_file = "./VTK/output-" + str(i+1)
+                PostProcess.write_displacements_forces_vtk(output_file, system)
+    
+    simulation_time = time.time() - start_time
+
+    print("\nTotal simulation time = %.2f sec." % (simulation_time))
+
 # run main functions
-static_main()
+# static_main()
+CZM_static_main()
