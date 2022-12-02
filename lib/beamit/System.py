@@ -56,11 +56,13 @@ class System:
         pass
 
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
-        # assemble stiffness
-        self.assemble_stiffness(A, solution)
 
+        # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!        
         # assemble residual
         self.assemble_residual(f, solution, nodal_loads, element_loads_info)
+
+        # assemble stiffness
+        self.assemble_stiffness(A, solution)
 
     # Function to update the variables in the system
     def update(self, solution):
