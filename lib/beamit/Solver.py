@@ -3,7 +3,7 @@ import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
 
-class NewtonRaphsonSolver:
+class Solver:
 
     def __init__(self, system):
         self.system = system
@@ -85,6 +85,11 @@ class NewtonRaphsonSolver:
         else:
             x = np.linalg.solve(A, f)
         return x
+class NewtonRaphsonSolver(Solver):
+
+    def __init__(self, system):
+        # invoke the parent (Solver) class
+        Solver.__init__(self, system)
     
     def solve(self, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # reset linear system before solving
@@ -140,11 +145,11 @@ class NewtonRaphsonSolver:
         # update the system attributes
         self.system.update(self.solution)
 
-class NewmarkSolver(NewtonRaphsonSolver):
+class DynamicSolver(Solver):
 
     def __init__(self, system):
-        # invoke the parent (NewtonRaphsonSolver) class
-        NewtonRaphsonSolver.__init__(self, system)
+        # invoke the parent (Solver) class
+        Solver.__init__(self, system)
         # initialize and assemble the mass matrix
         self.M = np.zeros([system.nequations, system.nequations])
         self.system.assemble_mass(self.M)
@@ -152,7 +157,7 @@ class NewmarkSolver(NewtonRaphsonSolver):
         self.velocity = np.zeros([system.nequations, 1])
         # the "acceleration" (linear accelerations and double time derivative of the tangents)
         self.acceleration = np.zeros([system.nequations, 1])
-    
+
     # Function to set the initial conditions (position and velocity) of the system
     def set_initial_conditions(self, initial_position, initial_velocity):
         self.solution = np.reshape(initial_position, [self.system.nequations, 1])
@@ -164,11 +169,16 @@ class NewmarkSolver(NewtonRaphsonSolver):
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
-        # MODIFY!!!
-        initial_acceleration = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs])
-        self.acceleration[Neumann_dofs] = initial_acceleration
+        initial_acceleration = self.linear_system_solver(self.M, self.f)
+        self.acceleration = initial_acceleration
         # update the system attributes
         self.system.update(self.solution)
+
+class ImplicitNewmarkSolver(DynamicSolver):
+
+    def __init__(self, system):
+        # invoke the parent (DynamicSolver) class
+        DynamicSolver.__init__(self, system)
 
     def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # constants in the time integration scheme
