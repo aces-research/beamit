@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
+import copy
 
 class Solver:
 
@@ -202,16 +203,17 @@ class ImplicitNewmarkSolver(DynamicSolver):
             # generate the Dirichlet solution vector
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
             # update the solution, velocity and acceleration of Dirichlet Dofs
-            acceleration_prev_Dirichlet = self.acceleration[Dirichlet_dofs]
-            velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
+            # Assuming only displacements are applied at the Dirichlet boundaries!!!
+            acceleration_prev_Dirichlet = copy.deepcopy(self.acceleration[Dirichlet_dofs])
+            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
             self.acceleration[Dirichlet_dofs] = (Dirichlet_solution - (dt*velocity_prev_Dirichlet) - (c5*acceleration_prev_Dirichlet))*c0
             self.velocity[Dirichlet_dofs] = velocity_prev_Dirichlet + (c3*acceleration_prev_Dirichlet) + (c4*self.acceleration[Dirichlet_dofs])
             self.solution[Dirichlet_dofs] += Dirichlet_solution
             # initialize total solution increment in the current step
             solution_step = np.zeros([Neumann_dofs.shape[0], 1])
             # velocity and acceleration of the Neumann Dofs from the previous step
-            velocity_prev_Neumann = self.velocity[Neumann_dofs]
-            acceleration_prev_Neumann = self.acceleration[Neumann_dofs]
+            velocity_prev_Neumann = copy.deepcopy(self.velocity[Neumann_dofs])
+            acceleration_prev_Neumann = copy.deepcopy(self.acceleration[Neumann_dofs])
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -259,5 +261,55 @@ class ImplicitNewmarkSolver(DynamicSolver):
             else:
                 # reset the linear system
                 self.reset_system()
+        # update the system attributes
+        self.system.update(self.solution)
+
+class ExplicitNewmarkSolver(DynamicSolver):
+
+    def __init__(self, system):
+        # invoke the parent (Solver) class
+        DynamicSolver.__init__(self, system)
+    
+    # Function to compute the stable time step
+    # probably should consider degrading modulus in case of damage!!!
+    def compute_stable_time_step(self, time_factor = 0.90):
+        element_length = self.system.weak_form.function_space.elL
+        modulus = self.system.weak_form.material.E
+        density = self.system.weak_form.material.rho
+        wave_speed = np.sqrt(modulus/density)
+        stable_time_step = time_factor*(element_length/wave_speed)
+        return stable_time_step
+
+    def solve(self, dt, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+        # perform stability check
+        if (dt > self.compute_stable_time_step(time_factor=1.0)):
+            sys.exit("\nThe chosen time step size makes the solver unstable in time.")
+        # reset the residual before solving
+        self.reset_system()
+        # create the Dirichlet and Neumann global dof arrays
+        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        # generate the nodal load vector
+        nodal_loads = np.zeros([self.system.nequations, 1])
+        nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+        # generate the Dirichlet solution vector
+        Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
+        # Assuming only displacements are applied at the Dirichlet boundaries!!!
+        # the PREDICTOR
+        solution_prev_Dirichlet = copy.deepcopy(self.solution[Dirichlet_dofs])
+        velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
+        # for the Dirichlet DoFs
+        self.solution[Dirichlet_dofs] += Dirichlet_solution
+        self.velocity[Dirichlet_dofs] = (self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
+        self.acceleration[Dirichlet_dofs] = (self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
+        # for the Neumann DoFs
+        self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
+        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+        # assemble the residual
+        self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
+        # solve the semi-discrete SOE for the current accelerations of the Neumann Dofs
+        current_accelerations_Neumann = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
+        # the CORRECTOR
+        self.acceleration[Neumann_dofs] = current_accelerations_Neumann
+        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # update the system attributes
         self.system.update(self.solution)
