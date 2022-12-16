@@ -46,7 +46,7 @@ class CohesiveInterfaceMaterial(Material):
         average_tensile_force_interface = (tensile_force_left_interface + tensile_force_right_interface)/2.0
         # if the average tensile force (of left and right side) at the interface satisfies the damage initiation criterion
         # considering only axial forces for now!!!
-        if ((average_tensile_force_interface/(self.fc) >= 1.0)):
+        if (average_tensile_force_interface/self.fc >= 1.0):
             return True
         else:
             return False
@@ -91,9 +91,9 @@ class CohesiveInterfaceMaterial(Material):
         fcoh = self.compute_effective_cohesive_force(delta, delta_max)
         # effective unit tangent at the interface
         effective_unit_tangent = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-        # compute the interface forces
-        interface_forces = fcoh*effective_unit_tangent
-        return interface_forces
+        # compute the cohesive forces
+        cohesive_forces = fcoh*effective_unit_tangent
+        return cohesive_forces
 
     # Function to compute the derivative of the effective cohesive force w.r.t the effective separation
     def compute_effective_cohesive_force_derivative(self, delta, delta_max):
