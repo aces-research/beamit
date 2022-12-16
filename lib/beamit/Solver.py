@@ -270,6 +270,19 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # invoke the parent (Solver) class
         DynamicSolver.__init__(self, system)
     
+    # Function to compute the natural frequencies of the system
+    def compute_system_frequencies(self):
+        # create the Dirichlet and Neumann global dof arrays
+        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        stiffness = np.zeros([self.system.nequations, self.system.nequations])
+        residual = np.zeros([self.system.nequations, 1])
+        self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
+        eig_vals, eig_vecs = spla.eigs(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], k=self.system.nequations-Dirichlet_dofs.size, M=self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
+        mode_shapes = np.zeros([self.system.nequations, self.system.nequations-Dirichlet_dofs.size])
+        mode_shapes[Neumann_dofs, :] += eig_vecs
+        mode_shapes[Dirichlet_dofs, :] += self.solution[Dirichlet_dofs]*np.ones([Dirichlet_dofs.size, self.system.nequations-Dirichlet_dofs.size])
+        return np.sqrt(eig_vals), mode_shapes
+    
     # Function to compute the stable time step
     # probably should consider degrading modulus in case of damage!!!
     def compute_stable_time_step(self, time_factor = 0.90):
