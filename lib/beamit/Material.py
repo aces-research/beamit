@@ -31,7 +31,8 @@ class CohesiveInterfaceMaterial(Material):
 
     # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface - CHECK!!!
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
-        effective_unit_tangent_interface = (rp_left_interface + rp_right_interface)/np.linalg.norm((rp_left_interface + rp_right_interface), ord=2, axis=0, keepdims=True)
+        average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
+        effective_unit_tangent_interface = average_rp_interface/np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
         return effective_unit_tangent_interface
     
     # Function to evaluate the damage initiation criterion at an interface
@@ -64,6 +65,15 @@ class CohesiveInterfaceMaterial(Material):
         delta = tensile_jump
         return delta
 
+    # Function to compute the axial separation
+    def compute_axial_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface):
+        # compute the effective unit tangent at the interface
+        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
+        # position jump at the interface
+        r_jump_interface = r_right_interface - r_left_interface
+        axial_jump = np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
+        return axial_jump
+    
     # Function to compute the "new" maximum effective separation
     def compute_effective_maximum_separation(self, delta, delta_max):
         if ((delta >= self.delta_c) or (delta >= delta_max)): # loading or complete damage
