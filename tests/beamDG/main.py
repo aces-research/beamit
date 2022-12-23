@@ -218,6 +218,8 @@ def CZM_static_main():
 
     # applied loads and tolerances
     DISP_MIC = 0.02
+    DISP_MIB = -0.02
+    PERTURB_FORCE = 100.0
     SPATIAL_TOLERANCE = 1.0E-05
 
     # Function to generate the boundary conditions
@@ -236,6 +238,19 @@ def CZM_static_main():
                     bctypes[i, 0:3] = 1
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
                     bcvalues[i, 0] = initial_state[i, 0] + load_level*DISP_MIC
+            elif (load_case == 1): # MODE-I BUCKLING WITH DISPLACEMENT CONTROL LOADING
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
+                # roller and axial displacement at the right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                    bcvalues[i, 0] = initial_state[i, 0] + load_level*DISP_MIB
+                # perturbation force at the center
+                elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bcvalues[i, 1] = PERTURB_FORCE
     
 
     # create a VTK directory or clear it
