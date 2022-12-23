@@ -183,7 +183,7 @@ def CZM_static_main():
     # critical effective cohesive strength
     Sc = 400.0E06
     # effective fracture energy
-    Gc = 34.0
+    Gc = 3400000.0
     # physical information (material parameters)
     material = Material.CohesiveInterfaceMaterial(rho, E, A, I, Sc, Gc)
 
@@ -198,7 +198,7 @@ def CZM_static_main():
     # a better idea is to create private attributes and use accessors
     nodal_coordinates = copy.deepcopy(function_space.nodes)
 
-    # a system binding the function_space (math) and the material (physics) 
+    # a system binding the function_space (math) and the material (physics)
     system = System.System(function_space, material)
     # to avoid creating reference to the object attributes
     initial_state = copy.deepcopy(system.state)
@@ -213,7 +213,7 @@ def CZM_static_main():
 
     # the load case and output
     load_case = 0
-    load_steps = 1000
+    load_steps = 2000
     save_step = 1
 
     # applied loads and tolerances
@@ -377,5 +377,5 @@ def CZM_dynamic_main():
 
 # run main functions
 # static_main()
-# CZM_static_main()
-CZM_dynamic_main()
+CZM_static_main()
+# CZM_dynamic_main()
