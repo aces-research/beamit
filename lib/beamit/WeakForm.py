@@ -234,7 +234,6 @@ class WeakFormDG(WeakFormCG):
                     self.internal_variables[i:i+1, 1:2] = 1.0
                     # evaluate interface forces according to the TSL
                     interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 2:3])
-                
             # DG FLUX AND COMPATIBILITY TERMS
             f[global_element_dofs_left] += (((1.0-self.internal_variables[i:i+1, 1:2])*np.matmul(np.transpose(N_left_interface), average_forces_interface)) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + ((1.0-self.internal_variables[i:i+1, 1:2])*self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
             f[global_element_dofs_right] -= (((1.0-self.internal_variables[i:i+1, 1:2])*np.matmul(np.transpose(N_right_interface), average_forces_interface)) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + ((1.0-self.internal_variables[i:i+1, 1:2])*self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))

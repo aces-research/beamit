@@ -303,7 +303,7 @@ def CZM_dynamic_main():
     # length of beam
     L = 10.0
     # number of elements
-    Nel = 2
+    Nel = 10
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
@@ -324,18 +324,23 @@ def CZM_dynamic_main():
     # boundary condition values matrix
     bcvalues = np.zeros([function_space.N, function_space.dof])
 
+    # applied loads and tolerances
+    SPATIAL_TOLERANCE = 1.0E-05
+    SPALL_VELOCITY = (0.50*Sc)/(rho*np.sqrt(E/rho))
+    
     # linear displacement signal function
     def linear_displacement_signal(time):
         return time
 
+    # spall displacement signal function
+    def spall_displacement_signal(time):
+        return SPALL_VELOCITY*time
+    
     # the load case and time details
-    load_case = 0
-    dt = 1.0E-05
+    load_case = 1
+    dt = 1.0E-06
     time_steps = 2000
     save_time = 1
-
-    # applied loads and tolerances
-    SPATIAL_TOLERANCE = 1.0E-05
     
     # function to apply BCs
     def update_BCs(bctypes, bcvalues, load_case, simulation_time):
@@ -343,7 +348,7 @@ def CZM_dynamic_main():
             x_coord = nodal_coordinates[i, 0]
             y_coord = nodal_coordinates[i, 1]
             z_coord = nodal_coordinates[i, 2]
-            if (load_case == 0):
+            if (load_case == 0): # MODE-I CRACKING WITH LINEAR DISPLACEMENT SIGNAL
                 # pin at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 0:3] = 1
@@ -353,6 +358,17 @@ def CZM_dynamic_main():
                     bctypes[i, 0:3] = 1
                     bcvalues[i, 0] = initial_state[i, 0] + linear_displacement_signal(simulation_time)
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
+            elif (load_case == 1): # MODE-I CRACKING WITH SPALL DISPLACEMENT SIGNAL
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0] = initial_state[i, 0] - spall_displacement_signal(simulation_time)
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                # roller and axial displacement at right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0] = initial_state[i, 0] + spall_displacement_signal(simulation_time)
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
     
     # set boundary and initial conditions
     update_BCs(bctypes, bcvalues, load_case, simulation_time = 0.0)
@@ -360,6 +376,18 @@ def CZM_dynamic_main():
     # to avoid creating reference to the object attributes
     initial_position = copy.deepcopy(initial_state)
     initial_velocity = np.zeros([function_space.N, function_space.dof])
+    # generate initial velocities
+    if (load_case == 1): # MODE-I CRACKING WITH SPALL DISPLACEMENT SIGNAL
+        for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+            x_coord = nodal_coordinates[i, 0]
+            y_coord = nodal_coordinates[i, 1]
+            z_coord = nodal_coordinates[i, 2]
+            # at left end
+            if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                initial_velocity[i, 0] = -SPALL_VELOCITY
+            # at right end
+            elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                initial_velocity[i, 0] = SPALL_VELOCITY
     solver.set_initial_conditions(initial_position, initial_velocity)
 
     # create a VTK directory or clear it
@@ -392,5 +420,5 @@ def CZM_dynamic_main():
 
 # run main functions
 # static_main()
-CZM_static_main()
-# CZM_dynamic_main()
+# CZM_static_main()
+CZM_dynamic_main()
