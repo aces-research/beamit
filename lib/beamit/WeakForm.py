@@ -142,7 +142,8 @@ class WeakFormDG(WeakFormCG):
         # second column = binary parameter to enable/disable DG flux and compatibility, and CZM force terms in the interface jump forces
         # (0.0 -> DG flux and compatibility terms are active, 1.0 -> CZM force terms are active)
         # third column = maximum effective separation at an interface in the entire loading history
-        self.internal_variables = np.zeros([self.function_space.E-1, 3])
+        # fourth column = effective force at an interface at damage initiation
+        self.internal_variables = np.zeros([self.function_space.E-1, 4])
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -158,7 +159,7 @@ class WeakFormDG(WeakFormCG):
         return t1, t2, t3, t4, t5
     
     # Function to compute the system residual
-    def compute_system_residual(self, f, system_unknowns, element_loads_info):
+    def compute_system_residual(self, f, system_unknowns, element_loads_info, update_internal=False):
         # compute system residual using the function in WeakFormCG
         super().compute_system_residual(f, system_unknowns, element_loads_info)
         # add the contributions of jump terms at the interfaces to the residual
@@ -220,20 +221,40 @@ class WeakFormDG(WeakFormCG):
                     if (self.internal_variables[i:i+1, 0:1] == 1.0):
                         self.internal_variables[i:i+1, 1:2] = 1.0
                         # evaluate interface forces according to the TSL
-                        interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 2:3])
+                        interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
+                        if (update_internal):
+                            # effective separation at the interface
+                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                            # update the maximum effective separation
+                            new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
+                            self.internal_variables[i:i+1, 2:3] = new_delta_max
                     # damage not yet initiated
                     elif (self.material.evaluate_damage_initiation_criterion(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)): # evaluate the damage initiation criterion
                         # damage just initiated at the interface
                         self.internal_variables[i:i+1, 0:1] = 1.0
                         self.internal_variables[i:i+1, 1:2] = 1.0
+                        # update the effective internal variables at damage initiation
+                        self.internal_variables[i:i+1, 3:4] = self.material.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)
                         # evaluate interface forces according to the TSL
-                        interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 2:3])
+                        interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
+                        if (update_internal):
+                            # effective separation at the interface
+                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                            # update the maximum effective separation
+                            new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
+                            self.internal_variables[i:i+1, 2:3] = new_delta_max
                     else: # no damage at the interface
                         self.internal_variables[i:i+1, 1:2] = 0.0
                 else: # damage already initiated at the interface (loading | unloading | damage after recontact)
                     self.internal_variables[i:i+1, 1:2] = 1.0
                     # evaluate interface forces according to the TSL
-                    interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 2:3])
+                    interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
+                    if (update_internal):
+                        # effective separation at the interface
+                        delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                        # update the maximum effective separation
+                        new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
+                        self.internal_variables[i:i+1, 2:3] = new_delta_max
             # DG FLUX AND COMPATIBILITY TERMS
             f[global_element_dofs_left] += (((1.0-self.internal_variables[i:i+1, 1:2])*np.matmul(np.transpose(N_left_interface), average_forces_interface)) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + ((1.0-self.internal_variables[i:i+1, 1:2])*self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
             f[global_element_dofs_right] -= (((1.0-self.internal_variables[i:i+1, 1:2])*np.matmul(np.transpose(N_right_interface), average_forces_interface)) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + ((1.0-self.internal_variables[i:i+1, 1:2])*self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
@@ -318,11 +339,11 @@ class WeakFormDG(WeakFormCG):
             dft2dd_Np_coeff = np.zeros(dt1dd_Np_left_interface.shape)
             # perform CZM calculations if needed in the case of a cohesive interface material
             if ((isinstance(self.material, (Material.CohesiveInterfaceMaterial))) and (self.internal_variables[i:i+1, 1:2] == 1.0)):
-                dft1dd_N_coeff, dft1dd_Np_coeff, dft2dd_Np_coeff = self.material.compute_cohesive_force_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, self.internal_variables[i:i+1, 2:3])
+                dft1dd_N_coeff, dft1dd_Np_coeff, dft2dd_Np_coeff = self.material.compute_cohesive_force_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
                 # effective separation at the interface
                 delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
                 # update the maximum effective separation
-                new_delta_max = self.material.compute_effective_maximum_separation(delta, self.internal_variables[i:i+1, 2:3])
+                new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                 self.internal_variables[i:i+1, 2:3] = new_delta_max
             # penalty term contribution at the current interface to the system stiffness
             A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (((1.0-self.internal_variables[i:i+1, 1:2])*(self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), N_left_interface))) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), Np_left_interface)))
