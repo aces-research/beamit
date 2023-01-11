@@ -36,9 +36,9 @@ class System:
         self.weak_form.compute_system_stiffness(A, solution)
         pass
 
-    def assemble_residual(self, f, solution, nodal_loads, element_loads_info):
+    def assemble_residual(self, f, solution, nodal_loads, element_loads_info, update_internal=False):
         dofs = self.weak_form.function_space.dof
-        self.weak_form.compute_system_residual(f, solution, element_loads_info)
+        self.weak_form.compute_system_residual(f, solution, element_loads_info, update_internal)
         updated_nodal_loads = np.zeros(nodal_loads.shape)
         for i in range(0, self.weak_form.function_space.N):
             updated_nodal_loads[dofs*i:(dofs*i)+3, :] += nodal_loads[dofs*i:(dofs*i)+3, :]
