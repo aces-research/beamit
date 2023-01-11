@@ -35,19 +35,22 @@ class CohesiveInterfaceMaterial(Material):
         effective_unit_tangent_interface = average_rp_interface/np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
         return effective_unit_tangent_interface
     
+    # Function to compute effective force at an interface
+    def compute_effective_force(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface):
+        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
+        average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
+        average_axial_force_interface = np.sum(average_forces_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
+        # only if the axial forces are tensile in nature
+        average_tensile_force_interface = np.maximum(average_axial_force_interface, 0.0)
+        # considering only axial forces for now!!!
+        effective_force_interface = average_tensile_force_interface
+        return effective_force_interface
+    
     # Function to evaluate the damage initiation criterion at an interface
     def evaluate_damage_initiation_criterion(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface):
-        # compute the effective unit tangent at the interface
-        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-        axial_force_left_interface = np.sum(forces_left_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
-        axial_force_right_interface = np.sum(forces_right_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
-        # only if the axial forces are tensile in nature
-        tensile_force_left_interface = np.maximum(axial_force_left_interface, 0.0)
-        tensile_force_right_interface = np.maximum(axial_force_right_interface, 0.0)
-        average_tensile_force_interface = (tensile_force_left_interface + tensile_force_right_interface)/2.0
-        # if the average tensile force (of left and right side) at the interface satisfies the damage initiation criterion
-        # considering only axial forces for now!!!
-        if (average_tensile_force_interface/self.fc >= 1.0):
+        effective_force_interface = self.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)
+        # if the effective force at the interface satisfies the damage initiation criterion
+        if (effective_force_interface/self.fc >= 1.0):
             return True
         else:
             return False
