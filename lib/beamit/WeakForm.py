@@ -143,7 +143,8 @@ class WeakFormDG(WeakFormCG):
         # (0.0 -> DG flux and compatibility terms are active, 1.0 -> CZM force terms are active)
         # third column = maximum effective separation at an interface in the entire loading history
         # fourth column = effective force at an interface at damage initiation
-        self.internal_variables = np.zeros([self.function_space.E-1, 4])
+        # fifth to seventh columns = position jumps at an interface at damage initiation
+        self.internal_variables = np.zeros([self.function_space.E-1, 7])
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -212,7 +213,7 @@ class WeakFormDG(WeakFormCG):
             interface_forces = np.zeros(average_forces_interface.shape)
             # perform CZM checks and calculations in the case of a cohesive interface material
             if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
-                axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
                 if (axial_jump < 0.0): # recontact at the interface
                     self.internal_variables[i:i+1, 1:2] = 0.0
                 # damage not yet initiated or for damage initiation with very small separation at the interface
@@ -224,7 +225,7 @@ class WeakFormDG(WeakFormCG):
                         interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
                         if (update_internal):
                             # effective separation at the interface
-                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
                             # update the maximum effective separation
                             new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                             self.internal_variables[i:i+1, 2:3] = new_delta_max
@@ -235,11 +236,12 @@ class WeakFormDG(WeakFormCG):
                         self.internal_variables[i:i+1, 1:2] = 1.0
                         # update the effective internal variables at damage initiation
                         self.internal_variables[i:i+1, 3:4] = self.material.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)
+                        self.internal_variables[i:i+1, 4:7] = r_jump_interface.T
                         # evaluate interface forces according to the TSL
                         interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
                         if (update_internal):
                             # effective separation at the interface
-                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                            delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
                             # update the maximum effective separation
                             new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                             self.internal_variables[i:i+1, 2:3] = new_delta_max
@@ -251,7 +253,7 @@ class WeakFormDG(WeakFormCG):
                     interface_forces = self.material.compute_cohesive_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
                     if (update_internal):
                         # effective separation at the interface
-                        delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                        delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
                         # update the maximum effective separation
                         new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                         self.internal_variables[i:i+1, 2:3] = new_delta_max
@@ -341,7 +343,7 @@ class WeakFormDG(WeakFormCG):
             if ((isinstance(self.material, (Material.CohesiveInterfaceMaterial))) and (self.internal_variables[i:i+1, 1:2] == 1.0)):
                 dft1dd_N_coeff, dft1dd_Np_coeff, dft2dd_Np_coeff = self.material.compute_cohesive_force_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3])
                 # effective separation at the interface
-                delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+                delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
                 # update the maximum effective separation
                 new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                 self.internal_variables[i:i+1, 2:3] = new_delta_max
