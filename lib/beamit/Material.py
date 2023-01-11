@@ -56,11 +56,11 @@ class CohesiveInterfaceMaterial(Material):
             return False
 
     # Function to compute the effective separation across the "cohesive boundary"
-    def compute_effective_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface):
+    def compute_effective_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=np.zeros([3,1])):
         # compute the effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # position jump at the interface
-        r_jump_interface = r_right_interface - r_left_interface
+        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
         axial_jump = np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
         # only if the axial jump is tensile
         tensile_jump = np.maximum(axial_jump, 0.0)
@@ -69,11 +69,11 @@ class CohesiveInterfaceMaterial(Material):
         return delta
 
     # Function to compute the axial separation
-    def compute_axial_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface):
+    def compute_axial_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=np.zeros([3,1])):
         # compute the effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # position jump at the interface
-        r_jump_interface = r_right_interface - r_left_interface
+        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
         axial_jump = np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
         return axial_jump
     
@@ -100,9 +100,9 @@ class CohesiveInterfaceMaterial(Material):
         return fcoh
     
     # Function to compute the cohesive forces at the interface
-    def compute_cohesive_forces(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None):
+    def compute_cohesive_forces(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1])):
         # effective separation at the interface
-        delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+        delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI)
         # effective cohesive force at the interface
         fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
         # effective unit tangent at the interface
@@ -126,7 +126,7 @@ class CohesiveInterfaceMaterial(Material):
         return dfcoh_ddelta
     
     # Function to compute the coefficients of the cohesive force derivatives
-    def compute_cohesive_force_derivative_coefficients(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None):
+    def compute_cohesive_force_derivative_coefficients(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1])):
         average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
         average_rp_interface_L2 = np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
         # position jump at the interface
@@ -134,7 +134,7 @@ class CohesiveInterfaceMaterial(Material):
         # effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # effective separation at the interface
-        delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface)
+        delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI)
         # effective cohesive force at the interface
         fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
         avrp_dyd_avrp = np.matmul(average_rp_interface, np.transpose(average_rp_interface))
