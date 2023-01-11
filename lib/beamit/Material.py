@@ -86,13 +86,16 @@ class CohesiveInterfaceMaterial(Material):
         return new_delta_max
     
     # Function to compute the effective cohesive force according to a linear TSL
-    def compute_effective_cohesive_force(self, delta, delta_max):
+    def compute_effective_cohesive_force(self, delta, delta_max, effective_force_DI=None):
+        # set the effective force to critical force in case of no input
+        if (effective_force_DI == None):
+            effective_force_DI = self.fc
         if (delta >= self.delta_c): # complete damage
             fcoh = 0.0
         elif (delta >= delta_max): # loading
-            fcoh = self.fc*(1.0-(delta/self.delta_c))
+            fcoh = effective_force_DI*(1.0-(delta/self.delta_c))
         else: # unloading
-            fmax = self.fc*(1.0-(delta_max/self.delta_c))
+            fmax = effective_force_DI*(1.0-(delta_max/self.delta_c))
             fcoh = (fmax/delta_max)*delta
         return fcoh
     
@@ -109,13 +112,16 @@ class CohesiveInterfaceMaterial(Material):
         return cohesive_forces
 
     # Function to compute the derivative of the effective cohesive force w.r.t the effective separation
-    def compute_effective_cohesive_force_derivative(self, delta, delta_max):
+    def compute_effective_cohesive_force_derivative(self, delta, delta_max, effective_force_DI=None):
+        # set the effective force to critical effective force in case of no input
+        if (effective_force_DI == None):
+            effective_force_DI = self.fc
         if (delta >= self.delta_c): # complete damage
             dfcoh_ddelta = 0.0
         elif (delta >= delta_max): # loading
-            dfcoh_ddelta = -self.fc/self.delta_c
+            dfcoh_ddelta = -effective_force_DI/self.delta_c
         else: # unloading
-            fmax = self.fc*(1.0-(delta_max/self.delta_c))
+            fmax = effective_force_DI*(1.0-(delta_max/self.delta_c))
             dfcoh_ddelta = fmax/delta_max
         return dfcoh_ddelta
     
