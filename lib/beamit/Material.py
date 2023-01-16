@@ -29,10 +29,12 @@ class CohesiveInterfaceMaterial(Material):
         # critical effective force
         self.fc = self.Sc*self.A
 
-    # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface - CHECK!!!
+    # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
-        average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
-        effective_unit_tangent_interface = average_rp_interface/np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
+        tangent_left_interface = rp_left_interface/np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
+        tangent_right_interface = rp_right_interface/np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
+        average_tangent_interface = (tangent_left_interface + tangent_right_interface)/2.0
+        effective_unit_tangent_interface = average_tangent_interface/np.linalg.norm(average_tangent_interface, ord=2, axis=0, keepdims=True)
         return effective_unit_tangent_interface
     
     # Function to compute effective force at an interface
@@ -127,21 +129,23 @@ class CohesiveInterfaceMaterial(Material):
     
     # Function to compute the coefficients of the cohesive force derivatives
     def compute_cohesive_force_derivative_coefficients(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1])):
-        average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
-        average_rp_interface_L2 = np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
+        tangent_left_interface = rp_left_interface/np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
+        tangent_right_interface = rp_right_interface/np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
+        average_tangent_interface = (tangent_left_interface + tangent_right_interface)/2.0
+        average_tangent_interface_L2 = np.linalg.norm(average_tangent_interface, ord=2, axis=0, keepdims=True)
         # position jump at the interface
-        r_jump_interface = r_right_interface - r_left_interface
+        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
         # effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # effective separation at the interface
         delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI)
-        # effective cohesive force at the interface
+        # effective cohesive force and its derivative w.r.t effective separation at the interface
         fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
-        avrp_dyd_avrp = np.matmul(average_rp_interface, np.transpose(average_rp_interface))
-        dtangeffdd_coeff = 0.50*((np.eye(rp_left_interface.shape[0])/average_rp_interface_L2) - (avrp_dyd_avrp/(average_rp_interface_L2**3.0)))
+        dfcoh_ddelta = self.compute_effective_cohesive_force_derivative(delta, delta_max, effective_force_DI)
+        avtan_dyd_avtan = np.matmul(average_tangent_interface, np.transpose(average_tangent_interface))     
+        dtangeffdd_coeff = 0.50*((np.eye(rp_left_interface.shape[0])/average_tangent_interface_L2) - (avtan_dyd_avtan/(average_tangent_interface_L2**3.0)))
         tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
         tangeff_dyd_rjump = np.matmul(effective_unit_tangent_interface, np.transpose(r_jump_interface))
-        dfcoh_ddelta = self.compute_effective_cohesive_force_derivative(delta, delta_max, effective_force_DI)
         # first term coefficients
         dft1dd_N_coeff = dfcoh_ddelta*tangeff_dyd_tangeff
         dft1dd_Np_coeff = dfcoh_ddelta*np.matmul(tangeff_dyd_rjump, dtangeffdd_coeff)
