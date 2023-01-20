@@ -28,6 +28,10 @@ class CohesiveInterfaceMaterial(Material):
         self.delta_c = (2.0*self.Gc)/self.Sc
         # critical effective force
         self.fc = self.Sc*self.A
+        # constant for non-dimensionalization
+        self.C = np.sqrt(self.A/np.pi)
+        # the mode-mixity parameter
+        self.alpha = 1.0
 
     # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
@@ -38,19 +42,23 @@ class CohesiveInterfaceMaterial(Material):
         return effective_unit_tangent_interface
     
     # Function to compute effective force at an interface
-    def compute_effective_force(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface):
+    def compute_effective_force(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface):
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
         average_axial_force_interface = np.sum(average_forces_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
-        # only if the axial forces are tensile in nature
+        # only if the axial forces are tensile
         average_tensile_force_interface = np.maximum(average_axial_force_interface, 0.0)
-        # considering only axial forces for now!!!
-        effective_force_interface = average_tensile_force_interface
+        # tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+        average_bending_moments_interface = (moments_left_interface + moments_right_interface)/2.0
+        # average_bending_moments_interface = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_moments_interface)
+        average_bending_moments_interface_L2 = np.linalg.norm(average_bending_moments_interface, ord=2, axis=0, keepdims=True)
+        # considering mixed-mode fracture with tensile forces and bending moments
+        effective_force_interface = np.sqrt((average_tensile_force_interface**2.0)+((average_bending_moments_interface_L2/(self.alpha*self.C))**2.0))
         return effective_force_interface
     
     # Function to evaluate the damage initiation criterion at an interface
-    def evaluate_damage_initiation_criterion(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface):
-        effective_force_interface = self.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface)
+    def evaluate_damage_initiation_criterion(self, rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface):
+        effective_force_interface = self.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface)
         # if the effective force at the interface satisfies the damage initiation criterion
         if (effective_force_interface/self.fc >= 1.0):
             return True
@@ -66,8 +74,14 @@ class CohesiveInterfaceMaterial(Material):
         axial_jump = np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
         # only if the axial jump is tensile
         tensile_jump = np.maximum(axial_jump, 0.0)
-        # considering only tensile jumps for now!!!
-        delta = tensile_jump
+        # tangent jump at the interface
+        rp_jump_interface = rp_right_interface - rp_left_interface
+        tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+        # bending rotations at the interface
+        bending_rotations = np.matmul((np.eye(3)-tangeff_dyd_tangeff), rp_jump_interface)
+        bending_rotations_L2 = np.linalg.norm(bending_rotations, ord=2, axis=0, keepdims=True)
+        # considering mixed-mode fracture with tensile jumps and bending rotations
+        delta = np.sqrt((tensile_jump**2.0)+((self.alpha*self.C*bending_rotations_L2)**2.0))
         return delta
 
     # Function to compute the axial separation
