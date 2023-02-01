@@ -303,7 +303,7 @@ def CZM_dynamic_main():
     # length of beam
     L = 10.0
     # number of elements
-    Nel = 10
+    Nel = 20
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
@@ -318,6 +318,7 @@ def CZM_dynamic_main():
 
     # the solver
     solver = Solver.ExplicitNewmarkSolver(system)
+    # solver = Solver.ImplicitNewmarkSolver(system)
 
     # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
     bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
@@ -359,7 +360,7 @@ def CZM_dynamic_main():
                     bcvalues[i, 0] = initial_state[i, 0] + linear_displacement_signal(simulation_time)
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
             elif (load_case == 1): # MODE-I CRACKING WITH SPALL DISPLACEMENT SIGNAL
-                # pin at left end
+                # roller and axial displacement at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 0:3] = 1
                     bcvalues[i, 0] = initial_state[i, 0] - spall_displacement_signal(simulation_time)
@@ -368,6 +369,25 @@ def CZM_dynamic_main():
                 elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 0:3] = 1
                     bcvalues[i, 0] = initial_state[i, 0] + spall_displacement_signal(simulation_time)
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+            elif (load_case == 2): # FLEXURAL CRACKING WITH LINEAR DISPLACEMENT SIGNAL
+                # pin at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
+                # roller at right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 1:3] = 1
+                    bcvalues[i, 1:3] = initial_state[i, 1:3]
+                # transverse displacement at center
+                elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 1] = 1
+                    bcvalues[i, 1] = initial_state[i, 1] - linear_displacement_signal(simulation_time)
+            elif (load_case == 3): # DG BEAM WITH SPALL DISPLACEMENT SIGNAL
+                # roller and axial displacement at left end
+                if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0] = initial_state[i, 0] - spall_displacement_signal(simulation_time)
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
     
     # set boundary and initial conditions
@@ -388,6 +408,14 @@ def CZM_dynamic_main():
             # at right end
             elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                 initial_velocity[i, 0] = SPALL_VELOCITY
+    elif (load_case == 3): # DG BEAM WITH SPALL DISPLACEMENT SIGNAL
+        for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+            x_coord = nodal_coordinates[i, 0]
+            y_coord = nodal_coordinates[i, 1]
+            z_coord = nodal_coordinates[i, 2]
+            # at left end
+            if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                initial_velocity[i, 0] = -SPALL_VELOCITY
     solver.set_initial_conditions(initial_position, initial_velocity)
 
     # create a VTK directory or clear it
@@ -410,6 +438,7 @@ def CZM_dynamic_main():
         # apply the boundary conditions
         solver.set_boundary_conditions(bctypes, bcvalues)
         solver.solve(dt)
+        # solver.solve(dt, tol=1.0E-03)
         if ((i+1) % save_time == 0):
             output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_displacements_forces_vtk(output_file, system)
