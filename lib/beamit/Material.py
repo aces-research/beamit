@@ -48,9 +48,7 @@ class CohesiveInterfaceMaterial(Material):
         average_axial_force_interface = np.sum(average_forces_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
         # only if the axial forces are tensile
         average_tensile_force_interface = np.maximum(average_axial_force_interface, 0.0)
-        tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-        average_moments_interface = (moments_left_interface + moments_right_interface)/2.0
-        average_bending_moments_interface = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_moments_interface)
+        average_bending_moments_interface = (moments_left_interface + moments_right_interface)/2.0
         average_bending_moments_interface_L2 = np.linalg.norm(average_bending_moments_interface, ord=2, axis=0, keepdims=True)
         # considering mixed-mode fracture with tensile forces and bending moments
         effective_force_interface = np.sqrt((average_tensile_force_interface**2.0)+((average_bending_moments_interface_L2/(self.alpha*self.C))**2.0))
@@ -67,18 +65,13 @@ class CohesiveInterfaceMaterial(Material):
 
     # Function to compute the effective separation across the "cohesive boundary"
     def compute_effective_separation(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
-        # compute the effective unit tangent at the interface
-        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # only if the axial jump is tensile
         tensile_jump = np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)
         # tangent jump at the interface
         rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
-        tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-        # bending rotations at the interface
-        bending_rotations = np.matmul((np.eye(3)-tangeff_dyd_tangeff), rp_jump_interface)
-        bending_rotations_L2 = np.linalg.norm(bending_rotations, ord=2, axis=0, keepdims=True)
+        tangent_jumps_L2 = np.linalg.norm(rp_jump_interface, ord=2, axis=0, keepdims=True)
         # considering mixed-mode fracture with tensile jumps and bending rotations
-        delta = np.sqrt((tensile_jump**2.0)+((self.alpha*self.C*bending_rotations_L2)**2.0))
+        delta = np.sqrt((tensile_jump**2.0)+((self.alpha*self.C*tangent_jumps_L2)**2.0))
         return delta
 
     # Function to compute the axial separation
@@ -120,34 +113,26 @@ class CohesiveInterfaceMaterial(Material):
         fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
         # effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-        # position jump at the interface
-        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
-        axial_jump = np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)
         # only if the axial jump is tensile
-        tensile_jump = np.maximum(axial_jump, 0.0)
-        # compute the cohesive forces
-        cohesive_forces = (fcoh/delta)*tensile_jump*effective_unit_tangent_interface
-        return cohesive_forces
+        tensile_jump = np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)
+        # compute the cohesive axial forces
+        cohesive_axial_forces = (fcoh/delta)*tensile_jump*effective_unit_tangent_interface
+        return cohesive_axial_forces
 
-    # Function to compute the cohesive moments at the interface
-    def compute_cohesive_moments(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
+    # Function to compute the cohesive bending moments at the interface
+    def compute_cohesive_bending_moments(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
         # effective separation at the interface
         delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI, tangent_jumps_DI)
         # effective cohesive force at the interface
         fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
-        # effective unit tangent at the interface
-        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
         # tangent jump at the interface
         rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
-        tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-        # bending rotations at the interface
-        bending_rotations = np.matmul((np.eye(3)-tangeff_dyd_tangeff), rp_jump_interface)
-        # compute the cohesive moments
-        cohesive_moments = (fcoh/delta)*((self.alpha*self.C)**2.0)*bending_rotations
-        return cohesive_moments
+        # compute the cohesive bending moments
+        cohesive_bending_moments = (fcoh/delta)*((self.alpha*self.C)**2.0)*rp_jump_interface
+        return cohesive_bending_moments
     
-    # Function to compute the derivative of the cohesive moments at the interface
-    def compute_cohesive_moments_derivative(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, rpp_left_interface, rpp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
+    # Function to compute the derivative of the cohesive bending moments perpendicular to cohesive boundary at the interface
+    def compute_cohesive_bending_moments_perpendicular_derivative(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, rpp_left_interface, rpp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
         # effective separation at the interface
         delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI, tangent_jumps_DI)
         # effective cohesive force at the interface
@@ -191,8 +176,8 @@ class CohesiveInterfaceMaterial(Material):
         ddelta_ds_term1 = (np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)*(np.sum(r_jump_interface*dtangeffds_interface, axis=0, keepdims=True) + np.sum(rp_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)))/delta
         ddelta_ds_term2 = (((self.alpha*self.C)**2.0)*bendrots_dot_dbendrots_ds)/delta
         ddelta_ds = ddelta_ds_term1 + ddelta_ds_term2
-        cohesive_moments_derivative = (dmoments_ddelta*ddelta_ds) + np.matmul(dmoments_drots, dbendrots_ds)
-        return cohesive_moments_derivative
+        cohesive_bending_moments_perpendicular_derivative = (dmoments_ddelta*ddelta_ds) + np.matmul(dmoments_drots, dbendrots_ds)
+        return cohesive_bending_moments_perpendicular_derivative
 
     # Function to compute the derivative of the effective cohesive force w.r.t the effective separation
     def compute_effective_cohesive_force_derivative(self, delta, delta_max, effective_force_DI=None):
