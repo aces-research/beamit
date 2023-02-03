@@ -70,17 +70,12 @@ class System:
         self.state = np.reshape(solution, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
         internal_force_vector = np.zeros([self.nequations, 1])
-        self.weak_form.compute_system_internal_forces(internal_force_vector, solution)
+        self.weak_form.compute_system_nodal_forces(internal_force_vector, solution)
         # compute the cross-product for the moments
         updated_internal_force_vector = np.zeros([self.nequations, 1])
         dofs = self.weak_form.function_space.dof
         for i in range(0, self.weak_form.function_space.N):
-            updated_internal_force_vector[dofs*i:(dofs*i)+3, :] += internal_force_vector[dofs*i:(dofs*i)+3, :]
-            nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
-            nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
-            t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
-            updated_internal_force_vector[(dofs*i)+3:(dofs*i)+6, :] += \
-                cross_op(internal_force_vector[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
+            updated_internal_force_vector[dofs*i:(dofs*i)+dofs, :] += internal_force_vector[dofs*i:(dofs*i)+dofs, :]
         self.internal_forces = np.reshape(updated_internal_force_vector, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
         pass
