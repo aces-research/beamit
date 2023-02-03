@@ -145,7 +145,8 @@ class WeakFormDG(WeakFormCG):
         # fourth column = effective force at an interface at damage initiation
         # fifth to seventh columns = position jumps at an interface at damage initiation
         # eighth to tenth columns = tangent jumps at an interface at damage initiation
-        self.internal_variables = np.zeros([self.function_space.E-1, 10])
+        # eleventh column = binary parameter to switch between axial DG and CZM terms in case of recontact at an interface "after damage initiation"
+        self.internal_variables = np.zeros([self.function_space.E-1, 11])
     
     # Helper function to compute 't_i' vectors in the residual
     def compute_residual_vectors(self, rp, rpp, rppp):
@@ -216,14 +217,16 @@ class WeakFormDG(WeakFormCG):
             interface_bending_moments = np.zeros(average_mxt4_interface.shape)
             # perform CZM checks and calculations in the case of a cohesive interface material
             if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
-                axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
-                if (axial_jump < 0.0): # recontact at the interface - DO NOT DEACTIVATE ALL THE CZM TERMS!!!
-                    self.internal_variables[i:i+1, 1:2] = 0.0
-                # damage not yet initiated or for just after damage initiation or very small separation at the interface
-                elif (self.internal_variables[i:i+1, 2:3] == 0.0):
-                    # just after damage initiation or with very small separation
+                # just after damage initiation or damage not yet initiated
+                if (self.internal_variables[i:i+1, 2:3] == 0.0):
+                    # just after damage initiation
                     if (self.internal_variables[i:i+1, 0:1] == 1.0):
                         self.internal_variables[i:i+1, 1:2] = 1.0
+                        axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
+                        if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
+                            self.internal_variables[i:i+1, 10:11] = 0.0
+                        else:
+                            self.internal_variables[i:i+1, 10:11] = 1.0
                         # evaluate interface forces according to the TSL
                         interface_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                         if (element_loads_info == None): # No element loads
@@ -252,6 +255,11 @@ class WeakFormDG(WeakFormCG):
                         self.internal_variables[i:i+1, 1:2] = 0.0
                 else: # damage already initiated at the interface (loading | unloading | damage after recontact)
                     self.internal_variables[i:i+1, 1:2] = 1.0
+                    axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
+                    if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
+                        self.internal_variables[i:i+1, 10:11] = 0.0
+                    else:
+                        self.internal_variables[i:i+1, 10:11] = 1.0
                     # evaluate interface forces according to the TSL
                     interface_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                     if (element_loads_info == None): # No element loads
