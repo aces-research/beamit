@@ -173,7 +173,8 @@ class CohesiveInterfaceMaterial(Material):
         dbendrots_ds = dbendrots_ds_term1 - dbendrots_ds_term2 - dbendrots_ds_term3
         # term-4
         bendrots_dot_dbendrots_ds = np.sum(bending_rotations*dbendrots_ds, axis=0, keepdims=True)
-        ddelta_ds_term1 = (np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)*(np.sum(r_jump_interface*dtangeffds_interface, axis=0, keepdims=True) + np.sum(rp_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)))/delta
+        tensile_jump = np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)
+        ddelta_ds_term1 = (tensile_jump*np.heaviside(tensile_jump, 0.0)*(np.sum(r_jump_interface*dtangeffds_interface, axis=0, keepdims=True) + np.sum(rp_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)))/delta
         ddelta_ds_term2 = (((self.alpha*self.C)**2.0)*bendrots_dot_dbendrots_ds)/delta
         ddelta_ds = ddelta_ds_term1 + ddelta_ds_term2
         cohesive_bending_moments_perpendicular_derivative = (dmoments_ddelta*ddelta_ds) + np.matmul(dmoments_drots, dbendrots_ds)
