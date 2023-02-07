@@ -3,6 +3,7 @@ import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
 import copy
+from beamit import Material
 
 class Solver:
 
@@ -318,7 +319,10 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # assemble the residual
-        self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
+        if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
+            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
+        else:
+            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
         # solve the semi-discrete SOE for the current accelerations of the Neumann Dofs
         current_accelerations_Neumann = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
         # the CORRECTOR
