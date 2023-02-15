@@ -35,10 +35,8 @@ class CohesiveInterfaceMaterial(Material):
 
     # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
-        tangent_left_interface = rp_left_interface/np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
-        tangent_right_interface = rp_right_interface/np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-        average_tangent_interface = (tangent_left_interface + tangent_right_interface)/2.0
-        effective_unit_tangent_interface = average_tangent_interface/np.linalg.norm(average_tangent_interface, ord=2, axis=0, keepdims=True)
+        average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
+        effective_unit_tangent_interface = average_rp_interface/np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
         return effective_unit_tangent_interface
     
     # Function to compute effective force at an interface
