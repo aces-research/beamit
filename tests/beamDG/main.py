@@ -427,7 +427,7 @@ def CZM_dynamic_main():
     
     # write the initial displacements
     output_file = "./VTK/output-0"
-    PostProcess.write_displacements_forces_vtk(output_file, system)
+    PostProcess.write_output_vtk(output_file, system)
 
     # solve the dynamic problem and update the nodal position in system
     simulation_time = 0.0
@@ -441,7 +441,7 @@ def CZM_dynamic_main():
         # solver.solve(dt, tol=1.0E-03)
         if ((i+1) % save_time == 0):
             output_file = "./VTK/output-" + str(i+1)
-            PostProcess.write_displacements_forces_vtk(output_file, system)
+            PostProcess.write_output_vtk(output_file, system)
 
     analysis_time = time.time() - start_time
 
