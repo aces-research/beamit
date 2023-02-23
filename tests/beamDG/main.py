@@ -383,12 +383,16 @@ def CZM_dynamic_main():
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 1] = 1
                     bcvalues[i, 1] = initial_state[i, 1] - linear_displacement_signal(simulation_time)
-            elif (load_case == 3): # DG BEAM WITH SPALL DISPLACEMENT SIGNAL
+            elif (load_case == 3): # HALF BEAM WITH SPALL DISPLACEMENT SIGNAL
                 # roller and axial displacement at left end
                 if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bctypes[i, 0:3] = 1
                     bcvalues[i, 0] = initial_state[i, 0] - spall_displacement_signal(simulation_time)
                     bcvalues[i, 1:3] = initial_state[i, 1:3]
+                # pin at the right end
+                elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                    bctypes[i, 0:3] = 1
+                    bcvalues[i, 0:3] = initial_state[i, 0:3]
     
     # set boundary and initial conditions
     update_BCs(bctypes, bcvalues, load_case, simulation_time = 0.0)
