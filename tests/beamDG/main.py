@@ -176,16 +176,14 @@ def CZM_static_main():
     rho = 3690.0
     # elastic modulus of beam
     E = 2.60E11
-    # area of cross section
-    A = 3.14159E-02
-    # area moment of inertia
-    I = 7.85398E-05
+    # the radius of the beam
+    R = 0.10
     # critical effective cohesive strength
     Sc = 400.0E06
     # effective fracture energy
     Gc = 3400000.0
     # physical information (material parameters)
-    material = Material.CohesiveInterfaceMaterial(rho, E, A, I, Sc, Gc)
+    material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # length of beam
     L = 10.0
@@ -289,16 +287,14 @@ def CZM_dynamic_main():
     rho = 3690.0
     # elastic modulus of beam
     E = 2.60E11
-    # area of cross section
-    A = 3.14159E-02
-    # area moment of inertia
-    I = 7.85398E-05
+    # the radius of the beam
+    R = 0.10
     # critical effective cohesive strength
     Sc = 400.0E06
     # effective fracture energy
     Gc = 34.0
     # physical information (material parameters)
-    material = Material.CohesiveInterfaceMaterial(rho, E, A, I, Sc, Gc)
+    material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # length of beam
     L = 10.0
