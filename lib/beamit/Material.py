@@ -1,23 +1,33 @@
 import numpy as np
+import sys
 
 class Material:
     
-    def __init__(self, rho, E, A, I):
+    def __init__(self, rho, E, R = None, A = None, I = None):
         # the density
         self.rho = rho
         # the elastic modulus
         self.E = E
-        # the area of the beam cross section
-        self.A = A
-        # the area moment of inertia
-        self.I = I
+        if (R != None):
+            # the radius of the beam
+            self.R = R
+            # the area of the beam cross section
+            self.A = np.pi*(R**2.0)
+            # the area moment of inertia
+            self.I = (np.pi*(R**4.0))/4.0
+        elif ((A != None) and (I != None)):
+            self.R = np.sqrt(A/np.pi)
+            self.A = A
+            self.I = I
+        else:
+            sys.exit("\nEither R or A & I has to be given as an input.")
         print("\nCreated the material.")
 
 class CohesiveInterfaceMaterial(Material):
 
-    def __init__(self, rho, E, A, I, Sc, Gc, gamma = 1.0):
+    def __init__(self, rho, E, R, Sc, Gc, gamma = 1.0):
         # invoke the parent (Material) class
-        Material.__init__(self, rho, E, A, I)
+        Material.__init__(self, rho, E, R=R)
         # critical effective cohesive strength of the material
         self.Sc = Sc
         # effective fracture energy of the material
@@ -29,7 +39,7 @@ class CohesiveInterfaceMaterial(Material):
         # critical effective force
         self.fc = self.Sc*self.A
         # constant for non-dimensionalization
-        self.C = np.sqrt(self.A/np.pi)
+        self.C = self.R
         # the mode-mixity parameter
         self.alpha = 1.0
 
