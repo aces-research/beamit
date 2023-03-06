@@ -1,4 +1,5 @@
 import numpy as np
+import scipy as sp
 import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
@@ -270,6 +271,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
     def __init__(self, system):
         # invoke the parent (Solver) class
         DynamicSolver.__init__(self, system)
+        # compute the stable time step size
+        self.stable_time_step = self.compute_stable_time_step()
     
     # Function to compute the natural frequencies of the system
     def compute_system_frequencies(self):
@@ -278,7 +281,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
         residual = np.zeros([self.system.nequations, 1])
         self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
-        eig_vals, eig_vecs = spla.eigs(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], k=self.system.nequations-Dirichlet_dofs.size, M=self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
+        eig_vals, eig_vecs = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
         mode_shapes = np.zeros([self.system.nequations, self.system.nequations-Dirichlet_dofs.size])
         mode_shapes[Neumann_dofs, :] += eig_vecs
         mode_shapes[Dirichlet_dofs, :] += self.solution[Dirichlet_dofs]*np.ones([Dirichlet_dofs.size, self.system.nequations-Dirichlet_dofs.size])
@@ -287,16 +290,18 @@ class ExplicitNewmarkSolver(DynamicSolver):
     # Function to compute the stable time step
     # probably should consider degrading modulus in case of damage!!!
     def compute_stable_time_step(self, time_factor = 0.90):
-        element_length = self.system.weak_form.function_space.elL
-        modulus = self.system.weak_form.material.E
-        density = self.system.weak_form.material.rho
-        wave_speed = np.sqrt(modulus/density)
-        stable_time_step = time_factor*(element_length/wave_speed)
+        print("\nRunning stable time computations!!!")
+        # with the maximum system frequency
+        sys_freqs, _ = self.compute_system_frequencies()
+        stable_time_step = time_factor*(2.0/np.max(sys_freqs.real))
         return stable_time_step
 
-    def solve(self, dt, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt = None, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+        # if the time step size input is not provided
+        if (dt == None):
+            dt = self.stable_time_step
         # perform stability check
-        if (dt > self.compute_stable_time_step(time_factor=1.0)):
+        elif (dt > self.stable_time_step):
             sys.exit("\nThe chosen time step size makes the solver unstable in time.")
         # reset the residual before solving
         self.reset_system()
