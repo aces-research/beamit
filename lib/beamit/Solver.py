@@ -3,7 +3,6 @@ import scipy as sp
 import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
-import copy
 from beamit import Material
 
 class Solver:
@@ -206,16 +205,16 @@ class ImplicitNewmarkSolver(DynamicSolver):
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
             # update the solution, velocity and acceleration of Dirichlet Dofs
             # Assuming only displacements are applied at the Dirichlet boundaries!!!
-            acceleration_prev_Dirichlet = copy.deepcopy(self.acceleration[Dirichlet_dofs])
-            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
+            acceleration_prev_Dirichlet = self.acceleration[Dirichlet_dofs]
+            velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
             self.acceleration[Dirichlet_dofs] = (Dirichlet_solution - (dt*velocity_prev_Dirichlet) - (c5*acceleration_prev_Dirichlet))*c0
             self.velocity[Dirichlet_dofs] = velocity_prev_Dirichlet + (c3*acceleration_prev_Dirichlet) + (c4*self.acceleration[Dirichlet_dofs])
             self.solution[Dirichlet_dofs] += Dirichlet_solution
             # initialize total solution increment in the current step
             solution_step = np.zeros([Neumann_dofs.shape[0], 1])
             # velocity and acceleration of the Neumann Dofs from the previous step
-            velocity_prev_Neumann = copy.deepcopy(self.velocity[Neumann_dofs])
-            acceleration_prev_Neumann = copy.deepcopy(self.acceleration[Neumann_dofs])
+            velocity_prev_Neumann = self.velocity[Neumann_dofs]
+            acceleration_prev_Neumann = self.acceleration[Neumann_dofs]
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -314,8 +313,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
         # Assuming only displacements are applied at the Dirichlet boundaries!!!
         # the PREDICTOR
-        solution_prev_Dirichlet = copy.deepcopy(self.solution[Dirichlet_dofs])
-        velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
+        solution_prev_Dirichlet = self.solution[Dirichlet_dofs]
+        velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
         # for the Dirichlet DoFs
         self.solution[Dirichlet_dofs] += Dirichlet_solution
         self.velocity[Dirichlet_dofs] = (self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
