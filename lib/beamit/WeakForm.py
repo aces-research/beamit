@@ -250,9 +250,9 @@ class WeakFormDG(WeakFormCG):
             mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
             mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
             average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
-            # initialize interface forces and moments
-            interface_forces = np.zeros(average_forces_interface.shape)
-            interface_bending_moments = np.zeros(average_mxt4_interface.shape)
+            # initialize cohesive forces and bending moments
+            cohesive_forces = np.zeros(average_forces_interface.shape)
+            cohesive_bending_moments = np.zeros(average_mxt4_interface.shape)
             # perform CZM checks and calculations in the case of a cohesive interface material
             if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
                 # just after damage initiation or damage not yet initiated
@@ -265,8 +265,8 @@ class WeakFormDG(WeakFormCG):
                             self.internal_variables[i:i+1, 10:11] = 0.0
                         else:
                             self.internal_variables[i:i+1, 10:11] = 1.0
-                        # evaluate interface forces according to the TSL
-                        interface_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                        # evaluate cohesive forces according to the TSL
+                        cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                         # effective separation at the interface
                         delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                         # compute the cohesive forces and bending moments
@@ -276,8 +276,8 @@ class WeakFormDG(WeakFormCG):
                             effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
                             tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
                             interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
-                        interface_forces = interface_axial_forces + interface_constrained_shear_forces
-                        interface_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                        cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
+                        cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                         if (update_internal):
                             # update the maximum effective separation
                             new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
@@ -301,8 +301,8 @@ class WeakFormDG(WeakFormCG):
                         self.internal_variables[i:i+1, 10:11] = 0.0
                     else:
                         self.internal_variables[i:i+1, 10:11] = 1.0
-                    # evaluate interface forces according to the TSL
-                    interface_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                    # evaluate cohesive forces according to the TSL
+                    cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                     # effective separation at the interface
                     delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                     # compute the cohesive forces and bending moments
@@ -312,8 +312,8 @@ class WeakFormDG(WeakFormCG):
                         effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
                         tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
                         interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
-                    interface_forces = interface_axial_forces + interface_constrained_shear_forces
-                    interface_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                    cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
+                    cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                     if (update_internal):
                         # update the maximum effective separation
                         new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
@@ -322,10 +322,10 @@ class WeakFormDG(WeakFormCG):
             f[global_element_dofs_left] += (1.0-self.internal_variables[i:i+1, 1:2])*(np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
             f[global_element_dofs_right] -= (1.0-self.internal_variables[i:i+1, 1:2])*(np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
             # INTERFACE FORCES AND MOMENTS FROM THE CZM
-            f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_left_interface), interface_forces)))
-            f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), interface_forces)))
-            f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_left_interface), interface_bending_moments)))
-            f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_right_interface), interface_bending_moments)))
+            f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_left_interface), cohesive_forces)))
+            f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), cohesive_forces)))
+            f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_left_interface), cohesive_bending_moments)))
+            f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_right_interface), cohesive_bending_moments)))
         pass
     
     # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
