@@ -282,13 +282,16 @@ class ExplicitNewmarkSolver(DynamicSolver):
     def __init__(self, system):
         # invoke the parent (Solver) class
         DynamicSolver.__init__(self, system)
-        # compute the stable time step size
-        self.stable_time_step = self.compute_stable_time_step()
+        # initialize the stable time step size
+        self.stable_time_step = None
     
     # Function to compute the natural frequencies of the system
     def compute_system_frequencies(self):
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        # if Dirichlet boundary conditions are not available
+        if (Dirichlet_dofs.size == 0):
+            sys.exit("\nDirichlet boundary conditions are not found.")
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
         residual = np.zeros([self.system.nequations, 1])
         self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
@@ -300,14 +303,18 @@ class ExplicitNewmarkSolver(DynamicSolver):
         mode_shapes[Dirichlet_dofs, :] += self.solution[Dirichlet_dofs]*np.ones([Dirichlet_dofs.size, self.system.nequations-Dirichlet_dofs.size])
         return np.sqrt(eig_vals), mode_shapes
     
-    # Function to compute the stable time step
+    # Function to compute and set the stable time step
     # probably should consider degrading modulus in case of damage!!!
-    def compute_stable_time_step(self, time_factor = 0.90):
+    def set_stable_time_step(self, time_factor = 0.90):
         print("\nRunning stable time computations!!!")
         # with the maximum system frequency
         sys_freqs, _ = self.compute_system_frequencies()
-        stable_time_step = time_factor*(2.0/np.max(sys_freqs.real))
-        return stable_time_step
+        self.stable_time_step = time_factor*(2.0/np.max(sys_freqs.real))
+    
+    # Function to set the boundary conditions and the stable time step
+    def set_boundary_conditions(self, bctypes, bcvalues):
+        super().set_boundary_conditions(bctypes, bcvalues)
+        self.set_stable_time_step()
 
     def solve(self, dt = None, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # if the time step size input is not provided
