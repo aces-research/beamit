@@ -138,55 +138,6 @@ class CohesiveInterfaceMaterial(Material):
         # compute the cohesive bending moments
         cohesive_bending_moments = (fcoh/delta)*((self.alpha*self.C)**2.0)*rp_jump_interface
         return cohesive_bending_moments
-    
-    # Function to compute the derivative of the cohesive bending moments perpendicular to cohesive boundary at the interface
-    def compute_cohesive_bending_moments_perpendicular_derivative(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, rpp_left_interface, rpp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3,1]), tangent_jumps_DI=np.zeros([3,1])):
-        # effective separation at the interface
-        delta = self.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI, tangent_jumps_DI)
-        # effective cohesive force at the interface
-        fcoh = self.compute_effective_cohesive_force(delta, delta_max, effective_force_DI)
-        # effective unit tangent at the interface
-        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-        # position jump at the interface
-        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
-        # tangent jump at the interface
-        rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
-        tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-        # bending rotations at the interface
-        bending_rotations = np.matmul((np.eye(3)-tangeff_dyd_tangeff), rp_jump_interface)
-        # the derivative terms
-        # term-1
-        dmoments_drots = (fcoh/delta)*((self.alpha*self.C)**2.0)*np.eye(3)
-        # term-2
-        dfcoh_ddelta = self.compute_effective_cohesive_force_derivative(delta, delta_max, effective_force_DI)
-        dmoments_ddelta = ((dfcoh_ddelta/delta)-(fcoh/(delta**2.0)))*((self.alpha*self.C)**2.0)*bending_rotations
-        # term-3
-        tangent_left_interface = rp_left_interface/np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
-        tangent_right_interface = rp_right_interface/np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-        average_tangent_interface = (tangent_left_interface + tangent_right_interface)/2.0
-        average_tangent_interface_L2 = np.linalg.norm(average_tangent_interface, ord=2, axis=0, keepdims=True)
-        avtan_dyd_avtan = np.matmul(average_tangent_interface, np.transpose(average_tangent_interface))
-        dtangeffdds_coeff = (np.eye(3)/average_tangent_interface_L2)-(avtan_dyd_avtan/(average_tangent_interface_L2**3.0))
-        rpdydrp_left_interface = np.matmul(rp_left_interface, np.transpose(rp_left_interface))
-        rpdydrp_right_interface = np.matmul(rp_right_interface, np.transpose(rp_right_interface))
-        rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
-        rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-        dtangds_left_interface = np.matmul(((np.eye(3)/rp_left_interface_L2)-(rpdydrp_left_interface/(rp_left_interface_L2**3.0))), rpp_left_interface)
-        dtangds_right_interface = np.matmul(((np.eye(3)/rp_right_interface_L2)-(rpdydrp_right_interface/(rp_right_interface_L2**3.0))), rpp_right_interface)
-        dtangeffds_interface = np.matmul(dtangeffdds_coeff, (dtangds_left_interface+dtangds_right_interface)/2.0)
-        rpp_jump_interface = rpp_left_interface - rpp_right_interface
-        dbendrots_ds_term1 = np.matmul((np.eye(3)-tangeff_dyd_tangeff), rpp_jump_interface)
-        dbendrots_ds_term2 = np.sum(rp_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)*dtangeffds_interface
-        dbendrots_ds_term3 = np.sum(rp_jump_interface*dtangeffds_interface, axis=0, keepdims=True)*effective_unit_tangent_interface
-        dbendrots_ds = dbendrots_ds_term1 - dbendrots_ds_term2 - dbendrots_ds_term3
-        # term-4
-        bendrots_dot_dbendrots_ds = np.sum(bending_rotations*dbendrots_ds, axis=0, keepdims=True)
-        tensile_jump = np.maximum(self.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)
-        ddelta_ds_term1 = (tensile_jump*np.heaviside(tensile_jump, 0.0)*(np.sum(r_jump_interface*dtangeffds_interface, axis=0, keepdims=True) + np.sum(rp_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)))/delta
-        ddelta_ds_term2 = (((self.alpha*self.C)**2.0)*bendrots_dot_dbendrots_ds)/delta
-        ddelta_ds = ddelta_ds_term1 + ddelta_ds_term2
-        cohesive_bending_moments_perpendicular_derivative = (dmoments_ddelta*ddelta_ds) + np.matmul(dmoments_drots, dbendrots_ds)
-        return cohesive_bending_moments_perpendicular_derivative
 
     # Function to compute the derivative of the effective cohesive force w.r.t the effective separation
     def compute_effective_cohesive_force_derivative(self, delta, delta_max, effective_force_DI=None):
