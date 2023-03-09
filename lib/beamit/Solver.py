@@ -41,6 +41,18 @@ class Solver:
                     # shift the Dirichlet conditions to obtain the incremental boundary conditions
                     self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
 
+    # Function to modify the boundary condition values
+    def modify_boundary_condition_values(self, bcvalues):
+        self.bcvalues = bcvalues
+        # loop on node
+        for n in range(0, self.bctypes.shape[0]):
+            # loop on nodal degrees of freedom
+            for d in range(0, self.bctypes.shape[1]):
+                # if Dirichlet bcs
+                if(self.bctypes[n, d] == 1):
+                    # shift the Dirichlet conditions to obtain the incremental boundary conditions
+                    self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
+
     # Function to reset the linear system
     def reset_system(self):
         self.A = np.zeros([self.system.nequations, self.system.nequations])
