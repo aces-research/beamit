@@ -4,6 +4,7 @@ import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
 from beamit import Material
+import copy
 
 class Solver:
 
@@ -30,26 +31,26 @@ class Solver:
     # Function to set the boundary conditions types (Dirichlet and Neumann) and values
     # for each pair (node, dof) of the beam
     def set_boundary_conditions(self, bctypes, bcvalues):
-        self.bctypes = bctypes
-        self.bcvalues = bcvalues
+        self.bctypes = copy.deepcopy(bctypes)
+        self.bcvalues = copy.deepcopy(bcvalues)
         # loop on node
         for n in range(0, self.bcvalues.shape[0]):
             # loop on nodal degrees of freedom
             for d in range(0, self.bcvalues.shape[1]):
                 # if Dirichlet bcs
-                if(bctypes[n, d] == 1):
+                if (bctypes[n, d] == 1):
                     # shift the Dirichlet conditions to obtain the incremental boundary conditions
                     self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
 
     # Function to modify the boundary condition values
     def modify_boundary_condition_values(self, bcvalues):
-        self.bcvalues = bcvalues
+        self.bcvalues = copy.deepcopy(bcvalues)
         # loop on node
         for n in range(0, self.bctypes.shape[0]):
             # loop on nodal degrees of freedom
             for d in range(0, self.bctypes.shape[1]):
                 # if Dirichlet bcs
-                if(self.bctypes[n, d] == 1):
+                if (self.bctypes[n, d] == 1):
                     # shift the Dirichlet conditions to obtain the incremental boundary conditions
                     self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
 
@@ -174,8 +175,8 @@ class DynamicSolver(Solver):
 
     # Function to set the initial conditions (position and velocity) of the system
     def set_initial_conditions(self, initial_position, initial_velocity):
-        self.solution = np.reshape(initial_position, [self.system.nequations, 1])
-        self.velocity = np.reshape(initial_velocity, [self.system.nequations, 1])
+        self.solution = copy.deepcopy(np.reshape(initial_position, [self.system.nequations, 1]))
+        self.velocity = copy.deepcopy(np.reshape(initial_velocity, [self.system.nequations, 1]))
         # compute initial accelerations
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         if (Dirichlet_dofs.size == 0):
@@ -217,16 +218,16 @@ class ImplicitNewmarkSolver(DynamicSolver):
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
             # update the solution, velocity and acceleration of Dirichlet Dofs
             # Assuming only displacements are applied at the Dirichlet boundaries!!!
-            acceleration_prev_Dirichlet = self.acceleration[Dirichlet_dofs]
-            velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
+            acceleration_prev_Dirichlet = copy.deepcopy(self.acceleration[Dirichlet_dofs])
+            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
             self.acceleration[Dirichlet_dofs] = (Dirichlet_solution - (dt*velocity_prev_Dirichlet) - (c5*acceleration_prev_Dirichlet))*c0
             self.velocity[Dirichlet_dofs] = velocity_prev_Dirichlet + (c3*acceleration_prev_Dirichlet) + (c4*self.acceleration[Dirichlet_dofs])
             self.solution[Dirichlet_dofs] += Dirichlet_solution
             # initialize total solution increment in the current step
             solution_step = np.zeros([Neumann_dofs.shape[0], 1])
             # velocity and acceleration of the Neumann Dofs from the previous step
-            velocity_prev_Neumann = self.velocity[Neumann_dofs]
-            acceleration_prev_Neumann = self.acceleration[Neumann_dofs]
+            velocity_prev_Neumann = copy.deepcopy(self.velocity[Neumann_dofs])
+            acceleration_prev_Neumann = copy.deepcopy(self.acceleration[Neumann_dofs])
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -334,8 +335,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
         # Assuming only displacements are applied at the Dirichlet boundaries!!!
         # the PREDICTOR
-        solution_prev_Dirichlet = self.solution[Dirichlet_dofs]
-        velocity_prev_Dirichlet = self.velocity[Dirichlet_dofs]
+        solution_prev_Dirichlet = copy.deepcopy(self.solution[Dirichlet_dofs])
+        velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
         # for the Dirichlet DoFs
         self.solution[Dirichlet_dofs] += Dirichlet_solution
         self.velocity[Dirichlet_dofs] = (self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
