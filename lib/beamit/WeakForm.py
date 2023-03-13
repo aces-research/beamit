@@ -398,13 +398,18 @@ class WeakFormDG(WeakFormCG):
             dt3dd_right_interface = np.matmul(dt3dd_Np_right_interface, Np_right_interface) + np.matmul(dt3dd_Npp_right_interface, Npp_right_interface)
             dt5dd_left_interface = np.matmul(dt5dd_Np_left_interface, Np_left_interface) + np.matmul(dt5dd_Npp_left_interface, Npp_left_interface) + np.matmul(dt5dd_Nppp_left_interface, Nppp_left_interface)
             dt5dd_right_interface = np.matmul(dt5dd_Np_right_interface, Np_right_interface) + np.matmul(dt5dd_Npp_right_interface, Npp_right_interface) + np.matmul(dt5dd_Nppp_right_interface, Nppp_right_interface)
-            # initialize the force derivative coefficients at the interface
-            dft1dd_N_coeff = np.zeros(dt1dd_Np_left_interface.shape)
-            dft1dd_Np_coeff = np.zeros(dt1dd_Np_left_interface.shape)
-            dft2dd_Np_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            # initialize the cohesive force derivative coefficients at the interface
+            dfcoh_axial_dd_N_dual_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dfcoh_axial_dd_Np_direct_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dfcoh_axial_dd_Np_dual_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dmcoh_bending_dd_N_dual_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dmcoh_bending_dd_Np_direct_coeff = np.zeros(dt1dd_Np_left_interface.shape)
+            dmcoh_bending_dd_Np_dual_coeff = np.zeros(dt1dd_Np_left_interface.shape)
             # perform CZM calculations if needed in the case of a cohesive interface material
             if ((isinstance(self.material, (Material.CohesiveInterfaceMaterial))) and (self.internal_variables[i:i+1, 1:2] == 1.0)):
-                dft1dd_N_coeff, dft1dd_Np_coeff, dft2dd_Np_coeff = self.material.compute_cohesive_force_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
+                # compute cohesive axial forces and bending moments derivative coefficients
+                dfcoh_axial_dd_N_dual_coeff, dfcoh_axial_dd_Np_direct_coeff, dfcoh_axial_dd_Np_dual_coeff = self.material.compute_cohesive_axial_forces_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                dmcoh_bending_dd_N_dual_coeff, dmcoh_bending_dd_Np_direct_coeff, dmcoh_bending_dd_Np_dual_coeff = self.material.compute_cohesive_bending_moments_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                 # effective separation at the interface
                 delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                 # update the maximum effective separation
