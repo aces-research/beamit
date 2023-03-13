@@ -214,3 +214,16 @@ class CohesiveInterfaceMaterial(Material):
         dmcoh_bending_dd_Np_dual_coeff += (((self.alpha*self.C)**2.0)*np.matmul(v3_term, np.transpose(rp_jump_interface)))/delta
         return dmcoh_bending_dd_N_dual_coeff, dmcoh_bending_dd_Np_direct_coeff, dmcoh_bending_dd_Np_dual_coeff
 
+    # Function to compute the coefficients of the constrained shear forces derivative
+    def compute_constrained_shear_forces_derivative_coefficients(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, average_forces_interface, position_jumps_DI=np.zeros([3,1])):
+        average_rp_interface = (rp_left_interface + rp_right_interface)/2.0
+        average_rp_interface_L2 = np.linalg.norm(average_rp_interface, ord=2, axis=0, keepdims=True)
+        # position jump at the interface
+        r_jump_interface = r_right_interface - r_left_interface - position_jumps_DI
+        # effective unit tangent at the interface
+        effective_unit_tangent_interface = self.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
+        avrp_dyd_avrp = np.matmul(average_rp_interface, np.transpose(average_rp_interface))
+        dtangeffdd_coeff = 0.50*((np.eye(3)/average_rp_interface_L2) - (avrp_dyd_avrp/(average_rp_interface_L2**3.0)))
+        dfDG_perp_dd_term2_Np_direct_coeff = -np.matmul(((np.sum(average_forces_interface*effective_unit_tangent_interface, axis=0, keepdims=True)*np.eye(3)) + np.matmul(average_forces_interface, np.transpose(effective_unit_tangent_interface))), dtangeffdd_coeff)
+        dcDG_perp_dd_term2_Np_direct_coeff = -np.matmul(((np.sum(r_jump_interface*effective_unit_tangent_interface, axis=0, keepdims=True)*np.eye(3)) + np.matmul(r_jump_interface, np.transpose(effective_unit_tangent_interface))), dtangeffdd_coeff)
+        return dfDG_perp_dd_term2_Np_direct_coeff, dcDG_perp_dd_term2_Np_direct_coeff
