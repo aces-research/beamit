@@ -131,14 +131,14 @@ class NewtonRaphsonSolver(Solver):
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
-                if (np.linalg.det(self.A) == 0.0):
+                if (sp.linalg.det(self.A) == 0.0):
                     sys.exit("\nSystem is not fixed properly.")
                 # report
                 print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
-                if (np.linalg.det(self.A) == 0.0):
+                if (sp.linalg.det(self.A) == 0.0):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
             solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
@@ -244,14 +244,14 @@ class ImplicitNewmarkSolver(DynamicSolver):
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
-                if (np.linalg.det(self.A) == 0.0):
+                if (sp.linalg.det(self.A) == 0.0):
                     sys.exit("\nSystem is not fixed properly.")
                 # report
                 print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
-                if (np.linalg.det(self.A) == 0.0):
+                if (sp.linalg.det(self.A) == 0.0):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
             solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
