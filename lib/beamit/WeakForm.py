@@ -459,29 +459,35 @@ class WeakFormDG(WeakFormCG):
             A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_left_interface)))
             A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_right_interface)))
             A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_right_interface)))
-            # INTERFACE FORCE DERIVATIVES FROM THE CZM
-            rp_dyd_rp_left = np.matmul(rp_left_interface, np.transpose(rp_left_interface))
-            rp_dyd_rp_right = np.matmul(rp_right_interface, np.transpose(rp_right_interface))
-            rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
-            rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-            dtangentdd_left = np.matmul(((np.eye(self.function_space.dim)/rp_left_interface_L2)-(rp_dyd_rp_left/(rp_left_interface_L2**3.0))), Np_left_interface)
-            dtangentdd_right = np.matmul(((np.eye(self.function_space.dim)/rp_right_interface_L2)-(rp_dyd_rp_right/(rp_right_interface_L2**3.0))), Np_right_interface)
-            dft1dd_term1_left = np.matmul(dft1dd_N_coeff, N_left_interface)
-            dft1dd_term1_right = np.matmul(dft1dd_N_coeff, N_right_interface)
-            dft1dd_term2_left = np.matmul(dft1dd_Np_coeff, dtangentdd_left)
-            dft1dd_term2_right = np.matmul(dft1dd_Np_coeff, dtangentdd_right)
-            dft2dd_left = np.matmul(dft2dd_Np_coeff, dtangentdd_left)
-            dft2dd_right = np.matmul(dft2dd_Np_coeff, dtangentdd_right)
-            # first set of terms
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dft1dd_term1_left))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dft1dd_term1_right))
-            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dft1dd_term1_right))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dft1dd_term1_left))
-            # second set of terms
-            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_left_interface), dft1dd_term2_left) + np.matmul(np.transpose(N_left_interface), dft2dd_left)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), dft1dd_term2_left) + np.matmul(np.transpose(N_right_interface), dft2dd_left)))
-            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_left_interface), dft1dd_term2_right) + np.matmul(np.transpose(N_left_interface), dft2dd_right)))
-            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), dft1dd_term2_right) + np.matmul(np.transpose(N_right_interface), dft2dd_right)))
+            # cohesive axial force and bending moment derivatives from the CZM
+            # the dual cohesive axial force terms
+            dfcoh_axial_dd_dual_left = np.matmul(dfcoh_axial_dd_N_dual_coeff, N_left_interface) + np.matmul(dfcoh_axial_dd_Np_dual_coeff, Np_left_interface)
+            dfcoh_axial_dd_dual_right = np.matmul(dfcoh_axial_dd_N_dual_coeff, N_right_interface) + np.matmul(dfcoh_axial_dd_Np_dual_coeff, Np_right_interface)
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dfcoh_axial_dd_dual_left))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dfcoh_axial_dd_dual_right))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dfcoh_axial_dd_dual_right))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dfcoh_axial_dd_dual_left))
+            # the direct cohesive axial force terms
+            dfcoh_axial_dd_direct_left = np.matmul(dfcoh_axial_dd_Np_direct_coeff, Np_left_interface)
+            dfcoh_axial_dd_direct_right = np.matmul(dfcoh_axial_dd_Np_direct_coeff, Np_right_interface)
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dfcoh_axial_dd_direct_left))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dfcoh_axial_dd_direct_left))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_left_interface), dfcoh_axial_dd_direct_right))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(N_right_interface), dfcoh_axial_dd_direct_right))
+            # the dual cohesive bending moment terms
+            dmcoh_bending_dd_dual_left = np.matmul(dmcoh_bending_dd_N_dual_coeff, N_left_interface) + np.matmul(dmcoh_bending_dd_Np_dual_coeff, Np_left_interface)
+            dmcoh_bending_dd_dual_right = np.matmul(dmcoh_bending_dd_N_dual_coeff, N_right_interface) + np.matmul(dmcoh_bending_dd_Np_dual_coeff, Np_right_interface)
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_left_interface), dmcoh_bending_dd_dual_left))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_right_interface), dmcoh_bending_dd_dual_right))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_left_interface), dmcoh_bending_dd_dual_right))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_right_interface), dmcoh_bending_dd_dual_left))
+            # the direct cohesive bending moment terms
+            dmcoh_bending_dd_direct_left = np.matmul(dmcoh_bending_dd_Np_direct_coeff, Np_left_interface)
+            dmcoh_bending_dd_direct_right = np.matmul(dmcoh_bending_dd_Np_direct_coeff, Np_right_interface)
+            A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_left_interface), dmcoh_bending_dd_direct_left))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_right_interface), dmcoh_bending_dd_direct_left))
+            A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_left_interface), dmcoh_bending_dd_direct_right))
+            A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.internal_variables[i:i+1, 1:2]*np.matmul(np.transpose(Np_right_interface), dmcoh_bending_dd_direct_right))
         pass
 
     # Function to compute the system nodal forces
