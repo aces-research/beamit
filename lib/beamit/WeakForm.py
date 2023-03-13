@@ -412,6 +412,39 @@ class WeakFormDG(WeakFormCG):
                 dmcoh_bending_dd_N_dual_coeff, dmcoh_bending_dd_Np_direct_coeff, dmcoh_bending_dd_Np_dual_coeff = self.material.compute_cohesive_bending_moments_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                 # effective separation at the interface
                 delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                # constrained shear forces derivatives
+                if (delta < self.material.delta_c): # before fully developed fracture
+                    effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
+                    tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+                    # the dual terms
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_left)] += (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), N_left_interface)))
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), N_right_interface)))
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), N_right_interface)))
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_left)] -= (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), N_left_interface)))
+                    t1_left_interface, _, _, _, t5_left_interface = self.compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
+                    t1_right_interface, _, _, _, t5_right_interface = self.compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
+                    # forces at the interface
+                    # works only when there are no elemental loads!!!
+                    forces_left_interface = (self.material.E*self.material.A*t1_left_interface) + (self.material.E*self.material.I*t5_left_interface)
+                    forces_right_interface = (self.material.E*self.material.A*t1_right_interface) + (self.material.E*self.material.I*t5_right_interface)
+                    average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
+                    # the first set of direct terms
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt1dd_left_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt5dd_left_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt3dd_left_interface))))
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt1dd_left_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt5dd_left_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt3dd_left_interface))))
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt1dd_right_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt5dd_right_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt3dd_right_interface))))
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += 0.50*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt1dd_right_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt5dd_right_interface))) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), np.matmul((np.eye(self.function_space.dim) - tangeff_dyd_tangeff), dt3dd_right_interface))))
+                    # second set of direct terms
+                    dfDG_perp_dd_term2_Np_direct_coeff, dcDG_perp_dd_term2_Np_direct_coeff = self.material.compute_constrained_shear_forces_derivative_coefficients(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, average_forces_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
+                    dfDG_perp_dd_term2_direct_left = np.matmul(dfDG_perp_dd_term2_Np_direct_coeff, Np_left_interface)
+                    dfDG_perp_dd_term2_direct_right = np.matmul(dfDG_perp_dd_term2_Np_direct_coeff, Np_right_interface)
+                    dfcomp_perp_dd_term2_direct_left = self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(dcDG_perp_dd_term2_Np_direct_coeff, Np_left_interface)
+                    dfcomp_perp_dd_term2_direct_right = self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(dcDG_perp_dd_term2_Np_direct_coeff, Np_right_interface)
+                    dfcons_shear_dd_term2_direct_left = dfDG_perp_dd_term2_direct_left + dfcomp_perp_dd_term2_direct_left
+                    dfcons_shear_dd_term2_direct_right = dfDG_perp_dd_term2_direct_right + dfcomp_perp_dd_term2_direct_right
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_left)] -= np.matmul(np.transpose(N_left_interface), dfcons_shear_dd_term2_direct_left)
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += np.matmul(np.transpose(N_right_interface), dfcons_shear_dd_term2_direct_left)
+                    A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= np.matmul(np.transpose(N_left_interface), dfcons_shear_dd_term2_direct_right)
+                    A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += np.matmul(np.transpose(N_right_interface), dfcons_shear_dd_term2_direct_right)
                 # update the maximum effective separation
                 new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
                 self.internal_variables[i:i+1, 2:3] = new_delta_max
