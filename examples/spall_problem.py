@@ -31,7 +31,6 @@ Nel = 80
 function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
 function_space.discretize()
 # to avoid creating reference to the object attributes
-# a better idea is to create private attributes and use accessors
 nodal_coordinates = copy.deepcopy(function_space.nodes)
 
 # a system binding the function_space (math) and the material (physics) 
@@ -51,36 +50,24 @@ bcvalues = np.zeros([function_space.N, function_space.dof])
 SPATIAL_TOLERANCE = 1.0E-05
 SPALL_VELOCITY = (0.50*Sc)/(rho*np.sqrt(E/rho))
 
-# the time details
-dt = 0.125E-09
-time_steps = 4000
-save_time = 1
+# generate and set boundary conditions
+for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+    x_coord = nodal_coordinates[i, 0]
+    y_coord = nodal_coordinates[i, 1]
+    z_coord = nodal_coordinates[i, 2]
+    # roller and axial displacement at left end
+    if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+        bctypes[i, 0:3] = 1
+        bcvalues[i, 0:3] = initial_state[i, 0:3]
+    # roller and axial displacement at right end
+    elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+        bctypes[i, 0:3] = 1
+        bcvalues[i, 0:3] = initial_state[i, 0:3]
 
-# function to apply BCs
-def update_BCs(simulation_time):
-    for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
-        x_coord = nodal_coordinates[i, 0]
-        y_coord = nodal_coordinates[i, 1]
-        z_coord = nodal_coordinates[i, 2]
-        # roller and axial displacement at left end
-        if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-            bctypes[i, 0:3] = 1
-            bcvalues[i, 0] = initial_state[i, 0] - (SPALL_VELOCITY*simulation_time)
-            bcvalues[i, 1:3] = initial_state[i, 1:3]
-        # roller and axial displacement at right end
-        elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-            bctypes[i, 0:3] = 1
-            bcvalues[i, 0] = initial_state[i, 0] + (SPALL_VELOCITY*simulation_time)
-            bcvalues[i, 1:3] = initial_state[i, 1:3]
-
-# set boundary and initial conditions
-update_BCs(simulation_time = 0.0)
 solver.set_boundary_conditions(bctypes, bcvalues)
-# to avoid creating reference to the object attributes
-initial_position = copy.deepcopy(initial_state)
 initial_velocity = np.zeros([function_space.N, function_space.dof])
 
-# generate initial velocities
+# generate initial velocities and set initial conditions
 for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
     x_coord = nodal_coordinates[i, 0]
     y_coord = nodal_coordinates[i, 1]
@@ -91,7 +78,8 @@ for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
     # at right end
     elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
         initial_velocity[i, 0] = SPALL_VELOCITY
-solver.set_initial_conditions(initial_position, initial_velocity)
+
+solver.set_initial_conditions(initial_state, initial_velocity)
 
 # create a VTK directory or clear it
 if not os.path.isdir("VTK"):
@@ -100,18 +88,36 @@ else:
     for item in os.listdir("VTK"):
         os.remove(os.path.join("VTK", item))
     
-# write the initial displacements
+# write the initial results
 output_file = "./VTK/output-0"
 PostProcess.write_output_vtk(output_file, system)
 
-# solve the dynamic problem and update the nodal position in system
+# function to update BCs
+def update_BCs(simulation_time):
+    for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+        x_coord = nodal_coordinates[i, 0]
+        y_coord = nodal_coordinates[i, 1]
+        z_coord = nodal_coordinates[i, 2]
+        # roller and axial displacement at left end
+        if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+            bcvalues[i, 0] = initial_state[i, 0] - (SPALL_VELOCITY*simulation_time)
+        # roller and axial displacement at right end
+        elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+            bcvalues[i, 0] = initial_state[i, 0] + (SPALL_VELOCITY*simulation_time)
+
+# the time details
+dt = solver.stable_time_step*0.50
+time_steps = 5000
+save_time = 1
+
+# solve the dynamic problem and update the state of system
 simulation_time = 0.0
 for i in range(0, time_steps):
     print("\nCurrent time step:", i+1,"out of", time_steps, "time steps.")
     simulation_time += dt
     update_BCs(simulation_time)
     # apply the boundary conditions
-    solver.set_boundary_conditions(bctypes, bcvalues)
+    solver.modify_boundary_condition_values(bcvalues)
     solver.solve(dt)
     if ((i+1) % save_time == 0):
         output_file = "./VTK/output-" + str(i+1)
