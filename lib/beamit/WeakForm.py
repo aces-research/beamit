@@ -259,29 +259,33 @@ class WeakFormDG(WeakFormCG):
                 if (self.internal_variables[i:i+1, 2:3] == 0.0):
                     # just after damage initiation
                     if (self.internal_variables[i:i+1, 0:1] == 1.0):
-                        self.internal_variables[i:i+1, 1:2] = 1.0
-                        axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
-                        if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
-                            self.internal_variables[i:i+1, 10:11] = 0.0
-                        else:
-                            self.internal_variables[i:i+1, 10:11] = 1.0
-                        # evaluate cohesive forces according to the TSL
-                        cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                         # effective separation at the interface
                         delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                        # compute the cohesive forces and bending moments
-                        if (delta >= self.material.delta_c): # for complete damage
-                            interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
-                        else:
-                            effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-                            tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-                            interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
-                        cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
-                        cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                        if (update_internal):
-                            # update the maximum effective separation
-                            new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
-                            self.internal_variables[i:i+1, 2:3] = new_delta_max
+                        if (delta == 0.0): # fall back to DG terms
+                            self.internal_variables[i:i+1, 1:2] = 0.0
+                        else: # perform CZM calculations
+                            self.internal_variables[i:i+1, 1:2] = 1.0
+                            axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
+                            if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
+                                self.internal_variables[i:i+1, 10:11] = 0.0
+                            else:
+                                self.internal_variables[i:i+1, 10:11] = 1.0
+                            # evaluate cohesive forces according to the TSL
+                            cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                            
+                            # compute the cohesive forces and bending moments
+                            if (delta >= self.material.delta_c): # for complete damage
+                                interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
+                            else:
+                                effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
+                                tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+                                interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
+                            cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
+                            cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
+                            if (update_internal):
+                                # update the maximum effective separation
+                                new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
+                                self.internal_variables[i:i+1, 2:3] = new_delta_max
                     # damage not yet initiated
                     elif (self.material.evaluate_damage_initiation_criterion(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface)): # evaluate the damage initiation criterion
                         # damage just initiated at the interface
