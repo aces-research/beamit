@@ -128,17 +128,18 @@ class NewtonRaphsonSolver(Solver):
             self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
             # apply the Dirichlet BCs
             self.apply_static_condensation(Neumann_dofs)
+            log_det_A = np.linalg.slogdet(self.A)[1]
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
-                if (sp.linalg.det(self.A) == 0.0):
+                if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nSystem is not fixed properly.")
                 # report
                 print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
-                if (sp.linalg.det(self.A) == 0.0):
+                if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
             solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
@@ -241,17 +242,18 @@ class ImplicitNewmarkSolver(DynamicSolver):
                 self.f -= np.matmul(self.M, self.acceleration)
             # apply the Dirichlet BCs
             self.apply_static_condensation(Neumann_dofs)
+            log_det_A = np.linalg.slogdet(self.A)[1]
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
-                if (sp.linalg.det(self.A) == 0.0):
+                if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nSystem is not fixed properly.")
                 # report
                 print("\nStarting the Newton-Raphson iterations!!!")
             # checks after the first iteration
             else:
                 # instability in the system
-                if (sp.linalg.det(self.A) == 0.0):
+                if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
             solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
