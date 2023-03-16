@@ -21,3 +21,4 @@ __pycache__/
 *.vtu
 *.pvsm
 *.ods
+*.png
