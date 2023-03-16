@@ -15,18 +15,18 @@ rho = 1500.0
 # elastic modulus of beam
 E = 3.80E09
 # the radius of the beam
-R = 7.0E-04
+R = 7.0E-06
 # critical effective cohesive strength
 Sc = 19.0E06
 # effective fracture energy
-Gc = 2500.0
+Gc = 10.0
 # physical information (material parameters)
 material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
 # length of beam
-L = 24.0E-02
+L = 24.0E-04
 # number of elements
-Nel = 50
+Nel = 100
 # geometric information (domain, no. of elements)
 function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
 function_space.discretize()
@@ -49,8 +49,8 @@ bcvalues = np.zeros([function_space.N, function_space.dof])
 
 # applied loads and tolerances
 SPATIAL_TOLERANCE = 1.0E-05
-BENDING_LOAD = 0.62
-QUENCH_RATE = 5.0E-03
+BENDING_LOAD = 0.62E-04
+QUENCH_RATE = 5.0E-05
 
 # the load steps
 load_steps = 35
@@ -90,7 +90,7 @@ for load_step in range(0, load_steps):
 
     # solve the quasi-static problem, update the system state and write the result
     quasi_static_solver.set_boundary_conditions(bctypes, bcvalues)
-    quasi_static_solver.solve(Nmax = 10, tol = 1.0E-03)
+    quasi_static_solver.solve(Nmax = 10, tol = BENDING_LOAD*1.0E-03)
     PostProcess.write_output_vtk("./VTK/output-"+str(load_step+1), system)
 
 ############### THE DYNAMIC STAGE ###############
@@ -147,9 +147,9 @@ def update_BCs(analysis_time):
             bcvalues[i, 0] = deformed_state[i, 0] - (QUENCH_RATE*analysis_time)
 
 # the time details
-dt = 1.0E-06
+dt = 1.0E-09
 # dt = dynamic_solver.stable_time_step
-time_steps = 1000
+time_steps = 2000
 save_time = 1
 
 # solve the dynamic problem and update the state of system
@@ -161,7 +161,7 @@ for time_step in range(0, time_steps):
     # apply the boundary conditions
     dynamic_solver.modify_boundary_condition_values(bcvalues)
     # dynamic_solver.solve(dt)
-    dynamic_solver.solve(dt, tol=1.0E-03, Nmax=20)
+    dynamic_solver.solve(dt, tol=QUENCH_RATE*1.0E-03, Nmax=20)
     if ((time_step+1) % save_time == 0):
         output_file = "./VTK/output-" + str(load_steps+time_step+1)
         PostProcess.write_output_vtk(output_file, system)
