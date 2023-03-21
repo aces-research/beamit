@@ -303,14 +303,13 @@ class ExplicitNewmarkSolver(DynamicSolver):
         if (Dirichlet_dofs.size == 0):
             sys.exit("\nDirichlet boundary conditions are not found.")
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
-        residual = np.zeros([self.system.nequations, 1])
-        self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
+        # compute the initial stiffness of the system
+        self.system.weak_form.compute_system_initial_stiffness(stiffness)
         eig_vals, eig_vecs = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
         mode_shapes = np.zeros([self.system.nequations, self.system.nequations-Dirichlet_dofs.size])
         if (np.linalg.norm(eig_vals.imag) != 0.0):
             sys.exit("\nThe Eigenvalues of the system are complex valued.")
         mode_shapes[Neumann_dofs, :] += eig_vecs
-        mode_shapes[Dirichlet_dofs, :] += self.solution[Dirichlet_dofs]*np.ones([Dirichlet_dofs.size, self.system.nequations-Dirichlet_dofs.size])
         return np.sqrt(eig_vals), mode_shapes
     
     # Function to compute and set the stable time step
