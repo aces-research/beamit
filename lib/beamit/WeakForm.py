@@ -148,11 +148,12 @@ class WeakFormCG:
         pass
 
     # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns):
+    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
-            A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_internal_stiffness(element_unknowns)
+            if (element_loads_info == None): # No element loads
+                A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_internal_stiffness(element_unknowns)
         pass
     
     # Function to compute the system mass
@@ -360,9 +361,9 @@ class WeakFormDG(WeakFormCG):
         return dt1dd_Np, dt3dd_Np, dt3dd_Npp, dt5dd_Np, dt5dd_Npp, dt5dd_Nppp
 
     # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns):
+    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
         # compute system stiffness using the function in WeakFormCG
-        super().compute_system_stiffness(A, system_unknowns)
+        super().compute_system_stiffness(A, system_unknowns, element_loads_info)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
@@ -544,7 +545,7 @@ class WeakFormDG(WeakFormCG):
         undeformed_state[:, 3:4] += 1.0
         undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
         # compute system stiffness using the function in WeakFormCG
-        super().compute_system_stiffness(A, undeformed_solution)
+        super().compute_system_stiffness(A, undeformed_solution, element_loads_info=None)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
