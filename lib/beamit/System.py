@@ -32,8 +32,17 @@ class System:
         initial_state[:, 3:4] = 1.0
         return initial_state
 
-    def assemble_stiffness(self, A, solution):
-        self.weak_form.compute_system_stiffness(A, solution)
+    def assemble_stiffness(self, A, solution, nodal_loads, element_loads_info):
+        dofs = self.weak_form.function_space.dof
+        self.weak_form.compute_system_stiffness(A, solution, element_loads_info)
+        # contribution of external nodal moments to the system stiffness
+        for i in range(0, self.weak_form.function_space.N):
+           nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
+           nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
+           nodal_moments = nodal_loads[(dofs*i)+3:(dofs*i)+6, :]
+           nodal_rp_dyd_rp = np.matmul(nodal_tangents, np.transpose(nodal_tangents))
+           nodal_dt4dd_coeff = (np.eye(self.weak_form.function_space.dim)/(nodal_tangents_L2**2.0)) - ((2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
+           A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
         pass
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads_info, update_internal=False):
@@ -60,12 +69,12 @@ class System:
 
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
 
-        # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!        
+        # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!
         # assemble residual
         self.assemble_residual(f, solution, nodal_loads, element_loads_info)
 
         # assemble stiffness
-        self.assemble_stiffness(A, solution)
+        self.assemble_stiffness(A, solution, nodal_loads, element_loads_info)
 
     # Function to update the variables in the system
     def update(self, solution):
