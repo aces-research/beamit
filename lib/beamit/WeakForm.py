@@ -79,6 +79,34 @@ class WeakFormCG:
         r_el_dist_moments = np.sum(moment_integrand*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_dist_forces + r_el_dist_moments
 
+    # Function to compute element rotational mass
+    def compute_element_rotational_mass(self, element_unknowns):
+        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
+        Npt = np.transpose(Np, axes=(0, 2, 1))
+        rp = np.matmul(Np, element_unknowns)
+        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
+        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
+        rotational_mass_integrand_1 = ((self.material.rho*self.material.I)/(rp_L2**2.0))*np.matmul(Npt, Np)
+        rotational_mass_integrand_2 = -((self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))
+        M_el_rot = np.sum((rotational_mass_integrand_1 + rotational_mass_integrand_2)*self.function_space.JxW, axis=0, keepdims=False)
+        return M_el_rot
+
+    # Function to compute element damping
+    def compute_element_damping(self, element_unknowns, element_velocities):
+        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
+        Npt = np.transpose(Np, axes=(0, 2, 1))
+        rp = np.matmul(Np, element_unknowns)
+        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
+        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
+        rp_dot = np.matmul(Np, element_velocities)
+        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
+        rp_dot_dyd_rp = np.matmul(rp_dot, np.transpose(rp, axes=(0, 2, 1)))
+        damping_integrand_1 = ((4.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))
+        damping_integrand_2 = -((2.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**4.0))*np.matmul(Npt, Np)
+        damping_integrand_3 = -((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp, Np))
+        M_el_damp = np.sum((damping_integrand_1 + damping_integrand_2 + damping_integrand_3)*self.function_space.JxW, axis=0, keepdims=False)
+        return M_el_damp
+    
     # Function to compute the overall system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info):
         for i in range(0, self.function_space.E):
