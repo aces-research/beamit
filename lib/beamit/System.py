@@ -63,8 +63,12 @@ class System:
         f += updated_nodal_loads
         pass
 
-    def assemble_mass(self, M):
-        self.weak_form.compute_system_mass(M)
+    def assemble_mass(self, M, solution):
+        self.weak_form.compute_system_mass(M, solution)
+        pass
+
+    def assemble_damping(self, C, solution, velocity):
+        self.weak_form.compute_system_damping(C, solution, velocity)
         pass
 
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
