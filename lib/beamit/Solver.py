@@ -195,9 +195,11 @@ class DynamicSolver(Solver):
             sys.exit("\nSet the boundary conditions before the initial conditions.")
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+        self.reset_system()
         self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
-        initial_acceleration = self.linear_system_solver(self.M, self.f)
-        self.acceleration = initial_acceleration
+        self.system.assemble_mass(self.M, self.solution)
+        self.system.assemble_damping(self.C, self.solution, self.velocity)
+        self.acceleration = self.linear_system_solver(self.M, (self.f - np.matmul(self.C, self.velocity)))
         # update the system attributes
         self.system.update(self.solution)
 
