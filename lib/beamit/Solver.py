@@ -312,22 +312,25 @@ class ExplicitNewmarkSolver(DynamicSolver):
         if (Dirichlet_dofs.size == 0):
             sys.exit("\nDirichlet boundary conditions are not found.")
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
-        # compute the initial stiffness of the system
-        self.system.weak_form.compute_system_initial_stiffness(stiffness)
-        eig_vals, eig_vecs = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
-        mode_shapes = np.zeros([self.system.nequations, self.system.nequations-Dirichlet_dofs.size])
+        mass = np.zeros([self.system.nequations, self.system.nequations])
+        # compute the initial stiffness and mass of the system
+        self.system.weak_form.compute_system_initial_stiffness_and_mass(stiffness, mass)
+        eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], mass[np.ix_(Neumann_dofs, Neumann_dofs)])
         if (np.linalg.norm(eig_vals.imag) != 0.0):
-            sys.exit("\nThe Eigenvalues of the system are complex valued.")
-        mode_shapes[Neumann_dofs, :] += eig_vecs
-        return np.sqrt(eig_vals), mode_shapes
+            print("\nWARNING: The Eigenvalues of the system are complex valued.")
+        return np.sqrt(eig_vals)
     
     # Function to compute and set the stable time step
     # probably should consider degrading modulus in case of damage!!!
     def set_stable_time_step(self, time_factor = 0.90):
         print("\nRunning stable time computations!!!")
         # with the maximum system frequency
-        sys_freqs, _ = self.compute_system_frequencies()
-        self.stable_time_step = time_factor*(2.0/np.max(sys_freqs.real))
+        sys_freqs = self.compute_system_frequencies()
+        # get the maximum frequency based on the complex valued magnitudes
+        max_sys_freq = sys_freqs[np.abs(sys_freqs).argmax()]
+        if (max_sys_freq.imag != 0.0):
+            sys.exit("\nThe maximum system frequency is complex valued.")
+        self.stable_time_step = time_factor*(2.0/(max_sys_freq.real))
     
     # Function to set the boundary conditions and the stable time step
     def set_boundary_conditions(self, bctypes, bcvalues):
