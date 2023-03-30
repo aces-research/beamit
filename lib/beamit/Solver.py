@@ -344,7 +344,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # perform stability check
         elif (dt > self.stable_time_step):
             sys.exit("\nThe chosen time step size makes the solver unstable in time.")
-        # reset the residual before solving
+        # reset the system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
@@ -369,6 +369,10 @@ class ExplicitNewmarkSolver(DynamicSolver):
             self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
         else:
             self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
+        # assemble the mass matrix
+        self.system.assemble_mass(self.M, self.solution)
+        # add the "damping forces" contribution to the residual
+        self.system.assemble_damping_forces(self.f, self.solution, self.velocity)
         # solve the semi-discrete SOE for the current accelerations of the Neumann Dofs
         current_accelerations_Neumann = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
         # the CORRECTOR
