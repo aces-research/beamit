@@ -67,6 +67,10 @@ class System:
         self.weak_form.compute_system_damping_inertia_forces(f, solution, velocity)
         pass
     
+    def assemble_inertia_forces(self, f, solution, velocity, acceleration):
+        self.weak_form.compute_system_inertia_forces(f, solution, velocity, acceleration)
+        pass
+    
     def assemble_mass(self, M, solution):
         self.weak_form.compute_system_mass(M, solution)
         pass
