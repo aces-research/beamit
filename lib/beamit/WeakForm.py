@@ -30,8 +30,8 @@ class WeakFormCG:
         r_el_int = np.sum((axial_integrand + bending_integrand_1 + bending_integrand_2)*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_int
     
-    # Function to compute the element "damping forces"
-    def compute_element_damping_forces(self, element_unknowns, element_velocities):
+    # Function to compute the element "damping inertia forces"
+    def compute_element_damping_inertia_forces(self, element_unknowns, element_velocities):
         Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
         Npt = np.transpose(Np, axes=(0, 2, 1))
         rp = np.matmul(Np, element_unknowns)
@@ -129,13 +129,13 @@ class WeakFormCG:
                 f[global_element_dofs] -= self.compute_element_internal_forces(element_unknowns)
         pass
 
-    # Function to compute the system "damping forces" contribution to the residual
-    def compute_system_damping_forces(self, f, system_unknowns, system_velocities):
+    # Function to compute the system "damping inertia forces" contribution to the residual
+    def compute_system_damping_inertia_forces(self, f, system_unknowns, system_velocities):
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
             element_velocities = system_velocities[global_element_dofs]
-            f[global_element_dofs] -= self.compute_element_damping_forces(element_unknowns, element_velocities)
+            f[global_element_dofs] -= self.compute_element_damping_inertia_forces(element_unknowns, element_velocities)
         pass
     
     # Helper function to compute 't_i' vectors

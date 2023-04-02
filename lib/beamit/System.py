@@ -63,8 +63,8 @@ class System:
         f += updated_nodal_loads
         pass
 
-    def assemble_damping_forces(self, f, solution, velocity):
-        self.weak_form.compute_system_damping_forces(f, solution, velocity)
+    def assemble_damping_inertia_forces(self, f, solution, velocity):
+        self.weak_form.compute_system_damping_inertia_forces(f, solution, velocity)
         pass
     
     def assemble_mass(self, M, solution):

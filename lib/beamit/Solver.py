@@ -196,7 +196,7 @@ class DynamicSolver(Solver):
         self.reset_system()
         self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
         self.system.assemble_mass(self.M, self.solution)
-        self.system.assemble_damping_forces(self.f, self.solution, self.velocity)
+        self.system.assemble_damping_inertia_forces(self.f, self.solution, self.velocity)
         self.acceleration = self.linear_system_solver(self.M, self.f)
         # update the system attributes
         self.system.update(self.solution)
