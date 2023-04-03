@@ -337,7 +337,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
-    def solve(self, dt = None, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt = None, Nmax = 10, tol = 1.0E-05, stop_factor = 1.0E02, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # if the time step size input is not provided
         if (dt == None):
             dt = self.stable_time_step
@@ -364,19 +364,39 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # for the Neumann DoFs
         self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
-        # assemble the residual
-        if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
-            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
-        else:
-            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
-        # assemble the mass matrix
-        self.system.assemble_mass(self.M, self.solution)
-        # add the "damping forces" contribution to the residual
-        self.system.assemble_damping_forces(self.f, self.solution, self.velocity)
-        # solve the semi-discrete SOE for the current accelerations of the Neumann Dofs
-        current_accelerations_Neumann = self.linear_system_solver(self.M[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
-        # the CORRECTOR
-        self.acceleration[Neumann_dofs] = current_accelerations_Neumann
-        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+        print("\nStarting the Newton-Raphson iterations!!!")
+        for i in range(0, Nmax):
+            # assemble the residual along with the inertial forces
+            if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
+                self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
+            else:
+                self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
+            self.system.assemble_inertia_forces(self.f, self.solution, self.velocity, self.acceleration)
+            # assemble the mass and damping matrices
+            self.system.assemble_mass(self.M, self.solution)
+            self.system.assemble_damping(self.C, self.solution, self.velocity)
+            # solve the SOE for the current accelerations step of the Neumann Dofs
+            current_accelerations_Neumann_step = self.linear_system_solver((self.M+((dt/2.0)*self.C))[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
+            # the CORRECTOR
+            self.acceleration[Neumann_dofs] += current_accelerations_Neumann_step
+            if (i == 0): # in the first iteration
+                self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+            else: # from the second iteration
+                self.velocity[Neumann_dofs] += ((dt/2.0)*current_accelerations_Neumann_step)
+            # convergence check
+            updated_residual = np.zeros([self.system.nequations, 1])
+            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
+            self.system.assemble_inertia_forces(updated_residual, self.solution, self.velocity, self.acceleration)
+            # the residual norm at all the NEUMANN NODES
+            res_L2_norm = np.linalg.norm(updated_residual[Neumann_dofs], ord=2)
+            print("\nIteration:",i+1,", Residual L2-norm = %.2e" % (res_L2_norm))
+            if (res_L2_norm <= tol):
+                print("\nSolver converged!!!")
+                break
+            else:
+                self.reset_system()
+        # stop the computations if the final residual norm is too high
+        if (res_L2_norm >= tol*stop_factor):
+            sys.exit("\nThe final residual norm is too high to proceed.")
         # update the system attributes
         self.system.update(self.solution)
