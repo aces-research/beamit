@@ -139,7 +139,30 @@ class WeakFormCG:
         damping_integrand_3 = -((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp, Np))
         M_el_damp = np.sum((damping_integrand_1 + damping_integrand_2 + damping_integrand_3)*self.function_space.JxW, axis=0, keepdims=False)
         return M_el_damp
-    
+
+    # Function to compute the element rotational inertia stiffness
+    def compute_element_rotational_inertia_stiffness(self, element_unknowns, element_velocities, element_accelerations):
+        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
+        Npt = np.transpose(Np, axes=(0, 2, 1))
+        rp = np.matmul(Np, element_unknowns)
+        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
+        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
+        rp_dot = np.matmul(Np, element_velocities)
+        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
+        rp_ddot = np.matmul(Np, element_accelerations)
+        rp_dot_rp_ddot = np.sum(rp*rp_ddot, axis=1, keepdims=True)
+        rp_dyd_rp_dot = np.matmul(rp, np.transpose(rp_dot, axes=(0, 2, 1)))
+        rp_dot_dyd_rp = np.matmul(rp_dot, np.transpose(rp, axes=(0, 2, 1)))
+        rp_dot_dyd_rp_dot = np.matmul(rp_dot, np.transpose(rp_dot, axes=(0, 2, 1)))
+        rp_dyd_rp_ddot = np.matmul(rp, np.transpose(rp_ddot, axes=(0, 2, 1)))
+        rp_ddot_dyd_rp = np.matmul(rp_ddot, np.transpose(rp, axes=(0, 2, 1)))
+        rot_stiff_integrand_1 = -((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_ddot_dyd_rp, Np))
+        rot_stiff_integrand_2 = (((8.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp, Np))) -(((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp_dot, Np)))
+        rot_stiff_integrand_3 = (((2.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**6.0))*np.matmul(Npt, Np)) + (((4.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp_dot, Np))) - (((12.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**8.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np)))
+        rot_stiff_integrand_4 = (((4.0*self.material.rho*self.material.I*rp_dot_rp_ddot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))) - (((self.material.rho*self.material.I*rp_dot_rp_ddot)/(rp_L2**4.0))*np.matmul(Npt, Np)) - (((self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dyd_rp_ddot, Np)))
+        K_el_rot_inertia = np.sum((rot_stiff_integrand_1 + rot_stiff_integrand_2 + rot_stiff_integrand_3 + rot_stiff_integrand_4)*self.function_space.JxW, axis=0, keepdims=False)
+        return K_el_rot_inertia
+
     # Function to compute the overall system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info):
         for i in range(0, self.function_space.E):
@@ -256,6 +279,16 @@ class WeakFormCG:
             element_unknowns = system_unknowns[global_element_dofs]
             element_velocities = system_velocities[global_element_dofs]
             C[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_damping(element_unknowns, element_velocities)
+        pass
+
+    # Function to compute the system rotational inertia stiffness
+    def compute_system_rotational_inertia_stiffness(self, A, system_unknowns, system_velocities, system_accelerations):
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            element_velocities = system_velocities[global_element_dofs]
+            element_accelerations = system_accelerations[global_element_dofs]
+            A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_inertia_stiffness(element_unknowns, element_velocities, element_accelerations)
         pass
 
 class WeakFormDG(WeakFormCG):

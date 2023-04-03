@@ -79,6 +79,10 @@ class System:
         self.weak_form.compute_system_damping(C, solution, velocity)
         pass
 
+    def assemble_rotational_inertia_stiffness(self, A, solution, velocity, acceleration):
+        self.weak_form.compute_system_rotational_inertia_stiffness(A, solution, velocity, acceleration)
+        pass
+
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
 
         # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!
