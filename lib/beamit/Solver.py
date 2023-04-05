@@ -363,7 +363,9 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.acceleration[Dirichlet_dofs] = (self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
         # for the Neumann DoFs
         self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
+        # the zero acceleration prediction
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+        self.acceleration[Neumann_dofs] = np.zeros([Neumann_dofs.shape[0], 1])
         print("\nStarting the Newton-Raphson iterations!!!")
         for i in range(0, Nmax):
             # assemble the residual along with the inertial forces
@@ -379,10 +381,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
             current_accelerations_Neumann_step = self.linear_system_solver((self.M+((dt/2.0)*self.C))[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # the CORRECTOR
             self.acceleration[Neumann_dofs] += current_accelerations_Neumann_step
-            if (i == 0): # in the first iteration
-                self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
-            else: # from the second iteration
-                self.velocity[Neumann_dofs] += ((dt/2.0)*current_accelerations_Neumann_step)
+            self.velocity[Neumann_dofs] += ((dt/2.0)*current_accelerations_Neumann_step)
             # convergence check
             updated_residual = np.zeros([self.system.nequations, 1])
             self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
