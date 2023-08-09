@@ -397,9 +397,8 @@ class WeakFormDG(WeakFormCG):
                                 self.internal_variables[i:i+1, 10:11] = 1.0
                             # evaluate cohesive forces according to the TSL
                             cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                            
                             # compute the cohesive forces and bending moments
-                            if (delta >= self.material.delta_c): # for complete damage
+                            if ((delta >= self.material.delta_c) or (self.internal_variables[i:i+1, 2:3] == self.material.delta_c)): # for complete damage
                                 interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
                             else:
                                 effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
@@ -435,7 +434,7 @@ class WeakFormDG(WeakFormCG):
                     # effective separation at the interface
                     delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                     # compute the cohesive forces and bending moments
-                    if (delta >= self.material.delta_c): # for complete damage
+                    if ((delta >= self.material.delta_c) or (self.internal_variables[i:i+1, 2:3] == self.material.delta_c)): # for complete damage
                         interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
                     else:
                         effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
@@ -542,7 +541,7 @@ class WeakFormDG(WeakFormCG):
                 # effective separation at the interface
                 delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
                 # constrained shear forces derivatives
-                if (delta < self.material.delta_c): # before fully developed fracture
+                if ((delta < self.material.delta_c) and (self.internal_variables[i:i+1, 2:3] < self.material.delta_c)): # before fully developed fracture
                     effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
                     tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
                     # the dual terms

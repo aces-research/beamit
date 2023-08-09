@@ -93,7 +93,9 @@ class CohesiveInterfaceMaterial(Material):
     
     # Function to compute the "new" maximum effective separation
     def compute_effective_maximum_separation(self, delta, delta_max):
-        if ((delta >= self.delta_c) or (delta >= delta_max)): # loading or complete damage
+        if (delta >= self.delta_c): # complete damage
+            new_delta_max = self.delta_c
+        elif (delta >= delta_max): # loading
             new_delta_max = delta
         else: # unloading
             new_delta_max = delta_max
