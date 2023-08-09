@@ -660,14 +660,16 @@ class WeakFormDG(WeakFormCG):
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
         pass
 
-    # Function to compute the initial stiffness of the system
-    def compute_system_initial_stiffness(self, A):
+    # Function to compute the initial stiffness and mass of the system
+    def compute_system_initial_stiffness_and_mass(self, A, M):
         # undeformed state of the system
         undeformed_state = np.zeros([self.function_space.N, self.function_space.dof])
         # straight beams along x-axis (linked to the assumption in the system)!!!
         undeformed_state[:, 0:3] += self.function_space.nodes
         undeformed_state[:, 3:4] += 1.0
         undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
+        # compute system mass
+        self.compute_system_mass(M, undeformed_solution)
         # compute system stiffness using the function in WeakFormCG
         super().compute_system_stiffness(A, undeformed_solution, element_loads_info=None)
         # add the contributions of jump terms at the interfaces to the residual
