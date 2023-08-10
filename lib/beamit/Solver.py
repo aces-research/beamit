@@ -121,12 +121,17 @@ class NewtonRaphsonSolver(Solver):
             nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
             # generate the Dirichlet solution vector
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
-            # add the Dirichlet solution to the overall solution vector
-            self.solution[Dirichlet_dofs] += Dirichlet_solution
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the linear system
             self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
+            # forces to be applied after static condensation of Dirichlet dofs
+            if (i == 0): # in the first iteration
+                static_condensation_forces = np.matmul(self.A[np.ix_(Neumann_dofs, Dirichlet_dofs)], Dirichlet_solution)
+                # add the Dirichlet solution to the overall solution vector
+                self.solution[Dirichlet_dofs] += Dirichlet_solution
+            else: # after the first iteration
+                static_condensation_forces = np.zeros([Neumann_dofs.shape[0], 1])
             # apply the Dirichlet BCs
             self.apply_static_condensation(Neumann_dofs)
             log_det_A = np.linalg.slogdet(self.A)[1]
@@ -143,7 +148,7 @@ class NewtonRaphsonSolver(Solver):
                 if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
-            solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
+            solution_increment = self.linear_system_solver(self.A, (self.f)-static_condensation_forces, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # update the overall solution vector
             self.solution[Neumann_dofs] += solution_increment
             # assess convergence
@@ -217,7 +222,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         c3 = (1.0-gamma)*dt
         c4 = gamma*dt
         c5 = (0.5-beta)*(dt**2.0)
-        # reset the stiffness matrix and force vector before solving
+        # reset the system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
@@ -246,6 +251,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
             self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
+            # YET TO ADD ROTATIONAL INERTIA RELATED UPDATES IN THIS SOLVER!
             # mass matrix contribution to the left hand side matrix
             self.A += c0*self.M
             # inertial force contribution to the right hand side vector
