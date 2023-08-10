@@ -324,18 +324,15 @@ class ExplicitNewmarkSolver(DynamicSolver):
         eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], mass[np.ix_(Neumann_dofs, Neumann_dofs)])
         if (np.linalg.norm(eig_vals.imag) != 0.0):
             print("\nWARNING: The Eigenvalues of the system are complex valued.")
-        return np.sqrt(eig_vals)
+        return np.absolute(np.sqrt(eig_vals))
     
     # Function to compute and set the stable time step
     # probably should consider degrading modulus in case of damage!!!
     def set_stable_time_step(self, time_factor = 0.90):
         print("\nRunning stable time computations!!!")
-        # with the maximum system frequency
         sys_freqs = self.compute_system_frequencies()
-        # get the maximum frequency based on the complex valued magnitudes
-        max_sys_freq = sys_freqs[np.abs(sys_freqs).argmax()]
-        if (max_sys_freq.imag != 0.0):
-            sys.exit("\nThe maximum system frequency is complex valued.")
+        # get the maximum frequency of the system
+        max_sys_freq = sys_freqs[sys_freqs.argmax()]
         self.stable_time_step = time_factor*(2.0/(max_sys_freq.real))
     
     # Function to set the boundary conditions and the stable time step
