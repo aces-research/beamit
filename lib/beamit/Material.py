@@ -25,23 +25,19 @@ class Material:
 
 class CohesiveInterfaceMaterial(Material):
 
-    def __init__(self, rho, E, R, Sc, Gc, gamma = 1.0):
+    def __init__(self, rho, E, R, Sc, Gc, alpha = 1.0):
         # invoke the parent (Material) class
         Material.__init__(self, rho, E, R=R)
         # critical effective cohesive strength of the material
         self.Sc = Sc
         # effective fracture energy of the material
         self.Gc = Gc
-        # weighting parameter
-        self.gamma = gamma
         # critical effective separation
         self.delta_c = (2.0*self.Gc)/self.Sc
         # critical effective force
         self.fc = self.Sc*self.A
-        # constant for non-dimensionalization
-        self.C = self.R
         # the mode-mixity parameter
-        self.alpha = 1.0
+        self.alpha = alpha
 
     # Function to compute the effective unit tangent ("normal to the cohesive boundary") at an interface
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
@@ -59,7 +55,7 @@ class CohesiveInterfaceMaterial(Material):
         average_bending_moments_interface = (moments_left_interface + moments_right_interface)/2.0
         average_bending_moments_interface_L2 = np.linalg.norm(average_bending_moments_interface, ord=2, axis=0, keepdims=True)
         # considering mixed-mode fracture with tensile forces and bending moments
-        effective_force_interface = np.sqrt((average_tensile_force_interface**2.0)+((average_bending_moments_interface_L2/(self.alpha*self.C))**2.0))
+        effective_force_interface = np.sqrt((average_tensile_force_interface**2.0)+((average_bending_moments_interface_L2/(self.alpha*self.R))**2.0))
         return effective_force_interface
     
     # Function to evaluate the damage initiation criterion at an interface
@@ -79,7 +75,7 @@ class CohesiveInterfaceMaterial(Material):
         rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
         tangent_jumps_L2 = np.linalg.norm(rp_jump_interface, ord=2, axis=0, keepdims=True)
         # considering mixed-mode fracture with tensile jumps and bending rotations
-        delta = np.sqrt((tensile_jump**2.0)+((self.alpha*self.C*tangent_jumps_L2)**2.0))
+        delta = np.sqrt((tensile_jump**2.0)+((self.alpha*self.R*tangent_jumps_L2)**2.0))
         return delta
 
     # Function to compute the axial separation
@@ -138,7 +134,7 @@ class CohesiveInterfaceMaterial(Material):
         # tangent jump at the interface
         rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
         # compute the cohesive bending moments
-        cohesive_bending_moments = (fcoh/delta)*((self.alpha*self.C)**2.0)*rp_jump_interface
+        cohesive_bending_moments = (fcoh/delta)*((self.alpha*self.R)**2.0)*rp_jump_interface
         return cohesive_bending_moments
 
     # Function to compute the derivative of the effective cohesive force w.r.t the effective separation
@@ -184,7 +180,7 @@ class CohesiveInterfaceMaterial(Material):
         dfcoh_axial_dd_Np_direct_coeff += (tensile_jump*np.heaviside(tensile_jump, 0.0)*np.matmul(np.matmul(v1_term, np.transpose(r_jump_interface)), dtangeffdd_coeff))/delta
         dfcoh_axial_dd_Np_direct_coeff += np.heaviside(tensile_jump, 0.0)*np.matmul(np.matmul(v2_term, np.transpose(r_jump_interface)), dtangeffdd_coeff)
         # Np dual term coefficient
-        dfcoh_axial_dd_Np_dual_coeff = (((self.alpha*self.C)**2.0)*np.matmul(v1_term, np.transpose(rp_jump_interface)))/delta
+        dfcoh_axial_dd_Np_dual_coeff = (((self.alpha*self.R)**2.0)*np.matmul(v1_term, np.transpose(rp_jump_interface)))/delta
         return dfcoh_axial_dd_N_dual_coeff, dfcoh_axial_dd_Np_direct_coeff, dfcoh_axial_dd_Np_dual_coeff
 
     # Function to compute the coefficients of the cohesive bending moments derivative
@@ -206,14 +202,14 @@ class CohesiveInterfaceMaterial(Material):
         avrp_dyd_avrp = np.matmul(average_rp_interface, np.transpose(average_rp_interface))
         dtangeffdd_coeff = 0.50*((np.eye(3)/average_rp_interface_L2) - (avrp_dyd_avrp/(average_rp_interface_L2**3.0)))
         dfcoh_div_delta_ddelta = (dfcoh_ddelta/delta) - (fcoh/(delta**2.0))
-        v3_term = dfcoh_div_delta_ddelta*((self.alpha*self.C)**2.0)*rp_jump_interface
+        v3_term = dfcoh_div_delta_ddelta*((self.alpha*self.R)**2.0)*rp_jump_interface
         # N dual term coefficient
         dmcoh_bending_dd_N_dual_coeff = (tensile_jump*np.heaviside(tensile_jump, 0.0)*np.matmul(v3_term, np.transpose(effective_unit_tangent_interface)))/delta
         # Np direct term coefficient
         dmcoh_bending_dd_Np_direct_coeff = (tensile_jump*np.heaviside(tensile_jump, 0.0)*np.matmul(np.matmul(v3_term, np.transpose(r_jump_interface)), dtangeffdd_coeff))/delta
         # Np dual term coefficient
-        dmcoh_bending_dd_Np_dual_coeff = (fcoh/delta)*((self.alpha*self.C)**2.0)*np.eye(3)
-        dmcoh_bending_dd_Np_dual_coeff += (((self.alpha*self.C)**2.0)*np.matmul(v3_term, np.transpose(rp_jump_interface)))/delta
+        dmcoh_bending_dd_Np_dual_coeff = (fcoh/delta)*((self.alpha*self.R)**2.0)*np.eye(3)
+        dmcoh_bending_dd_Np_dual_coeff += (((self.alpha*self.R)**2.0)*np.matmul(v3_term, np.transpose(rp_jump_interface)))/delta
         return dmcoh_bending_dd_N_dual_coeff, dmcoh_bending_dd_Np_direct_coeff, dmcoh_bending_dd_Np_dual_coeff
 
     # Function to compute the coefficients of the constrained shear forces derivative
