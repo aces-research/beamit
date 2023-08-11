@@ -9,9 +9,9 @@ import copy
 import time
 
 # density of the material
-rho = 1500.0
+rho = 3690.0
 # elastic modulus of beam
-E = 3.80E09
+E = 2.60E11
 # the radius of the beam
 R = 1.0E-03
 # length of beam
@@ -19,12 +19,12 @@ L = 0.1
 # number of elements
 Nel = 10
 # critical effective cohesive strength
-Sc = 19.0E06
+Sc = 400.0E06
 # effective fracture energy
-Gc = 100.0
+Gc = 34.0
 
 # applied loads and tolerances
-BENDING_DISPLACEMENT = -0.01
+BENDING_DISPLACEMENT = -0.005
 SPATIAL_TOLERANCE = 1.0E-05
 
 # the load steps and output
