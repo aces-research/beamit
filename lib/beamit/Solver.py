@@ -322,9 +322,11 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # compute the initial stiffness and mass of the system
         self.system.weak_form.compute_system_initial_stiffness_and_mass(stiffness, mass)
         eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], mass[np.ix_(Neumann_dofs, Neumann_dofs)])
-        if (np.linalg.norm(eig_vals.imag) != 0.0):
-            print("\nWARNING: The Eigenvalues of the system are complex valued.")
-        return np.absolute(np.sqrt(eig_vals))
+        # compute the complex valued Eigen frequencies of the system
+        eig_freqs = np.sqrt(eig_vals)
+        if (not (((eig_freqs.real > 0.0).all()) and ((eig_freqs.imag >= 0.0).all()))):
+            sys.exit("\nEither the real and/or imaginary parts of the Eigenvalues are negative.")
+        return np.absolute(eig_freqs)
     
     # Function to compute and set the stable time step
     # probably should consider degrading modulus in case of damage!!!
