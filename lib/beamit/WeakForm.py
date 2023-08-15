@@ -260,16 +260,32 @@ class WeakFormCG:
         pass
     
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns):
+    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=True, lump=False):
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         translational_mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)
         # the element translational mass matrix
         M_el_trans = np.sum(translational_mass_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        # apply "special lumping" to the element translational mass matrix
+        if (lump):
+            sum_all_entries = np.sum(M_el_trans)
+            sum_diag_entries = np.sum(np.diag(M_el_trans))
+            diag_elements = (sum_all_entries / sum_diag_entries) * np.diag(M_el_trans)
+            M_el_trans = np.zeros([self.function_space.npel*self.function_space.dof, self.function_space.npel*self.function_space.dof])
+            np.fill_diagonal(M_el_trans, diag_elements)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
             M[np.ix_(global_element_dofs, global_element_dofs)] += M_el_trans
-            M[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_mass(element_unknowns)
+            if (use_rotational_mass):
+                M_el_rot = self.compute_element_rotational_mass(element_unknowns)
+                # apply "special lumping" to the element rotational mass matrix
+                if (lump):
+                    sum_all_entries = np.sum(M_el_rot)
+                    sum_diag_entries = np.sum(np.diag(M_el_rot))
+                    diag_elements = (sum_all_entries / sum_diag_entries) * np.diag(M_el_rot)
+                    M_el_rot = np.zeros([self.function_space.npel*self.function_space.dof, self.function_space.npel*self.function_space.dof])
+                    np.fill_diagonal(M_el_rot, diag_elements)
+                M[np.ix_(global_element_dofs, global_element_dofs)] += M_el_rot
         pass
 
     # Function to compute the system damping
