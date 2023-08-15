@@ -308,13 +308,7 @@ class WeakFormCG:
         pass
 
     # Function to compute the initial stiffness and mass of the system
-    def compute_system_initial_stiffness_and_mass(self, A, M):
-        # undeformed state of the system
-        undeformed_state = np.zeros([self.function_space.N, self.function_space.dof])
-        # straight beams along x-axis (linked to the assumption in the system)!!!
-        undeformed_state[:, 0:3] += self.function_space.nodes
-        undeformed_state[:, 3:4] += 1.0
-        undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
+    def compute_system_initial_stiffness_and_mass(self, A, M, undeformed_solution):
         # compute system mass
         self.compute_system_mass(M, undeformed_solution, use_rotational_mass=False, lump=True)
         # compute system stiffness
@@ -695,14 +689,8 @@ class WeakFormDG(WeakFormCG):
         pass
 
     # Function to compute the initial stiffness and mass of the system
-    def compute_system_initial_stiffness_and_mass(self, A, M):
-        # undeformed state of the system
-        undeformed_state = np.zeros([self.function_space.N, self.function_space.dof])
-        # straight beams along x-axis (linked to the assumption in the system)!!!
-        undeformed_state[:, 0:3] += self.function_space.nodes
-        undeformed_state[:, 3:4] += 1.0
-        undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
-        super().compute_system_initial_stiffness_and_mass(A, M)
+    def compute_system_initial_stiffness_and_mass(self, A, M, undeformed_solution):
+        super().compute_system_initial_stiffness_and_mass(A, M, undeformed_solution)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)

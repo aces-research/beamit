@@ -319,8 +319,11 @@ class ExplicitNewmarkSolver(DynamicSolver):
             sys.exit("\nDirichlet boundary conditions are not found.")
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
         mass = np.zeros([self.system.nequations, self.system.nequations])
+        # the undeformed state of the system
+        undeformed_state = self.system.initialize_state()
+        undeformed_solution = np.reshape(undeformed_state, [self.system.nequations, 1])
         # compute the initial stiffness and mass of the system
-        self.system.weak_form.compute_system_initial_stiffness_and_mass(stiffness, mass)
+        self.system.weak_form.compute_system_initial_stiffness_and_mass(stiffness, mass, undeformed_solution)
         eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], mass[np.ix_(Neumann_dofs, Neumann_dofs)])
         # compute the complex valued Eigen frequencies of the system
         eig_freqs = np.sqrt(eig_vals)
