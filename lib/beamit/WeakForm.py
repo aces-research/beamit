@@ -307,6 +307,22 @@ class WeakFormCG:
             A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_inertia_stiffness(element_unknowns, element_velocities, element_accelerations)
         pass
 
+    # Function to compute the initial stiffness and mass of the system
+    def compute_system_initial_stiffness_and_mass(self, A, M):
+        # undeformed state of the system
+        undeformed_state = np.zeros([self.function_space.N, self.function_space.dof])
+        # straight beams along x-axis (linked to the assumption in the system)!!!
+        undeformed_state[:, 0:3] += self.function_space.nodes
+        undeformed_state[:, 3:4] += 1.0
+        undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
+        # compute system mass
+        self.compute_system_mass(M, undeformed_solution, use_rotational_mass=False, lump=True)
+        # compute system stiffness
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_internal_stiffness(undeformed_solution[global_element_dofs])
+        pass
+
 class WeakFormDG(WeakFormCG):
 
     def __init__(self, function_space, material, betaP, betaT):
@@ -686,10 +702,7 @@ class WeakFormDG(WeakFormCG):
         undeformed_state[:, 0:3] += self.function_space.nodes
         undeformed_state[:, 3:4] += 1.0
         undeformed_solution = np.reshape(undeformed_state, [self.function_space.N*self.function_space.dof, 1])
-        # compute system mass
-        self.compute_system_mass(M, undeformed_solution)
-        # compute system stiffness using the function in WeakFormCG
-        super().compute_system_stiffness(A, undeformed_solution, element_loads_info=None)
+        super().compute_system_initial_stiffness_and_mass(A, M)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
