@@ -168,6 +168,96 @@ def static_main():
 
     print("\nTotal simulation time = %.2f sec." % (simulation_time))
 
+def static_large_rotation():
+
+    start_time = time.time()
+
+    # density of the material
+    rho = 1500.0
+    # elastic modulus of beam
+    E = 5.013E09
+    # area of cross section
+    A = 102.06734E-08
+    # area moment of inertia
+    I = 829.04193E-16
+    # physical information (material parameters)
+    material = Material.Material(rho, E, A=A, I=I)
+
+    # length of beam
+    L = 0.24
+    # number of elements
+    Nel = 10
+    # geometric information (domain, no. of elements)
+    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space.discretize()
+    # to avoid creating reference to the object attributes
+    # a better idea is to create private attributes and use accessors
+    nodal_coordinates = copy.deepcopy(function_space.nodes)
+
+    # a system binding the function_space (math) and the material (physics) 
+    system = System.System(function_space, material)
+    # to avoid creating reference to the object attributes
+    initial_state = copy.deepcopy(system.state)
+
+    # the solver
+    solver = Solver.NewtonRaphsonSolver(system)
+
+    # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
+    bctypes = np.zeros([function_space.N, function_space.dof], dtype=np.int64)
+    # boundary condition values matrix
+    bcvalues = np.zeros([function_space.N, function_space.dof])
+
+    # the load case and output
+    load_steps = 10
+    save_step = 1
+
+    # applied loads and tolerances
+    MOMENT_Z = 0.006
+    SPATIAL_TOLERANCE = 1.0E-05
+
+    # Function to generate the boundary conditions
+    def get_BCs(bctypes, bcvalues, load_level = 0.0):
+        for i in range(0, nodal_coordinates.shape[0]): # loop over the nodes
+            x_coord = nodal_coordinates[i, 0]
+            y_coord = nodal_coordinates[i, 1]
+            z_coord = nodal_coordinates[i, 2]
+            # clamp left node
+            if ((x_coord <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                bctypes[i, 0:3] = 1
+                bctypes[i, 4:6] = 1
+                bcvalues[i, 0:3] = initial_state[i, 0:3]
+                bcvalues[i, 4:6] = initial_state[i, 4:6]
+            # apply moment on right node
+            elif ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
+                bcvalues[i, 5] = load_level * MOMENT_Z
+
+    # create a VTK directory or clear it
+    if not os.path.isdir("VTK"):
+        os.mkdir("VTK")
+    else:
+        for item in os.listdir("VTK"):
+            os.remove(os.path.join("VTK", item))
+    
+    # write the initial state 
+    PostProcess.write_output_vtk("./VTK/output-0", system)
+
+    # incremental computation of the load path
+    for i in range(0, load_steps):
+        print("\nCurrent load step:", i+1,"out of", load_steps, "load steps.")
+        load_level = (i+1)/load_steps
+        # apply the boundary conditions
+        get_BCs(bctypes, bcvalues, load_level)
+        solver.set_boundary_conditions(bctypes, bcvalues)
+        # solve the nonlinear static problem and update the system 
+        solver.solve(Nmax = 50, tol = 1.0E-08)
+        if ((i+1) % save_step == 0):
+            output_file = "./VTK/output-" + str(i+1)
+            PostProcess.write_output_vtk(output_file, system)
+
+    simulation_time = time.time() - start_time
+
+    print("\nTotal simulation time = %.2f sec." % (simulation_time))
+
 def CZM_static_main():
 
     start_time = time.time()
@@ -449,5 +539,6 @@ def CZM_dynamic_main():
 
 # run main functions
 # static_main()
+# static_large_rotation()
 # CZM_static_main()
 CZM_dynamic_main()
