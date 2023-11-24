@@ -260,7 +260,7 @@ class WeakFormCG:
         pass
     
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=True, lump=False):
+    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         translational_mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)
         # the element translational mass matrix
