@@ -308,6 +308,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         DynamicSolver.__init__(self, system)
         # initialize the stable time step size
         self.stable_time_step = None
+        # compute the lumped mass
+        self.system.assemble_mass(self.M, self.solution)
     
     # Function to compute the natural frequencies of the system
     def compute_system_frequencies(self):
@@ -349,7 +351,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
-    def solve(self, dt = None, Nmax = 10, tol = 1.0E-05, stop_factor = 1.0E02, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt = None, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # if the time step size input is not provided
         if (dt == None):
             dt = self.stable_time_step
@@ -357,7 +359,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         elif (dt > self.stable_time_step):
             sys.exit("\nThe chosen time step size makes the solver unstable in time.")
         # reset the system before solving
-        self.reset_system()
+        Solver.reset_system()
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         # generate the nodal load vector
@@ -375,39 +377,15 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.acceleration[Dirichlet_dofs] = (self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
         # for the Neumann DoFs
         self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
-        # the zero acceleration prediction
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
-        self.acceleration[Neumann_dofs] = np.zeros([Neumann_dofs.shape[0], 1])
-        print("\nStarting the Newton-Raphson iterations!!!")
-        for i in range(0, Nmax):
-            # assemble the residual along with the inertial forces
-            if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
-                self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
-            else:
-                self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
-            self.system.assemble_inertia_forces(self.f, self.solution, self.velocity, self.acceleration)
-            # assemble the mass and damping matrices
-            self.system.assemble_mass(self.M, self.solution)
-            self.system.assemble_damping(self.C, self.solution, self.velocity)
-            # solve the SOE for the current accelerations step of the Neumann Dofs
-            current_accelerations_Neumann_step = self.linear_system_solver((self.M+((dt/2.0)*self.C))[np.ix_(Neumann_dofs, Neumann_dofs)], self.f[Neumann_dofs], solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
-            # the CORRECTOR
-            self.acceleration[Neumann_dofs] += current_accelerations_Neumann_step
-            self.velocity[Neumann_dofs] += ((dt/2.0)*current_accelerations_Neumann_step)
-            # convergence check
-            updated_residual = np.zeros([self.system.nequations, 1])
-            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
-            self.system.assemble_inertia_forces(updated_residual, self.solution, self.velocity, self.acceleration)
-            # the residual norm at all the NEUMANN NODES
-            res_L2_norm = np.linalg.norm(updated_residual[Neumann_dofs], ord=2)
-            print("\nIteration:",i+1,", Residual L2-norm = %.2e" % (res_L2_norm))
-            if (res_L2_norm <= tol):
-                print("\nSolver converged!!!")
-                break
-            else:
-                self.reset_system()
-        # stop the computations if the final residual norm is too high
-        if (res_L2_norm >= tol*stop_factor):
-            sys.exit("\nThe final residual norm is too high to proceed.")
+        # assemble the residual
+        if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
+            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
+        else:
+            self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
+        # the CORRECTOR
+        # solve the semi-discrete SOE for accelerations of the Neumann Dofs
+        self.acceleration[Neumann_dofs] = self.f[Neumann_dofs] / np.diag(self.M)[Neumann_dofs]
+        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # update the system attributes
         self.system.update(self.solution)
