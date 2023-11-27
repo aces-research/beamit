@@ -310,6 +310,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.stable_time_step = None
         # compute the lumped mass
         self.system.assemble_mass(self.M, self.solution)
+        self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
     
     # Function to compute the natural frequencies of the system
     def compute_system_frequencies(self):
@@ -350,7 +351,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         elif (dt > self.stable_time_step):
             sys.exit("\nThe chosen time step size makes the solver unstable in time.")
         # reset the system before solving
-        Solver.reset_system()
+        Solver.reset_system(self)
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         # generate the nodal load vector
@@ -376,7 +377,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
             self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
-        self.acceleration[Neumann_dofs] = self.f[Neumann_dofs] / np.diag(self.M)[Neumann_dofs]
+        self.acceleration[Neumann_dofs] = self.f[Neumann_dofs] / self.lumpedMass[Neumann_dofs]
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # update the system attributes
         self.system.update(self.solution)
