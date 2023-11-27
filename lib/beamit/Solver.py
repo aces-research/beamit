@@ -325,12 +325,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # compute the complex valued Eigen frequencies of the system
         eig_freqs = np.sqrt(eig_vals)
         if (not (((eig_freqs.real > 0.0).all()) and ((eig_freqs.imag >= 0.0).all()))):
-            print("\nEither the real and/or imaginary parts of the Eigen frequencies are negative.")
-            print("\nThe non-positive real frequencies:", eig_freqs.real[eig_freqs.real <= 0.0])
-            print("\nThe negative imaginary frequencies:", eig_freqs.imag[eig_freqs.imag < 0.0])
-            print("\nThe real parts of negative imaginary frequencies:", eig_freqs.real[eig_freqs.imag < 0.0])
-            print("\nThe real part of fundamental Eigen frequency:", eig_freqs.real[(np.absolute(eig_freqs)).argmin()])
-            sys.exit()
+            print("\nWARNING: Either the real and/or imaginary parts of the Eigen frequencies are negative.")
         return np.absolute(eig_freqs)
     
     # Function to compute and set the stable time step
