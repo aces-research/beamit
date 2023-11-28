@@ -113,13 +113,9 @@ class System:
         # update the state of the system
         self.state = np.reshape(solution, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
+        # update the internal forces
         internal_force_vector = np.zeros([self.nequations, 1])
         self.weak_form.compute_system_nodal_forces(internal_force_vector, solution)
-        # compute the cross-product for the moments
-        updated_internal_force_vector = np.zeros([self.nequations, 1])
-        dofs = self.weak_form.function_space.dof
-        for i in range(0, self.weak_form.function_space.N):
-            updated_internal_force_vector[dofs*i:(dofs*i)+dofs, :] += internal_force_vector[dofs*i:(dofs*i)+dofs, :]
-        self.internal_forces = np.reshape(updated_internal_force_vector, [self.weak_form.function_space.N, \
+        self.internal_forces = np.reshape(internal_force_vector, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
         pass
