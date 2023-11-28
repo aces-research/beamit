@@ -22,11 +22,7 @@ LOAD = -1.0e01
 SPATIAL_TOLERANCE = 1.0E-05
 NUMERICAL_TOLERANCE = 1.0E-10
 
-def simply_supported_CG_test():
-
-    print("\nRunning Euler-Bernoulli beam simply supported CG test...")
-
-    start_time = time.time()
+def test_simply_supported_CG():
 
     # physical information (material parameters)
     material = Material.Material(rho, E, R=R)
@@ -76,14 +72,8 @@ def simply_supported_CG_test():
         # asserts
         assert abs(system.state[n, 0] - analytical_transverse_displacement) < NUMERICAL_TOLERANCE, \
                f"Error in X displacement: expected {analytical_transverse_displacement} but computed {system.state[n, 0]}."
-    print("\nAll tests passed!")
-    print("\nTest time = %.3f sec." % (time.time() - start_time))
 
-def cantilever_CG_test():
-
-    print("\nRunning Euler-Bernoulli beam cantilever CG test...")
-
-    start_time = time.time()
+def test_cantilever_CG():
 
     # physical information (material parameters)
     material = Material.Material(rho, E, R=R)
@@ -123,11 +113,3 @@ def cantilever_CG_test():
     analytical_displacement = (LOAD*(L**3.0)) / (3.0*E*material.I)
     assert abs(system.state[-1, 0] - analytical_displacement) < NUMERICAL_TOLERANCE, \
                f"Error in X displacement: expected {analytical_displacement} but computed {system.state[-1, 0]}."
-    print("\nAll tests passed!")
-    print("\nTest time = %.3f sec." % (time.time() - start_time))
-
-if __name__ == "__main__":
-
-    # run the tests
-    simply_supported_CG_test()
-    cantilever_CG_test()

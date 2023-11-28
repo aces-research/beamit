@@ -16,7 +16,7 @@ Nel = 1
 # tolerance
 NUMERICAL_TOLERANCE = 1.0E-10
 
-if __name__ == "__main__":
+def test_stiffness_and_residual():
 
     # physical information (material parameters)
     material = Material.Material(rho, E, R=R)
@@ -42,7 +42,6 @@ if __name__ == "__main__":
 
     assert np.linalg.norm(computed_stiffness_matrix - actual_stiffness_matrix) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam stiffness matrix test failed."
-    print("\nEuler-Bernoulli beam stiffness matrix test passed!")
 
     # test the internal element residual
     random_solution = np.random.rand(function_space.npel*function_space.dof, 1)
@@ -51,4 +50,3 @@ if __name__ == "__main__":
     assert np.linalg.norm(computed_internal_residual - \
                           np.matmul(actual_stiffness_matrix, random_solution)) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam internal residual test failed."
-    print("\nEuler-Bernoulli beam internal residual test passed!")    

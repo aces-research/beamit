@@ -26,11 +26,7 @@ NUMERICAL_TOLERANCE = 1.0E-04
 dt = 5.0E-07
 time_steps = 10000
 
-if __name__ == "__main__":
-
-    print("\nRunning beam KLTF DG point load test...")
-
-    start_time = time.time()
+def test_beamDG_point_load():
 
     # physical information (material parameters)
     material = Material.Material(rho, E, R=R)
@@ -77,7 +73,6 @@ if __name__ == "__main__":
 
     # solve the problem
     for i in range(0, time_steps):
-        print("\nCurrent time step =", i+1,"out of", time_steps, "time steps.")
         load_level = (i+1) / time_steps
         # update the boundary conditions
         for n in range(0, nodal_coordinates.shape[0]): # loop over the nodes
@@ -106,5 +101,3 @@ if __name__ == "__main__":
                f"Error in Y displacement: expected {analytical_transverse_displacement} but computed {system.state[n, 1] - initial_state[n, 1]}."
         assert abs(system.state[n, 2] - initial_state[n, 2]) < NUMERICAL_TOLERANCE, \
                f"Error in Z displacement: expected {0.0} but computed {system.state[n, 2] - initial_state[n, 2]}."
-    print("\nAll tests passed!")
-    print("\nTest time = %.3f sec." % (time.time() - start_time))
