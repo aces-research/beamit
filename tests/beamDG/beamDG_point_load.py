@@ -3,7 +3,6 @@ from beamit import Material
 from beamit import System
 from beamit import Solver
 import numpy as np
-import time
 import copy
 
 # density of the material
