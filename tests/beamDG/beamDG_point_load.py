@@ -28,6 +28,8 @@ time_steps = 10000
 
 if __name__ == "__main__":
 
+    print("\nRunning beam KLTF DG point load test...")
+
     start_time = time.time()
 
     # physical information (material parameters)
@@ -105,6 +107,4 @@ if __name__ == "__main__":
         assert abs(system.state[n, 2] - initial_state[n, 2]) < NUMERICAL_TOLERANCE, \
                f"Error in Z displacement: expected {0.0} but computed {system.state[n, 2] - initial_state[n, 2]}."
     print("\nAll tests passed!")
-    print("\nTest time = %.2f sec." % (time.time() - start_time))
-
-
+    print("\nTest time = %.3f sec." % (time.time() - start_time))
