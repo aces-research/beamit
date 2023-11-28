@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from beamit import FunctionSpace
 from beamit import WeakForm
 
 def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
@@ -8,16 +9,26 @@ def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
 class System:
     
     def __init__(self, function_space, material, betaP = 10.0, betaT = 10.0):
-        if (function_space.discretization_type == "CG"):
-            # the continuous Galerkin weak form
-            self.weak_form = WeakForm.WeakFormCG(function_space, material)
-        elif (function_space.discretization_type == "DG"):
-            # the discontinuous Galerkin weak form
-            self.weak_form = WeakForm.WeakFormDG(function_space, material, betaP, betaT)
-        else:
-            sys.exit("\nWeak form of the discretization is not available.")
-        # the initial state of the system
-        self.state = self.initialize_state()
+        # use beam KLTF weak form for usual function space
+        if (type(function_space) == FunctionSpace.FunctionSpace):
+            if (function_space.discretization_type == "CG"):
+                # the continuous Galerkin weak form
+                self.weak_form = WeakForm.WeakFormCG(function_space, material)
+            elif (function_space.discretization_type == "DG"):
+                # the discontinuous Galerkin weak form
+                self.weak_form = WeakForm.WeakFormDG(function_space, material, betaP, betaT)
+            else:
+                sys.exit("\nBeam KLTF weak form of the discretization is not available.")
+            # the initial state of the system
+            self.state = self.initialize_state()
+        # use Euler-Bernoulli (EB) weak form for EB function space
+        elif (type(function_space) == FunctionSpace.EulerBernoulliFunctionSpace):
+            if (function_space.discretization_type == "CG"):
+                # the continuous Galerkin weak form
+                self.weak_form = WeakForm.EulerBernoulliWeakFormCG(function_space, material)
+            else:
+                sys.exit("\nEuler-Bernoulli weak form of the discretization is not available.")
+            self.state = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
         # the internal forces of the system
         self.internal_forces = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
         # the number of equations
