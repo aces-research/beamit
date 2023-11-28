@@ -51,6 +51,33 @@ def test_stiffness_and_residual():
                           np.matmul(actual_stiffness_matrix, random_solution)) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam internal residual test failed."
 
+def test_consistent_mass():
+
+    # physical information (material parameters)
+    material = Material.Material(rho, E, R=R)
+
+    # geometric information (domain, no. of elements)
+    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "CG")
+    function_space.discretize()
+
+    # a system binding the function_space (math) and the material (physics) 
+    system = System.System(function_space, material)
+
+    computed_mass_matrix = np.zeros([system.nequations, system.nequations])
+    system.weak_form.compute_system_mass(computed_mass_matrix, \
+                        np.zeros([function_space.npel*function_space.dof, 1]), \
+                        use_rotational_mass=False, lump=False)
+
+    # test the element mass matrix
+    actual_mass_matrix = ((rho*material.A*L)/420.0) * \
+                            np.array([[156.0, 22.0*L, 54.0, -13.0*L], \
+                                      [22.0*L, 4.0*L*L, 13.0*L, -3.0*L*L], 
+                                      [54.0, 13.0*L, 156.0, -22.0*L], 
+                                      [-13.0*L, -3.0*L*L, -22.0*L, 4.0*L*L]])
+    
+    assert np.linalg.norm(computed_mass_matrix - actual_mass_matrix) < NUMERICAL_TOLERANCE, \
+            f"Euler-Bernoulli beam mass matrix test failed."
+
 if __name__ == "__main__":
 
     # run the tests
