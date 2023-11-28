@@ -1,6 +1,7 @@
 import numpy as np
 from pyevtk.hl import linesToVTK
 from beamit import Material
+from beamit import WeakForm
 
 def write_positions_vtk(output_file, system):
     # co-ordinates, state of the nodes and the discretization type
@@ -110,6 +111,20 @@ def write_output_vtk(output_file, system):
     state = system.state
     internal_forces = system.internal_forces
     discretization_type = system.weak_form.function_space.discretization_type
+    # convert the fields to 3D state for post-processing
+    if ((type(system.weak_form) == WeakForm.EulerBernoulliWeakFormCG)):
+        # add zeros to the Y and Z coordinates
+        nodes = np.append(nodes, np.zeros([nodes.shape[0], 2]), axis=1)
+        # add displacements at the appropriate location
+        displacements_y = state[:, 0:1]
+        state = np.zeros([nodes.shape[0], 6])
+        state[:, 1:2] = displacements_y
+        # add internal forces at the appropriate location
+        shear_forces = internal_forces[:, 0:1]
+        bending_moments = internal_forces[:, 1:2]
+        internal_forces = np.zeros([nodes.shape[0], 6])
+        internal_forces[:, 1:2] = shear_forces
+        internal_forces[:, 5:6] = bending_moments
     x, y, z = nodes[:, 0:1].flatten(), nodes[:, 1:2].flatten(), nodes[:, 2:3].flatten()
     # positions of the nodes
     pos_x, pos_y, pos_z = state[:, 0:1].flatten(), state[:, 1:2].flatten(), state[:, 2:3].flatten()
