@@ -1,0 +1,10 @@
+# run test
+test:
+  image: biancagi/gitlab-runner-ubuntu-python3
+  stage: test
+  script:
+    - export PYTHONPATH="${PYTHONPATH}:$PWD/lib"
+    - cd tests
+    - python3 -m pytest -vv .
+  tags:
+    - general
