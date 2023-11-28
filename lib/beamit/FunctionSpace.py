@@ -133,3 +133,72 @@ class FunctionSpace:
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
         pass
+
+class EulerBernoulliFunctionSpace(FunctionSpace):
+
+    def __init__(self, s0, s1, E, discretization_type = "CG"):
+        # invoke the parent (FunctionSpace) class
+        FunctionSpace.__init__(self, s0, s1, E, discretization_type)
+        # the number of degrees of freedom per node (1 displacement, 1 rotation)
+        self.dof = 2
+        # the number of dimensions in the problem
+        self.dim = 1
+        # assuming the elements are connected like a simple chain!!!
+        # global connectivity (element number -> global dof number)
+        if (self.discretization_type == "CG"):
+            # number of nodes in the discretization
+            self.N = self.E + 1
+            global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
+            dofspel = self.npel*self.dof
+            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            for i in range(0, self.E):
+                self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
+        elif (self.discretization_type == "DG"):
+            # number of nodes in the discretization
+            self.N = self.E*self.npel
+            global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
+            dofspel = self.npel*self.dof
+            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            for i in range(0, self.E):
+                self.global_connectivity[i:i+1, :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+        else:
+            sys.exit("\nConnectivity cannot be generated for the discretization type.")
+        # the discretization nodes of the beam
+        self.nodes = np.zeros([self.N, self.dim])
+        # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
+        self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
+        
+    # Function to compute shape functions and its gradients of the element at any point
+    def compute_shapes(self, xi):
+        # Hermite shape functions and their gradients on the reference element (xi in [-1.0, 1.0])
+        Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
+        Nt1 = 0.25*(1.0 + xi)*((1.0 - xi)**2.0)
+        Nd2 = 0.25*(2.0 - xi)*((1.0 + xi)**2.0)
+        Nt2 = -0.25*(1.0 - xi)*((1.0 + xi)**2.0)
+        Nd1_xi = 0.25*((1.0 - xi)**2.0) - 0.50*(2.0 + xi)*(1.0 - xi)
+        Nt1_xi = 0.25*((1.0 - xi)**2.0) - 0.50*(1.0 + xi)*(1.0 - xi)
+        Nd2_xi = -0.25*((1.0 + xi)**2.0) + 0.50*(2.0 - xi)*(1.0 + xi)
+        Nt2_xi = 0.25*((1.0 + xi)**2.0) - 0.50*(1.0 - xi)*(1.0 + xi)
+        Nd1_xixi = -(1.0 - xi) + 0.50*(2.0 + xi)
+        Nt1_xixi = -(1.0 - xi) + 0.50*(1.0 + xi)
+        Nd2_xixi = -(1.0 + xi) + 0.50*(2.0 - xi)
+        Nt2_xixi = (1.0 + xi) - 0.50*(1.0 - xi)
+        Nd1_xixixi = 1.50
+        Nt1_xixixi = 1.50
+        Nd2_xixixi = -1.50
+        Nt2_xixixi = 1.50
+
+        # elemental shape function and gradient matrices
+        L = self.elL
+        shape_functions = np.array([[Nd1, 0.50*L*Nt1, Nd2, 0.50*L*Nt2]])
+        shape_first_gradients = np.array([[Nd1_xi, 0.50*L*Nt1_xi, Nd2_xi, 0.50*L*Nt2_xi]])
+        shape_second_gradients = np.array([[Nd1_xixi, 0.50*L*Nt1_xixi, Nd2_xixi, 0.50*L*Nt2_xixi]])
+        shape_third_gradients = np.array([[Nd1_xixixi, 0.50*L*Nt1_xixixi, Nd2_xixixi, 0.50*L*Nt2_xixixi]])
+        
+        return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
