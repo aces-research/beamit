@@ -112,3 +112,9 @@ def test_cantilever_CG():
     analytical_displacement = (LOAD*(L**3.0)) / (3.0*E*material.I)
     assert abs(system.state[-1, 0] - analytical_displacement) < NUMERICAL_TOLERANCE, \
                f"Error in X displacement: expected {analytical_displacement} but computed {system.state[-1, 0]}."
+
+if __name__ == "__main__":
+
+    # run the tests
+    test_simply_supported_CG()
+    test_cantilever_CG()

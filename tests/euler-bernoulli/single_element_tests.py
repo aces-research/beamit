@@ -50,3 +50,9 @@ def test_stiffness_and_residual():
     assert np.linalg.norm(computed_internal_residual - \
                           np.matmul(actual_stiffness_matrix, random_solution)) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam internal residual test failed."
+
+if __name__ == "__main__":
+
+    # run the tests
+    test_stiffness_and_residual()
+    test_consistent_mass()

@@ -158,3 +158,10 @@ def test_fix_tangent():
     assert(np.all(np.transpose(solver.solution) -
         np.array([0.,0.,0.,1.,0.,0.,L,0.,0.,1.,0.,0.])
         ==0))
+
+if __name__ == "__main__":
+
+    # run the tests
+    test_clamp()
+    test_fix_position()
+    test_fix_tangent()
