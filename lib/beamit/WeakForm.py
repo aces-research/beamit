@@ -677,3 +677,23 @@ class WeakFormDG(WeakFormCG):
             f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
         pass
+
+class EulerBernoulliWeakFormCG(WeakFormCG):
+    
+    def __init__(self, function_space, material):
+        # invoke the parent (WeakFormCG) class
+        WeakFormCG.__init__(self, function_space, material)
+
+    # Function to compute element internal forces
+    def compute_element_internal_forces(self, element_unknowns):
+        Nxx = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        wxx = np.matmul(Nxx, element_unknowns)
+        integrand = self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
+        return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
+    
+    # Function to compute element internal stiffness
+    def compute_element_internal_stiffness(self, element_unknowns):
+        Nxx = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        integrand = self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
+        return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
+    
