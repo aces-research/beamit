@@ -4,7 +4,6 @@ from beamit import System
 from beamit import Solver
 import numpy as np
 
-
 def test_clamp():
 
     # density of the material
@@ -53,7 +52,6 @@ def test_clamp():
     assert(np.all(np.transpose(solver.solution) -
         np.array([0.,0.,0.,1.,0.,0.,L,0.,0.,1.,0.,0.])
         ==0))
-
 
 def test_fix_position():
 
