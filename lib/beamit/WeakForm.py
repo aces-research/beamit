@@ -686,15 +686,20 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
-        Nxx = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
+        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        ux = np.matmul(phix, element_unknowns)
         wxx = np.matmul(Nxx, element_unknowns)
-        integrand = self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
+        integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
+                            self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
-        Nxx = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
-        integrand = self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
+        phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
+        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), phix) + \
+                            self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
     # Function to compute the system nodal forces
