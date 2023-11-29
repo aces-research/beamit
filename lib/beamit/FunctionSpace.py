@@ -134,15 +134,26 @@ class FunctionSpace:
         print("\nGenerated the function space.")
         pass
 
-class EulerBernoulliFunctionSpace(FunctionSpace):
+class EulerBernoulliFunctionSpace():
 
     def __init__(self, s0, s1, E, discretization_type = "CG"):
-        # invoke the parent (FunctionSpace) class
-        FunctionSpace.__init__(self, s0, s1, E, discretization_type)
-        # the number of degrees of freedom per node (1 displacement, 1 rotation)
-        self.dof = 2
+        # the coordinate of the left end of the beam
+        self.s0 = s0
+        # the coordinate of the right end of the beam
+        self.s1 = s1
+        # the number of elements
+        self.E = E
+        # the discretization type (CG (Continuous Galerkin) or DG (Discontinuous Galerkin))
+        if ((discretization_type == "CG") or (discretization_type == "DG")):
+            self.discretization_type = discretization_type
+        else:
+            sys.exit("\nUnknown discretization type in the function space.")
+        # the number of degrees of freedom per node (2 displacements, 1 rotation)
+        self.dof = 3
         # the number of dimensions in the problem
         self.dim = 1
+        # no. of nodes per element
+        self.npel = 2
         # assuming the elements are connected like a simple chain!!!
         # global connectivity (element number -> global dof number)
         if (self.discretization_type == "CG"):
@@ -165,12 +176,21 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
             sys.exit("\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
-        # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
-        # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
-        # the shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # assuming the elements are of equal length!!!
+        self.elL = (self.s1 - self.s0)/self.E
+        # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
+        self.Q = 4
+        # the lagrange shape functions and their gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.lagrange_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.lagrange_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the hermite shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.hermite_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the hermite shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.hermite_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the hermite shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.hermite_shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the jacobian of the transformation from parent to reference configuration (xi -> s)
+        self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
         self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
         
