@@ -194,8 +194,19 @@ class EulerBernoulliFunctionSpace():
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
         self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
         
-    # Function to compute shape functions and its gradients of the element at any point
-    def compute_shapes(self, xi):
+    # Function to compute lagrange shape functions and their gradients of the element at any point
+    def compute_lagrange_shapes(self, xi):
+        # Lagrange shape functions and their gradients on the reference element (xi in [-1.0, 1.0])
+        Nu1 = 0.50*(1.0 - xi)
+        Nu2 = 0.50*(1.0 + xi)
+        Nu1_xi = -0.50
+        Nu2_xi = 0.50
+        shape_functions = np.array([[Nu1, 0.0, 0.0, Nu2, 0.0, 0.0]])
+        shape_first_gradients = np.array([[Nu1_xi, 0.0, 0.0, Nu2_xi, 0.0, 0.0]])
+        return shape_functions, shape_first_gradients
+    
+    # Function to compute hermite shape functions and its gradients of the element at any point
+    def compute_hermite_shapes(self, xi):
         # Hermite shape functions and their gradients on the reference element (xi in [-1.0, 1.0])
         Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
         Nt1 = 0.25*(1.0 + xi)*((1.0 - xi)**2.0)
@@ -216,9 +227,39 @@ class EulerBernoulliFunctionSpace():
 
         # elemental shape function and gradient matrices
         L = self.elL
-        shape_functions = np.array([[Nd1, 0.50*L*Nt1, Nd2, 0.50*L*Nt2]])
-        shape_first_gradients = np.array([[Nd1_xi, 0.50*L*Nt1_xi, Nd2_xi, 0.50*L*Nt2_xi]])
-        shape_second_gradients = np.array([[Nd1_xixi, 0.50*L*Nt1_xixi, Nd2_xixi, 0.50*L*Nt2_xixi]])
-        shape_third_gradients = np.array([[Nd1_xixixi, 0.50*L*Nt1_xixixi, Nd2_xixixi, 0.50*L*Nt2_xixixi]])
+        shape_functions = np.array([[0.0, Nd1, 0.50*L*Nt1, 0.0, Nd2, 0.50*L*Nt2]])
+        shape_first_gradients = np.array([[0.0, Nd1_xi, 0.50*L*Nt1_xi, 0.0, Nd2_xi, 0.50*L*Nt2_xi]])
+        shape_second_gradients = np.array([[0.0, Nd1_xixi, 0.50*L*Nt1_xixi, 0.0, Nd2_xixi, 0.50*L*Nt2_xixi]])
+        shape_third_gradients = np.array([[0.0, Nd1_xixixi, 0.50*L*Nt1_xixixi, 0.0, Nd2_xixixi, 0.50*L*Nt2_xixixi]])
         
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
+
+    def discretize(self):
+        # assuming the "initially straight" beam is along the x-direction!!!
+        self.nodes[0:1, 0:1] = self.s0
+        self.nodes[self.N-1:self.N, 0:1] = self.s1
+        if (self.discretization_type == "CG"):
+            for i in range(1, self.N-1):
+                self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
+        elif (self.discretization_type == "DG"):
+            for i in range(1, self.N-1, 2):
+                self.nodes[i:i+1, 0:1] = self.nodes[i-1:i, 0:1] + self.elL
+                self.nodes[i+1:i+2, 0:1] = self.nodes[i:i+1, 0:1]
+
+        # quadrature rule on reference element
+        integration_points, integration_weights = np.polynomial.legendre.leggauss(self.Q)
+
+        # evaluate shape functions, their gradients and weights at the quadrature points
+        for i in range(0, self.Q):
+            el_LShape_functions, el_LShape_first_gradients = \
+                                        self.compute_lagrange_shapes(integration_points[i])
+            self.lagrange_shape_functions[i:i+1, :, :] = el_LShape_functions
+            self.lagrange_shape_first_gradients[i:i+1, :, :] = el_LShape_first_gradients
+            el_HShape_functions, el_HShape_first_gradients, el_HShape_second_gradients, _ = \
+                                    self.compute_hermite_shapes(integration_points[i])
+            self.hermite_shape_functions[i:i+1, :, :] = el_HShape_functions
+            self.hermite_shape_first_gradients[i:i+1, :, :] = el_HShape_first_gradients
+            self.hermite_shape_second_gradients[i:i+1, :, :] = el_HShape_second_gradients
+            self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
+        print("\nGenerated the function space.")
+        pass
