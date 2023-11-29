@@ -48,12 +48,13 @@ def test_simply_supported_CG():
         # pin at left end
         if (x_coord <= SPATIAL_TOLERANCE):
             bctypes[i, 0] = 1
+            bctypes[i, 1] = 1
         # roller at the right end
         elif (abs(x_coord - L) <= SPATIAL_TOLERANCE):
-            bctypes[i, 0] = 1
+            bctypes[i, 1] = 1
         # transverse load at the center
         elif (abs(x_coord - (0.50 * L)) <= SPATIAL_TOLERANCE):
-            bcvalues[i, 0] = LOAD
+            bcvalues[i, 1] = LOAD
 
     solver.set_boundary_conditions(bctypes, bcvalues)
 
@@ -69,8 +70,8 @@ def test_simply_supported_CG():
             shifted_coordinate = L - x_coord
         analytical_transverse_displacement = (LOAD*shifted_coordinate*((3.0*L*L)-(4.0*shifted_coordinate*shifted_coordinate)))/(48.0*E*material.I)
         # asserts
-        assert abs(system.state[n, 0] - analytical_transverse_displacement) < NUMERICAL_TOLERANCE, \
-               f"Error in X displacement: expected {analytical_transverse_displacement} but computed {system.state[n, 0]}."
+        assert abs(system.state[n, 1] - analytical_transverse_displacement) < NUMERICAL_TOLERANCE, \
+               f"Error in X displacement: expected {analytical_transverse_displacement} but computed {system.state[n, 1]}."
 
 def test_cantilever_CG():
 
@@ -100,9 +101,10 @@ def test_cantilever_CG():
         if (x_coord <= SPATIAL_TOLERANCE):
             bctypes[i, 0] = 1
             bctypes[i, 1] = 1
-        # roller at the right end
+            bctypes[i, 2] = 1
+        # load at the right end
         elif (abs(x_coord - L) <= SPATIAL_TOLERANCE):
-            bcvalues[i, 0] = LOAD
+            bcvalues[i, 1] = LOAD
 
     solver.set_boundary_conditions(bctypes, bcvalues)
 
@@ -110,8 +112,8 @@ def test_cantilever_CG():
     solver.solve(Nmax=1)
 
     analytical_displacement = (LOAD*(L**3.0)) / (3.0*E*material.I)
-    assert abs(system.state[-1, 0] - analytical_displacement) < NUMERICAL_TOLERANCE, \
-               f"Error in X displacement: expected {analytical_displacement} but computed {system.state[-1, 0]}."
+    assert abs(system.state[-1, 1] - analytical_displacement) < NUMERICAL_TOLERANCE, \
+               f"Error in X displacement: expected {analytical_displacement} but computed {system.state[-1, 1]}."
 
 if __name__ == "__main__":
 
