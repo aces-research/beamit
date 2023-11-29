@@ -702,6 +702,35 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
+    # Function to compute the system mass
+    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
+        phit = np.transpose(self.function_space.lagrange_shape_functions, axes=(0, 2, 1))
+        Nt = np.transpose(self.function_space.hermite_shape_functions, axes=(0, 2, 1))
+        axial_integrand = self.material.rho*self.material.A * \
+                                np.matmul(phit, self.function_space.lagrange_shape_functions)
+        bending_integrand = self.material.rho*self.material.A * \
+                                np.matmul(Nt, self.function_space.hermite_shape_functions)
+        
+        M_el_axial = np.sum(axial_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        M_el_bending = np.sum(bending_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        if (lump):
+            # apply row sum to the axial mass matrix
+            diag_elements = np.sum(M_el_axial, axis=1)
+            M_el_axial = np.zeros([self.function_space.npel*self.function_space.dof, \
+                                            self.function_space.npel*self.function_space.dof])
+            np.fill_diagonal(M_el_axial, diag_elements)
+            # apply "special lumping" to the bending mass matrix
+            sum_all_entries = np.sum(M_el_bending)
+            sum_diag_entries = np.sum(np.diag(M_el_bending))
+            diag_elements = (sum_all_entries / sum_diag_entries) * np.diag(M_el_bending)
+            M_el_bending = np.zeros([self.function_space.npel*self.function_space.dof, \
+                                            self.function_space.npel*self.function_space.dof])
+            np.fill_diagonal(M_el_bending, diag_elements)
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            M[np.ix_(global_element_dofs, global_element_dofs)] += (M_el_axial + M_el_bending)
+        pass
+    
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
