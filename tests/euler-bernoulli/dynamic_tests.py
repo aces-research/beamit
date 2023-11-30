@@ -25,13 +25,13 @@ NUMERICAL_TOLERANCE = 1.0E-04
 dt = 1.0E-06
 time_steps = 10000
 
-def test_Euler_Bernoulli_beamCG_point_load():
+def test_Euler_Bernoulli_beam_point_load():
 
     # physical information (material parameters)
     material = Material.Material(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -76,7 +76,7 @@ def test_Euler_Bernoulli_beamCG_point_load():
             x_coord = nodal_coordinates[n, 0]
             # transverse load at the center
             if (abs(x_coord - 0.50 * L) <= SPATIAL_TOLERANCE):
-                bcvalues[n, 1] = load_level * LOAD
+                bcvalues[n, 1] = 0.50 * load_level * LOAD
             solver.modify_boundary_condition_values(bcvalues)
             # solve the dynamic problem
             solver.solve(dt)
@@ -92,8 +92,7 @@ def test_Euler_Bernoulli_beamCG_point_load():
         assert abs(system.state[n, 1] - analytical_transverse_displacement) < NUMERICAL_TOLERANCE, \
                f"Error in X displacement: expected {analytical_transverse_displacement} but computed {system.state[n, 1]}."
 
-
 if __name__ == "__main__":
 
     # run the tests
-    test_Euler_Bernoulli_beamCG_point_load()
+    test_Euler_Bernoulli_beam_point_load()
