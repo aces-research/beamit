@@ -26,6 +26,8 @@ class System:
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
                 self.weak_form = WeakForm.EulerBernoulliWeakFormCG(function_space, material)
+            elif (function_space.discretization_type == "DG"):
+                self.weak_form = WeakForm.EulerBernoulliWeakFormDG(function_space, material, betaP)
             else:
                 sys.exit("\nEuler-Bernoulli weak form of the discretization is not available.")
             self.state = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
