@@ -112,7 +112,7 @@ def write_output_vtk(output_file, system):
     internal_forces = system.internal_forces
     discretization_type = system.weak_form.function_space.discretization_type
     # convert the fields to 3D state for post-processing
-    if ((type(system.weak_form) == WeakForm.EulerBernoulliWeakFormCG)):
+    if (isinstance(system.weak_form, (WeakForm.EulerBernoulliWeakFormCG))):
         # add zeros to the Y and Z coordinates
         nodes = np.append(nodes, np.zeros([nodes.shape[0], 2]), axis=1)
         # add displacements at the appropriate location
