@@ -77,9 +77,9 @@ def test_simply_supported():
             # transverse load at the center
             if (abs(x_coord - 0.50 * L) <= SPATIAL_TOLERANCE):
                 bcvalues[n, 1] = 0.50 * load_level * LOAD
-            solver.modify_boundary_condition_values(bcvalues)
-            # solve the dynamic problem
-            solver.solve(dt)
+        solver.modify_boundary_condition_values(bcvalues)
+        # solve the dynamic problem
+        solver.solve(dt)
 
     # test the displacements
     for n in range(0, nodal_coordinates.shape[0]): # loop over the nodes
@@ -141,9 +141,9 @@ def test_bar_tension():
             # axial load at the right end
             if (abs(x_coord - L) <= SPATIAL_TOLERANCE):
                 bcvalues[n, 0] = -load_level * LOAD
-            solver.modify_boundary_condition_values(bcvalues)
-            # solve the dynamic problem
-            solver.solve(dt)
+        solver.modify_boundary_condition_values(bcvalues)
+        # solve the dynamic problem
+        solver.solve(dt)
 
     # test the displacements
     for n in range(0, nodal_coordinates.shape[0]): # loop over the nodes
