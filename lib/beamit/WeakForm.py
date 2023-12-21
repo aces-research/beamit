@@ -685,11 +685,15 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         WeakFormCG.__init__(self, function_space, material)
 
     # Function to compute element internal forces
-    def compute_element_internal_forces(self, element_unknowns):
+    def compute_element_internal_forces(self, element_unknowns, boundary_dof_jumps):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
+                                                (1.0/self.function_space.jacobian)
         ux = np.matmul(phix, element_unknowns)
         wxx = np.matmul(Nxx, element_unknowns)
+        # the lifting related part of the axial dof derivative
+        ux += np.matmul(axial_lifting_shapes, boundary_dof_jumps)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
