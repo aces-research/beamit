@@ -694,6 +694,17 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
+    # Function to compute element lifting forces
+    def compute_element_lifting_forces(self, element_unknowns, boundary_dof_jumps):
+        phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
+        axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
+                                                (1.0/self.function_space.jacobian)
+        ux = np.matmul(phix, element_unknowns) + np.matmul(axial_lifting_shapes, boundary_dof_jumps)
+        # the axial variational lifting term
+        lifting_integrand = self.material.E*self.material.A*np.matmul(np.transpose(axial_lifting_shapes, \
+                                                        axes=(0, 2, 1)), ux)
+        return np.sum(lifting_integrand*self.function_space.JxW, axis=0, keepdims=False)
+
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
