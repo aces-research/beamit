@@ -895,8 +895,10 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         w_jump = w_right - w_left
         wx_jump = wx_right - wx_left
         # "forces" at the interface
-        axial_forces_interface = ((axial_force_left + axial_force_right) / 2.0) + \
-                                        (self.beta*((self.material.E*self.material.A) / \
+        # axial_forces_interface = ((axial_force_left + axial_force_right) / 2.0) + \
+        #                                 (self.beta*((self.material.E*self.material.A) / \
+        #                                            self.function_space.elL)*u_jump)
+        axial_forces_interface = (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*u_jump)
         shear_forces_interface = ((shear_force_left + shear_force_right) / 2.0) + \
                                         (self.beta*((self.material.E*self.material.A) / \
