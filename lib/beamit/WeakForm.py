@@ -709,6 +709,58 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                                                         axes=(0, 2, 1)), ux)
         return np.sum(lifting_integrand*self.function_space.JxW, axis=0, keepdims=False)
 
+    # Function to compute the overall system residual
+    def compute_system_residual(self, f, system_unknowns, element_loads_info):
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            boundary_dof_jumps = np.zeros([dofspel, 1])
+            if (i == 0): # left most element
+                right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
+                # jumps at the right boundary
+                boundary_dof_jumps[dofs:dofspel] = system_unknowns[right_element_dofs[0:dofs]] - \
+                                                    element_unknowns[dofs:dofspel]
+            elif (i == self.function_space.E-1): # right most element
+                left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
+                # jumps at the left boundary
+                boundary_dof_jumps[0:dofs] = element_unknowns[0:dofs] - \
+                                                system_unknowns[left_element_dofs[dofs:dofspel]]
+            else: # intermediate elements
+                left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
+                right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
+                # jumps at the left boundary
+                boundary_dof_jumps[0:dofs] = element_unknowns[0:dofs] - \
+                                                system_unknowns[left_element_dofs[dofs:dofspel]]
+                # jumps at the right boundary
+                boundary_dof_jumps[dofs:dofspel] = system_unknowns[right_element_dofs[0:dofs]] - \
+                                                    element_unknowns[dofs:dofspel]
+            if (element_loads_info == None): # No element loads
+                element_internal_forces = \
+                    self.compute_element_internal_forces(element_unknowns, boundary_dof_jumps)
+                element_lifting_forces = \
+                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps)
+                # element internal forces
+                f[global_element_dofs] -= element_internal_forces
+                # element lifting forces
+                if (i == 0): # left most element
+                    # right side
+                    f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
+                    f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+                elif (i == self.function_space.E-1): # right most element
+                    # left side
+                    f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
+                    f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
+                else: # intermediate elements
+                    # left side
+                    f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
+                    f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
+                    # right side
+                    f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
+                    f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+        pass
+    
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
