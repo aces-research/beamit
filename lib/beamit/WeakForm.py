@@ -711,12 +711,24 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
     # Function to compute element lifting forces
     def compute_element_lifting_forces(self, element_unknowns, boundary_dof_jumps):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
+        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
                                                 (1.0/self.function_space.jacobian)
+        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
+                                                ((1.0/self.function_space.jacobian)**2.0)
+        # jacobian vector to convert the rotation into derivative of transverse displacement 
+        # w.r.t the parametric coordinate in the lifting computation!
+        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
+        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
+        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
         ux = np.matmul(phix, element_unknowns) + np.matmul(axial_lifting_shapes, boundary_dof_jumps)
-        # the axial variational lifting term
+        wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
+                                                           boundary_dof_jumps*jacobian_vector)
+        # the axial and bending variational lifting term
         lifting_integrand = self.material.E*self.material.A*np.matmul(np.transpose(axial_lifting_shapes, \
-                                                        axes=(0, 2, 1)), ux)
+                                                        axes=(0, 2, 1)), ux) + \
+                            self.material.E*self.material.I*np.matmul(np.transpose(bending_lifting_shapes * \
+                                                        (jacobian_vector.T), axes=(0, 2, 1)), wxx)
         return np.sum(lifting_integrand*self.function_space.JxW, axis=0, keepdims=False)
 
     # Function to compute the overall system residual
