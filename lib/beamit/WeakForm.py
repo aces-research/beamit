@@ -742,21 +742,21 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
             if (i == 0): # left most element
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
                 # jumps at the right boundary
-                boundary_dof_jumps[dofs:dofspel] = system_unknowns[right_element_dofs[0:dofs]] - \
+                boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
                                                     element_unknowns[dofs:dofspel]
             elif (i == self.function_space.E-1): # right most element
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
                 # jumps at the left boundary
-                boundary_dof_jumps[0:dofs] = element_unknowns[0:dofs] - \
+                boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
                                                 system_unknowns[left_element_dofs[dofs:dofspel]]
             else: # intermediate elements
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
                 # jumps at the left boundary
-                boundary_dof_jumps[0:dofs] = element_unknowns[0:dofs] - \
+                boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
                                                 system_unknowns[left_element_dofs[dofs:dofspel]]
                 # jumps at the right boundary
-                boundary_dof_jumps[dofs:dofspel] = system_unknowns[right_element_dofs[0:dofs]] - \
+                boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
                                                     element_unknowns[dofs:dofspel]
             if (element_loads_info == None): # No element loads
                 element_internal_forces = \
