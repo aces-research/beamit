@@ -872,8 +872,6 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         # dofs and their derivaitives at the interface
         # left side
         u_left = np.matmul(self.phi_left_interface, element_unknowns_left)
-        axial_force_left = self.material.E*self.material.A * \
-                    np.matmul(self.phix_left_interface, element_unknowns_left)
         w_left = np.matmul(self.N_left_interface, element_unknowns_left)
         wx_left = np.matmul(self.Nx_left_interface, element_unknowns_left)
         shear_force_left = -self.material.E*self.material.I * \
@@ -882,8 +880,6 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
                                 np.matmul(self.Nxx_left_interface, element_unknowns_left)
         # right side
         u_right = np.matmul(self.phi_right_interface, element_unknowns_right)
-        axial_force_right = self.material.E*self.material.A * \
-                    np.matmul(self.phix_right_interface, element_unknowns_right)
         w_right = np.matmul(self.N_right_interface, element_unknowns_right)
         wx_right = np.matmul(self.Nx_right_interface, element_unknowns_right)
         shear_force_right = -self.material.E*self.material.I * \
@@ -895,9 +891,6 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         w_jump = w_right - w_left
         wx_jump = wx_right - wx_left
         # "forces" at the interface
-        # axial_forces_interface = ((axial_force_left + axial_force_right) / 2.0) + \
-        #                                 (self.beta*((self.material.E*self.material.A) / \
-        #                                            self.function_space.elL)*u_jump)
         axial_forces_interface = (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*u_jump)
         shear_forces_interface = ((shear_force_left + shear_force_right) / 2.0) + \
