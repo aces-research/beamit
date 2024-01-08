@@ -690,10 +690,20 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
                                                 (1.0/self.function_space.jacobian)
+        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
+                                                ((1.0/self.function_space.jacobian)**2.0)
+        # we need the jacobian vector to convert the rotation into derivative of transverse 
+        # displacement w.r.t the parametric coordinate in the lifting computation!
+        # this operation will change if the jacobian on the either sides of the interface is 
+        # different!!!
+        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
+        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
+        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
         ux = np.matmul(phix, element_unknowns)
         wxx = np.matmul(Nxx, element_unknowns)
-        # the lifting related part of the axial dof derivative
+        # the lifting related part of the axial and bending dof derivatives
         ux += np.matmul(axial_lifting_shapes, boundary_dof_jumps)
+        wxx += np.matmul(bending_lifting_shapes, boundary_dof_jumps*jacobian_vector)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
