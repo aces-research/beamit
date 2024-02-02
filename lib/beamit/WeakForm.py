@@ -685,7 +685,8 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         WeakFormCG.__init__(self, function_space, material)
 
     # Function to compute element internal forces
-    def compute_element_internal_forces(self, element_unknowns, boundary_dof_jumps):
+    def compute_element_internal_forces(self, element_unknowns, boundary_dof_jumps, \
+                                                                extended_boundary_dof_jumps):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
@@ -704,12 +705,16 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         # the lifting related part of the axial and bending dof derivatives
         ux += np.matmul(axial_lifting_shapes, boundary_dof_jumps)
         wxx += np.matmul(bending_lifting_shapes, boundary_dof_jumps*jacobian_vector)
+        # since extended boundary dof jumps can be non zero in CG as well!
+        if (self.function_space.discretization_type == "DG"):
+            wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
     # Function to compute element lifting forces
-    def compute_element_lifting_forces(self, element_unknowns, boundary_dof_jumps):
+    def compute_element_lifting_forces(self, element_unknowns, boundary_dof_jumps, \
+                                                               extended_boundary_dof_jumps):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
@@ -724,6 +729,9 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         ux = np.matmul(phix, element_unknowns) + np.matmul(axial_lifting_shapes, boundary_dof_jumps)
         wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
                                                            boundary_dof_jumps*jacobian_vector)
+        # since extended boundary dof jumps can be non zero in CG as well!
+        if (self.function_space.discretization_type == "DG"):
+            wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
         # the axial and bending variational lifting term
         lifting_integrand = self.material.E*self.material.A*np.matmul(np.transpose(axial_lifting_shapes, \
                                                         axes=(0, 2, 1)), ux) + \
@@ -739,30 +747,71 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
             boundary_dof_jumps = np.zeros([dofspel, 1])
+            extended_boundary_dof_jumps = np.zeros([dofspel, 1])
+            # the extended boundary dof jumps container is filled in such a way that they can be 
+            # interpolated with bending lifting shape functions
+            # the expressions used for extended boundary dof jumps and the variational coefficients 
+            # are evaluated for quadratic lifting shape functions!!! these expressions have to be 
+            # changed if the order of lifting shape functions are changed
             if (i == 0): # left most element
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
+                right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
                 # jumps at the right boundary
                 boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
                                                     element_unknowns[dofs:dofspel]
+                extended_boundary_dof_jumps[5:6, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
+                                                        system_unknowns[right_element_dofs[4:5]])
             elif (i == self.function_space.E-1): # right most element
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
+                left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
                 # jumps at the left boundary
                 boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
                                                 system_unknowns[left_element_dofs[dofs:dofspel]]
+                extended_boundary_dof_jumps[2:3, 0:1] = -0.75*(system_unknowns[left_element_dofs[1:2]] - \
+                                                        system_unknowns[left_previous_element_dofs[4:5]])
             else: # intermediate elements
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
-                # jumps at the left boundary
+                # dof jumps at the boundary
                 boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
                                                 system_unknowns[left_element_dofs[dofs:dofspel]]
                 # jumps at the right boundary
                 boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
                                                     element_unknowns[dofs:dofspel]
+                if (i == 1): # left last but one element
+                    right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
+                    extended_boundary_dof_jumps[2:3, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
+                                                                  element_unknowns[4:5])
+                    extended_boundary_dof_jumps[5:6, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
+                                                            system_unknowns[right_element_dofs[4:5]]) - \
+                                                            0.75*(element_unknowns[1:2] - \
+                                                            system_unknowns[left_element_dofs[4:5]])
+                elif (i == self.function_space.E-2): # right last but one element
+                    left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
+                    extended_boundary_dof_jumps[2:3, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
+                                                            element_unknowns[4:5]) - \
+                                                            0.75*(system_unknowns[left_element_dofs[1:2]] - \
+                                                            system_unknowns[left_previous_element_dofs[4:5]])
+                    extended_boundary_dof_jumps[5:6, 0:1] = -0.75*(element_unknowns[1:2] - \
+                                                            system_unknowns[left_element_dofs[4:5]])
+                else: # other elements
+                    left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
+                    right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
+                    extended_boundary_dof_jumps[2:3, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
+                                                            element_unknowns[4:5]) - \
+                                                            0.75*(system_unknowns[left_element_dofs[1:2]] - \
+                                                            system_unknowns[left_previous_element_dofs[4:5]])
+                    extended_boundary_dof_jumps[5:6, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
+                                                            system_unknowns[right_element_dofs[4:5]]) - \
+                                                            0.75*(element_unknowns[1:2] - \
+                                                            system_unknowns[left_element_dofs[4:5]])
             if (element_loads_info == None): # No element loads
                 element_internal_forces = \
-                    self.compute_element_internal_forces(element_unknowns, boundary_dof_jumps)
+                    self.compute_element_internal_forces(element_unknowns, boundary_dof_jumps, \
+                                                         extended_boundary_dof_jumps)
                 element_lifting_forces = \
-                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps)
+                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps, \
+                                                        extended_boundary_dof_jumps)
                 # element internal forces
                 f[global_element_dofs] -= element_internal_forces
                 # element lifting forces
