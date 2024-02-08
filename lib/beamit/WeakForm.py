@@ -735,6 +735,25 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                                                         (jacobian_vector.T), axes=(0, 2, 1)), wxx)
         return np.sum(lifting_integrand*self.function_space.JxW, axis=0, keepdims=False)
 
+    # Function to compute element extended lifting forces
+    def compute_element_extended_lifting_forces(self, element_unknowns, boundary_dof_jumps, \
+                                                               extended_boundary_dof_jumps):
+        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
+        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
+                                                ((1.0/self.function_space.jacobian)**2.0)
+        # jacobian vector to convert the rotation into derivative of transverse displacement 
+        # w.r.t the parametric coordinate in the lifting computation!
+        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
+        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
+        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
+        wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
+                                                           boundary_dof_jumps*jacobian_vector)
+        wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
+        extended_lifting_forces_integrand = self.material.E*self.material.I* \
+                np.matmul((np.transpose(bending_lifting_shapes, axes=(0, 2, 1)))[:, [2, 5], :], wxx)
+        return np.sum(extended_lifting_forces_integrand*((self.function_space.JxW)[:, [2, 5], :]), \
+                                                                    axis=0, keepdims=False)
+
     # Function to compute the overall system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info):
         dofs = self.function_space.dof
@@ -812,14 +831,24 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                     element_lifting_forces = \
                     self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps, \
                                                         extended_boundary_dof_jumps)
+                    element_extended_lifting_forces = self.compute_element_extended_lifting_forces(
+                                                        element_unknowns, \
+                                                        boundary_dof_jumps, \
+                                                        extended_boundary_dof_jumps)
+                    # the variational coefficients in extended lifting forces are only valid 
+                    # for quadratic lifting shape functions!!!
                     if (i == 0): # left most element
                         # right side
                         f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
                         f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+                        f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                        f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
                     elif (i == self.function_space.E-1): # right most element
                         # left side
                         f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
                         f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
+                        f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                        f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
                     else: # intermediate elements
                         # left side
                         f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
@@ -827,6 +856,29 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                         # right side
                         f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
                         f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+                        if (i == 1): # left last but one element
+                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
+                        elif (i == self.function_space.E-2): # right last but one element
+                            f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                        else: # other elements
+                            f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
+                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
+                            f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
         pass
     
     # Function to compute element internal stiffness
