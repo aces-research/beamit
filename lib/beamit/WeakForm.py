@@ -994,18 +994,10 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         u_left = np.matmul(self.phi_left_interface, element_unknowns_left)
         w_left = np.matmul(self.N_left_interface, element_unknowns_left)
         wx_left = np.matmul(self.Nx_left_interface, element_unknowns_left)
-        shear_force_left = -self.material.E*self.material.I * \
-                                np.matmul(self.Nxxx_left_interface, element_unknowns_left)
-        bending_moment_left = -self.material.E*self.material.I * \
-                                np.matmul(self.Nxx_left_interface, element_unknowns_left)
         # right side
         u_right = np.matmul(self.phi_right_interface, element_unknowns_right)
         w_right = np.matmul(self.N_right_interface, element_unknowns_right)
         wx_right = np.matmul(self.Nx_right_interface, element_unknowns_right)
-        shear_force_right = -self.material.E*self.material.I * \
-                                np.matmul(self.Nxxx_right_interface, element_unknowns_right)
-        bending_moment_right = -self.material.E*self.material.I * \
-                                np.matmul(self.Nxx_right_interface, element_unknowns_right)
         # jumps at the interface
         u_jump = u_right - u_left
         w_jump = w_right - w_left
@@ -1013,11 +1005,9 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         # "forces" at the interface
         axial_forces_interface = (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*u_jump)
-        shear_forces_interface = ((shear_force_left + shear_force_right) / 2.0) + \
-                                        (self.beta*((self.material.E*self.material.A) / \
+        shear_forces_interface = (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*w_jump)
-        bending_moments_interface = -((bending_moment_left + bending_moment_right) / 2.0) + \
-                                        (self.beta*((self.material.E*self.material.I) / \
+        bending_moments_interface = (self.beta*((self.material.E*self.material.I) / \
                                                    self.function_space.elL)*wx_jump)
         return axial_forces_interface, shear_forces_interface, bending_moments_interface
 
