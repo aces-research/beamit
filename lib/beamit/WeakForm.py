@@ -805,27 +805,28 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                 element_internal_forces = \
                     self.compute_element_internal_forces(element_unknowns, boundary_dof_jumps, \
                                                          extended_boundary_dof_jumps)
-                element_lifting_forces = \
-                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps, \
-                                                        extended_boundary_dof_jumps)
                 # element internal forces
                 f[global_element_dofs] -= element_internal_forces
-                # element lifting forces
-                if (i == 0): # left most element
-                    # right side
-                    f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
-                    f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
-                elif (i == self.function_space.E-1): # right most element
-                    # left side
-                    f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
-                    f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
-                else: # intermediate elements
-                    # left side
-                    f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
-                    f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
-                    # right side
-                    f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
-                    f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+                # element lifting and extended lifting forces
+                if (self.function_space.discretization_type == "DG"):
+                    element_lifting_forces = \
+                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps, \
+                                                        extended_boundary_dof_jumps)
+                    if (i == 0): # left most element
+                        # right side
+                        f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
+                        f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
+                    elif (i == self.function_space.E-1): # right most element
+                        # left side
+                        f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
+                        f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
+                    else: # intermediate elements
+                        # left side
+                        f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
+                        f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
+                        # right side
+                        f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
+                        f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
         pass
     
     # Function to compute element internal stiffness
