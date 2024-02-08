@@ -705,9 +705,7 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         # the lifting related part of the axial and bending dof derivatives
         ux += np.matmul(axial_lifting_shapes, boundary_dof_jumps)
         wxx += np.matmul(bending_lifting_shapes, boundary_dof_jumps*jacobian_vector)
-        # since extended boundary dof jumps can be non zero in CG as well!
-        if (self.function_space.discretization_type == "DG"):
-            wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
+        wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
@@ -729,9 +727,7 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         ux = np.matmul(phix, element_unknowns) + np.matmul(axial_lifting_shapes, boundary_dof_jumps)
         wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
                                                            boundary_dof_jumps*jacobian_vector)
-        # since extended boundary dof jumps can be non zero in CG as well!
-        if (self.function_space.discretization_type == "DG"):
-            wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
+        wxx += np.matmul(bending_lifting_shapes, extended_boundary_dof_jumps)
         # the axial and bending variational lifting term
         lifting_integrand = self.material.E*self.material.A*np.matmul(np.transpose(axial_lifting_shapes, \
                                                         axes=(0, 2, 1)), ux) + \
