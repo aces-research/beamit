@@ -774,16 +774,18 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                 # jumps at the right boundary
                 boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
                                                     element_unknowns[dofs:dofspel]
-                extended_boundary_dof_jumps[5:6, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
-                                                        system_unknowns[right_element_dofs[4:5]])
+                if (self.function_space.E > 2):
+                    extended_boundary_dof_jumps[5:6, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
+                                                            system_unknowns[right_element_dofs[4:5]])
             elif (i == self.function_space.E-1): # right most element
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
                 left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
                 # jumps at the left boundary
                 boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
                                                 system_unknowns[left_element_dofs[dofs:dofspel]]
-                extended_boundary_dof_jumps[2:3, 0:1] = -0.75*(system_unknowns[left_element_dofs[1:2]] - \
-                                                        system_unknowns[left_previous_element_dofs[4:5]])
+                if (self.function_space.E > 2):
+                    extended_boundary_dof_jumps[2:3, 0:1] = -0.75*(system_unknowns[left_element_dofs[1:2]] - \
+                                                            system_unknowns[left_previous_element_dofs[4:5]])
             else: # intermediate elements
                 left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
