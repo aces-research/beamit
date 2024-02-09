@@ -53,8 +53,7 @@ def test_stiffness_and_residual():
     random_solution = np.random.rand(function_space.npel*function_space.dof, 1)
     computed_internal_residual = \
         system.weak_form.compute_element_internal_forces(random_solution, \
-                    boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]), 
-                    extended_boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]))
+                    boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]))
     assert np.linalg.norm(computed_internal_residual - \
                           np.matmul(actual_stiffness_matrix, random_solution)) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam internal residual test failed."
@@ -76,8 +75,7 @@ def test_axial_lifting_operator():
     boundary_jumps[3, 0] = 1.0
     computed_lifting_forces = system.weak_form.compute_element_lifting_forces(element_unknowns=\
                             np.zeros([function_space.npel*function_space.dof, 1]), \
-                            boundary_dof_jumps=boundary_jumps, \
-                            extended_boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]))
+                            boundary_dof_jumps=boundary_jumps)
     actual_lifting_forces = np.zeros([function_space.npel*function_space.dof, 1])
     actual_lifting_forces[0, 0] = 58904862.25480857
     actual_lifting_forces[3, 0] = 82466807.15673202
@@ -104,8 +102,7 @@ def test_bending_lifting_operator():
     boundary_jumps[5, 0] = 1.0
     computed_lifting_forces = system.weak_form.compute_element_lifting_forces(element_unknowns=\
                             np.zeros([function_space.npel*function_space.dof, 1]), \
-                            boundary_dof_jumps=boundary_jumps, \
-                            extended_boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]))
+                            boundary_dof_jumps=boundary_jumps)
     actual_lifting_forces = np.zeros([function_space.npel*function_space.dof, 1])
     actual_lifting_forces[1, 0] = 169763.81301836
     actual_lifting_forces[2, 0] = -1634.60992757
@@ -127,9 +124,9 @@ def test_bending_extended_lifting_operator():
     # a system binding the function_space (math) and the material (physics)
     system = System.System(function_space, material)
 
-    extended_boundary_dof_jumps = np.zeros([function_space.npel*function_space.dof, 1])
-    extended_boundary_dof_jumps[2, 0] = 1.0
-    extended_boundary_dof_jumps[5, 0] = 0.5
+    extended_boundary_dof_jumps = np.zeros([2, 1])
+    extended_boundary_dof_jumps[0, 0] = 1.0
+    extended_boundary_dof_jumps[1, 0] = 0.5
     computed_extended_lifting_forces = system.weak_form.compute_element_extended_lifting_forces(element_unknowns=\
                             np.zeros([function_space.npel*function_space.dof, 1]), \
                             boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]), \
