@@ -685,207 +685,14 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         WeakFormCG.__init__(self, function_space, material)
 
     # Function to compute element internal forces
-    def compute_element_internal_forces(self, element_unknowns, boundary_dof_jumps, \
-                                                                extended_boundary_dof_jumps=np.zeros([2, 1])):
+    def compute_element_internal_forces(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
-        axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
-                                                (1.0/self.function_space.jacobian)
-        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
-                                                ((1.0/self.function_space.jacobian)**2.0)
-        # we need the jacobian vector to convert the rotation into derivative of transverse 
-        # displacement w.r.t the parametric coordinate in the lifting computation!
-        # this operation will change if the jacobian on the either sides of the interface is 
-        # different!!!
-        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
-        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
-        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
         ux = np.matmul(phix, element_unknowns)
         wxx = np.matmul(Nxx, element_unknowns)
-        # the lifting related part of the axial and bending dof derivatives
-        ux += np.matmul(axial_lifting_shapes, boundary_dof_jumps)
-        wxx += np.matmul(bending_lifting_shapes, boundary_dof_jumps*jacobian_vector)
-        wxx += np.matmul(bending_lifting_shapes[:, :, [2, 5]], extended_boundary_dof_jumps)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
-    
-    # Function to compute element lifting forces
-    def compute_element_lifting_forces(self, element_unknowns, boundary_dof_jumps, \
-                                                               extended_boundary_dof_jumps=np.zeros([2, 1])):
-        phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
-        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
-        axial_lifting_shapes = self.function_space.axial_lifting_shape_functions * \
-                                                (1.0/self.function_space.jacobian)
-        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
-                                                ((1.0/self.function_space.jacobian)**2.0)
-        # jacobian vector to convert the rotation into derivative of transverse displacement 
-        # w.r.t the parametric coordinate in the lifting computation!
-        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
-        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
-        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
-        ux = np.matmul(phix, element_unknowns) + np.matmul(axial_lifting_shapes, boundary_dof_jumps)
-        wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
-                                                           boundary_dof_jumps*jacobian_vector)
-        wxx += np.matmul(bending_lifting_shapes[:, :, [2, 5]], extended_boundary_dof_jumps)
-        # the axial and bending variational lifting term
-        lifting_integrand = self.material.E*self.material.A*np.matmul(np.transpose(axial_lifting_shapes, \
-                                                        axes=(0, 2, 1)), ux) + \
-                            self.material.E*self.material.I*np.matmul(np.transpose(bending_lifting_shapes * \
-                                                        (jacobian_vector.T), axes=(0, 2, 1)), wxx)
-        return np.sum(lifting_integrand*self.function_space.JxW, axis=0, keepdims=False)
-
-    # Function to compute element extended lifting forces
-    def compute_element_extended_lifting_forces(self, element_unknowns, boundary_dof_jumps, \
-                                                               extended_boundary_dof_jumps=np.zeros([2, 1])):
-        Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
-        bending_lifting_shapes = self.function_space.bending_lifting_shape_functions * \
-                                                ((1.0/self.function_space.jacobian)**2.0)
-        # jacobian vector to convert the rotation into derivative of transverse displacement 
-        # w.r.t the parametric coordinate in the lifting computation!
-        jacobian_vector = np.ones([self.function_space.dof*self.function_space.npel, 1])
-        jacobian_vector[2:3, 0:1] = self.function_space.jacobian
-        jacobian_vector[5:6, 0:1] = self.function_space.jacobian
-        wxx = np.matmul(Nxx, element_unknowns) + np.matmul(bending_lifting_shapes, \
-                                                           boundary_dof_jumps*jacobian_vector)
-        wxx += np.matmul(bending_lifting_shapes[:, :, [2, 5]], extended_boundary_dof_jumps)
-        extended_lifting_forces_integrand = self.material.E*self.material.I* \
-                np.matmul((np.transpose(bending_lifting_shapes, axes=(0, 2, 1)))[:, [2, 5], :], wxx)
-        return np.sum(extended_lifting_forces_integrand*((self.function_space.JxW)[:, [2, 5], :]), \
-                                                                    axis=0, keepdims=False)
-
-    # Function to compute the overall system residual
-    def compute_system_residual(self, f, system_unknowns, element_loads_info):
-        dofs = self.function_space.dof
-        dofspel = self.function_space.dof*self.function_space.npel
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            boundary_dof_jumps = np.zeros([dofspel, 1])
-            extended_boundary_dof_jumps = np.zeros([2, 1])
-            # the expressions used for extended boundary dof jumps and the variational coefficients 
-            # are evaluated for quadratic lifting shape functions!!! these expressions have to be 
-            # changed if the order of lifting shape functions are changed
-            # LOOKS LIKE THE SECOND PART OF THE LIFTING OPERATOR IS MESSING UP THE ROTATION 
-            # DOFS IN THE SOLUTION! CHECK WHATS THE PROBLEM. START FROM THE COMPUTATION OF THE 
-            # EXTENDED BOUNDARY DOF JUMPS.
-            # MOVE THE LIFTING RELATED METHODS INTO THE DG WEAK FORM AND IMPLEMENT A NEW 
-            # SYSTEM RESIDUAL METHOD THERE TO CARRY OUT THE LIFTING RELATED OPERATIONS!
-            # ADD PROVISION TO SWITCH BETWEEN LIFTING AND FLUX APPROACH!
-            if (i == 0): # left most element
-                right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
-                right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
-                # jumps at the right boundary
-                boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
-                                                    element_unknowns[dofs:dofspel]
-                if (self.function_space.E > 2):
-                    extended_boundary_dof_jumps[1:2, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
-                                                            system_unknowns[right_element_dofs[4:5]])
-            elif (i == self.function_space.E-1): # right most element
-                left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
-                left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
-                # jumps at the left boundary
-                boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
-                                                system_unknowns[left_element_dofs[dofs:dofspel]]
-                if (self.function_space.E > 2):
-                    extended_boundary_dof_jumps[0:1, 0:1] = -0.75*(system_unknowns[left_element_dofs[1:2]] - \
-                                                            system_unknowns[left_previous_element_dofs[4:5]])
-            else: # intermediate elements
-                left_element_dofs = self.function_space.global_connectivity[i-1:i].flatten()
-                right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
-                # dof jumps at the boundary
-                boundary_dof_jumps[0:dofs, 0:1] = element_unknowns[0:dofs] - \
-                                                system_unknowns[left_element_dofs[dofs:dofspel]]
-                # jumps at the right boundary
-                boundary_dof_jumps[dofs:dofspel, 0:1] = system_unknowns[right_element_dofs[0:dofs]] - \
-                                                    element_unknowns[dofs:dofspel]
-                if (i == 1): # left last but one element
-                    right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
-                    extended_boundary_dof_jumps[0:1, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
-                                                                  element_unknowns[4:5])
-                    extended_boundary_dof_jumps[1:2, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
-                                                            system_unknowns[right_element_dofs[4:5]]) - \
-                                                            0.75*(element_unknowns[1:2] - \
-                                                            system_unknowns[left_element_dofs[4:5]])
-                elif (i == self.function_space.E-2): # right last but one element
-                    left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
-                    extended_boundary_dof_jumps[0:1, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
-                                                            element_unknowns[4:5]) - \
-                                                            0.75*(system_unknowns[left_element_dofs[1:2]] - \
-                                                            system_unknowns[left_previous_element_dofs[4:5]])
-                    extended_boundary_dof_jumps[1:2, 0:1] = -0.75*(element_unknowns[1:2] - \
-                                                            system_unknowns[left_element_dofs[4:5]])
-                else: # other elements
-                    left_previous_element_dofs = self.function_space.global_connectivity[i-2:i-1].flatten()
-                    right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
-                    extended_boundary_dof_jumps[0:1, 0:1] = 0.75*(system_unknowns[right_element_dofs[1:2]] - \
-                                                            element_unknowns[4:5]) - \
-                                                            0.75*(system_unknowns[left_element_dofs[1:2]] - \
-                                                            system_unknowns[left_previous_element_dofs[4:5]])
-                    extended_boundary_dof_jumps[1:2, 0:1] = 0.75*(system_unknowns[right_next_element_dofs[1:2]] - \
-                                                            system_unknowns[right_element_dofs[4:5]]) - \
-                                                            0.75*(element_unknowns[1:2] - \
-                                                            system_unknowns[left_element_dofs[4:5]])
-            if (element_loads_info == None): # No element loads
-                element_internal_forces = \
-                    self.compute_element_internal_forces(element_unknowns, boundary_dof_jumps, \
-                                                         extended_boundary_dof_jumps)
-                # element internal forces
-                f[global_element_dofs] -= element_internal_forces
-                # element lifting and extended lifting forces
-                if (self.function_space.discretization_type == "DG"):
-                    element_lifting_forces = \
-                    self.compute_element_lifting_forces(element_unknowns, boundary_dof_jumps, \
-                                                        extended_boundary_dof_jumps)
-                    element_extended_lifting_forces = self.compute_element_extended_lifting_forces(
-                                                        element_unknowns, \
-                                                        boundary_dof_jumps, \
-                                                        extended_boundary_dof_jumps)
-                    # the variational coefficients in extended lifting forces are only valid 
-                    # for quadratic lifting shape functions!!!
-                    if (i == 0): # left most element
-                        # right side
-                        f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
-                        f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
-                        f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                        f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-                    elif (i == self.function_space.E-1): # right most element
-                        # left side
-                        f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
-                        f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
-                        f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                        f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                    else: # intermediate elements
-                        # left side
-                        f[global_element_dofs[0:dofs]] -= element_lifting_forces[0:dofs]
-                        f[left_element_dofs[dofs:dofspel]] += element_lifting_forces[0:dofs]
-                        # right side
-                        f[global_element_dofs[dofs:dofspel]] += element_lifting_forces[dofs:dofspel]
-                        f[right_element_dofs[0:dofs]] -= element_lifting_forces[dofs:dofspel]
-                        if (i == 1): # left last but one element
-                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-                        elif (i == self.function_space.E-2): # right last but one element
-                            f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                        else: # other elements
-                            f[left_previous_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[left_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[global_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[right_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[0:1, 0:1]
-                            f[left_element_dofs[4:5]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[global_element_dofs[1:2]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[right_element_dofs[4:5]] += 0.75*element_extended_lifting_forces[1:2, 0:1]
-                            f[right_next_element_dofs[1:2]] -= 0.75*element_extended_lifting_forces[1:2, 0:1]
-        pass
     
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
@@ -998,22 +805,37 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         # dofs and their derivaitives at the interface
         # left side
         u_left = np.matmul(self.phi_left_interface, element_unknowns_left)
+        axial_force_left = self.material.E*self.material.A * \
+                    np.matmul(self.phix_left_interface, element_unknowns_left)
         w_left = np.matmul(self.N_left_interface, element_unknowns_left)
         wx_left = np.matmul(self.Nx_left_interface, element_unknowns_left)
+        shear_force_left = -self.material.E*self.material.I * \
+                                np.matmul(self.Nxxx_left_interface, element_unknowns_left)
+        bending_moment_left = -self.material.E*self.material.I * \
+                                np.matmul(self.Nxx_left_interface, element_unknowns_left)
         # right side
         u_right = np.matmul(self.phi_right_interface, element_unknowns_right)
+        axial_force_right = self.material.E*self.material.A * \
+                    np.matmul(self.phix_right_interface, element_unknowns_right)
         w_right = np.matmul(self.N_right_interface, element_unknowns_right)
         wx_right = np.matmul(self.Nx_right_interface, element_unknowns_right)
+        shear_force_right = -self.material.E*self.material.I * \
+                                np.matmul(self.Nxxx_right_interface, element_unknowns_right)
+        bending_moment_right = -self.material.E*self.material.I * \
+                                np.matmul(self.Nxx_right_interface, element_unknowns_right)
         # jumps at the interface
         u_jump = u_right - u_left
         w_jump = w_right - w_left
         wx_jump = wx_right - wx_left
         # "forces" at the interface
-        axial_forces_interface = (self.beta*((self.material.E*self.material.A) / \
+        axial_forces_interface = ((axial_force_left + axial_force_right) / 2.0) + \
+                                        (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*u_jump)
-        shear_forces_interface = (self.beta*((self.material.E*self.material.A) / \
+        shear_forces_interface = ((shear_force_left + shear_force_right) / 2.0) + \
+                                        (self.beta*((self.material.E*self.material.A) / \
                                                    self.function_space.elL)*w_jump)
-        bending_moments_interface = (self.beta*((self.material.E*self.material.I) / \
+        bending_moments_interface = -((bending_moment_left + bending_moment_right) / 2.0) + \
+                                        (self.beta*((self.material.E*self.material.I) / \
                                                    self.function_space.elL)*wx_jump)
         return axial_forces_interface, shear_forces_interface, bending_moments_interface
 

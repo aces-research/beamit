@@ -52,91 +52,10 @@ def test_stiffness_and_residual():
     # test the internal element residual
     random_solution = np.random.rand(function_space.npel*function_space.dof, 1)
     computed_internal_residual = \
-        system.weak_form.compute_element_internal_forces(random_solution, \
-                    boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]))
+        system.weak_form.compute_element_internal_forces(random_solution)
     assert np.linalg.norm(computed_internal_residual - \
                           np.matmul(actual_stiffness_matrix, random_solution)) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam internal residual test failed."
-
-def test_axial_lifting_operator():
-
-    # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
-
-    # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "DG")
-    function_space.discretize()
-
-    # a system binding the function_space (math) and the material (physics)
-    system = System.System(function_space, material)
-
-    boundary_jumps = np.zeros([function_space.npel*function_space.dof, 1])
-    boundary_jumps[0, 0] = 0.5
-    boundary_jumps[3, 0] = 1.0
-    computed_lifting_forces = system.weak_form.compute_element_lifting_forces(element_unknowns=\
-                            np.zeros([function_space.npel*function_space.dof, 1]), \
-                            boundary_dof_jumps=boundary_jumps)
-    actual_lifting_forces = np.zeros([function_space.npel*function_space.dof, 1])
-    actual_lifting_forces[0, 0] = 58904862.25480857
-    actual_lifting_forces[3, 0] = 82466807.15673202
-
-    assert np.linalg.norm(computed_lifting_forces - actual_lifting_forces) < NUMERICAL_TOLERANCE, \
-            f"Euler-Bernoulli beam axial lifting operator test failed."
-
-def test_bending_lifting_operator():
-
-    # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
-
-    # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "DG")
-    function_space.discretize()
-
-    # a system binding the function_space (math) and the material (physics)
-    system = System.System(function_space, material)
-
-    boundary_jumps = np.zeros([function_space.npel*function_space.dof, 1])
-    boundary_jumps[1, 0] = 1.0
-    boundary_jumps[2, 0] = 0.5
-    boundary_jumps[4, 0] = 2.0
-    boundary_jumps[5, 0] = 1.0
-    computed_lifting_forces = system.weak_form.compute_element_lifting_forces(element_unknowns=\
-                            np.zeros([function_space.npel*function_space.dof, 1]), \
-                            boundary_dof_jumps=boundary_jumps)
-    actual_lifting_forces = np.zeros([function_space.npel*function_space.dof, 1])
-    actual_lifting_forces[1, 0] = 169763.81301836
-    actual_lifting_forces[2, 0] = -1634.60992757
-    actual_lifting_forces[4, 0] = 184254.40913304
-    actual_lifting_forces[5, 0] = 1905.57229394
-    
-    assert np.linalg.norm(computed_lifting_forces - actual_lifting_forces) < NUMERICAL_TOLERANCE, \
-            f"Euler-Bernoulli beam bending lifting operator test failed."
-
-def test_bending_extended_lifting_operator():
-
-     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
-
-    # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "DG")
-    function_space.discretize()
-
-    # a system binding the function_space (math) and the material (physics)
-    system = System.System(function_space, material)
-
-    extended_boundary_dof_jumps = np.zeros([2, 1])
-    extended_boundary_dof_jumps[0, 0] = 1.0
-    extended_boundary_dof_jumps[1, 0] = 0.5
-    computed_extended_lifting_forces = system.weak_form.compute_element_extended_lifting_forces(element_unknowns=\
-                            np.zeros([function_space.npel*function_space.dof, 1]), \
-                            boundary_dof_jumps=np.zeros([function_space.npel*function_space.dof, 1]), \
-                            extended_boundary_dof_jumps=extended_boundary_dof_jumps)
-    actual_extended_lifting_forces = np.zeros([2, 1])
-    actual_extended_lifting_forces[0, 0] = 8246.68071567
-    actual_extended_lifting_forces[1, 0] = 5890.48622548
-
-    assert np.linalg.norm(computed_extended_lifting_forces - actual_extended_lifting_forces) < NUMERICAL_TOLERANCE, \
-            f"Euler-Bernoulli beam bending extended lifting operator test failed."
 
 def test_consistent_mass():
 
@@ -171,12 +90,14 @@ def test_consistent_mass():
 
     assert np.linalg.norm(computed_mass_matrix - actual_mass_matrix) < NUMERICAL_TOLERANCE, \
             f"Euler-Bernoulli beam mass matrix test failed."
+    
+    computed_mass_matrix = np.zeros([system.nequations, system.nequations])
+    system.weak_form.compute_system_mass(computed_mass_matrix, \
+                        np.zeros([function_space.npel*function_space.dof, 1]), \
+                        use_rotational_mass=False, lump=True)
 
 if __name__ == "__main__":
 
     # run the tests
     test_stiffness_and_residual()
     test_consistent_mass()
-    test_axial_lifting_operator()
-    test_bending_lifting_operator()
-    test_bending_extended_lifting_operator()

@@ -189,10 +189,6 @@ class EulerBernoulliFunctionSpace():
         self.hermite_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
         # the hermite shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.hermite_shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
-        # the axial lifting shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.axial_lifting_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
-        # the bending lifting shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.bending_lifting_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
         self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
@@ -238,24 +234,6 @@ class EulerBernoulliFunctionSpace():
         
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
-    # Function to compute lifting shape functions and its gradients of the element at any point
-    def compute_lifting_shapes(self, xi):
-        # Lifting shape functions on the reference element (xi in [-1.0, 1.0])
-        # linear lifting shapes
-        # k01 = (1.0-(3.0*xi))/4.0
-        # k12 = (1.0+(3.0*xi))/4.0
-        # quadratic lifting shapes
-        k01 = ((15.0*(xi**2.0))-(6.0*xi)-3.0)/8.0
-        k12 = ((15.0*(xi**2.0))+(6.0*xi)-3.0)/8.0
-        k01_xi = ((15.0*xi)-3.0)/4.0
-        k12_xi = ((15.0*xi)+3.0)/4.0
-
-        # elemental lifting shape function matrices
-        axial_lifting_shapes = np.array([[k01, 0.0, 0.0, k12, 0.0, 0.0]])
-        bending_lifting_shapes = np.array([[0.0, k01_xi, k01, 0.0, k12_xi, k12]])
-
-        return axial_lifting_shapes, bending_lifting_shapes
-
     def discretize(self):
         # assuming the "initially straight" beam is along the x-direction!!!
         self.nodes[0:1, 0:1] = self.s0
@@ -279,13 +257,9 @@ class EulerBernoulliFunctionSpace():
             self.lagrange_shape_first_gradients[i:i+1, :, :] = el_LShape_first_gradients
             el_HShape_functions, el_HShape_first_gradients, el_HShape_second_gradients, _ = \
                                     self.compute_hermite_shapes(integration_points[i])
-            el_axial_lifting_shapes, el_bending_lifting_shapes = \
-                self.compute_lifting_shapes(integration_points[i])
             self.hermite_shape_functions[i:i+1, :, :] = el_HShape_functions
             self.hermite_shape_first_gradients[i:i+1, :, :] = el_HShape_first_gradients
             self.hermite_shape_second_gradients[i:i+1, :, :] = el_HShape_second_gradients
-            self.axial_lifting_shape_functions[i:i+1, :, :] = el_axial_lifting_shapes
-            self.bending_lifting_shape_functions[i:i+1, :, :] = el_bending_lifting_shapes
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
         pass
