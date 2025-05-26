@@ -766,6 +766,12 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
             # the expressions used for extended boundary dof jumps and the variational coefficients 
             # are evaluated for quadratic lifting shape functions!!! these expressions have to be 
             # changed if the order of lifting shape functions are changed
+            # LOOKS LIKE THE SECOND PART OF THE LIFTING OPERATOR IS MESSING UP THE ROTATION 
+            # DOFS IN THE SOLUTION! CHECK WHATS THE PROBLEM. START FROM THE COMPUTATION OF THE 
+            # EXTENDED BOUNDARY DOF JUMPS.
+            # MOVE THE LIFTING RELATED METHODS INTO THE DG WEAK FORM AND IMPLEMENT A NEW 
+            # SYSTEM RESIDUAL METHOD THERE TO CARRY OUT THE LIFTING RELATED OPERATIONS!
+            # ADD PROVISION TO SWITCH BETWEEN LIFTING AND FLUX APPROACH!
             if (i == 0): # left most element
                 right_element_dofs = self.function_space.global_connectivity[i+1:i+2].flatten()
                 right_next_element_dofs = self.function_space.global_connectivity[i+2:i+3].flatten()
