@@ -127,6 +127,8 @@ class NewtonRaphsonSolver(Solver):
         initial_residual = np.zeros([self.system.nequations, 1])
         self.system.assemble_residual(initial_residual, self.solution, nodal_loads, element_loads_info=None)
         self.initial_residual_norm = np.linalg.norm(initial_residual[Neumann_dofs], ord=2)
+        # handle the case when initial residual norm is a very small number
+        self.initial_residual_norm = 1.0 if self.initial_residual_norm < 1.0E-20 else self.initial_residual_norm
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the linear system
@@ -167,15 +169,14 @@ class NewtonRaphsonSolver(Solver):
                   res_L2_norm/self.initial_residual_norm))
             if ((res_L2_norm <= tol) or ((res_L2_norm/self.initial_residual_norm) <= tol)):
                 print("\nSolver converged!!!")
-                break
+                # update the system attributes
+                self.system.update(self.solution)
+                return
             else:
                 # reset the linear system
                 self.reset_system()
         # if the solver did not converge
-        if (i == Nmax-1):
-            sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
-        # update the system attributes
-        self.system.update(self.solution)
+        sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
 
 class DynamicSolver(Solver):
 
@@ -260,6 +261,8 @@ class ImplicitNewmarkSolver(DynamicSolver):
         self.system.assemble_residual(initial_residual, self.solution, nodal_loads, element_loads_info=None)
         initial_residual -= np.matmul(self.M, self.acceleration)
         self.initial_residual_norm = np.linalg.norm(initial_residual[Neumann_dofs], ord=2)
+        # handle the case when initial residual norm is a very small number
+        self.initial_residual_norm = 1.0 if self.initial_residual_norm < 1.0E-20 else self.initial_residual_norm
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -306,15 +309,14 @@ class ImplicitNewmarkSolver(DynamicSolver):
                   res_L2_norm/self.initial_residual_norm))
             if ((res_L2_norm <= tol) or ((res_L2_norm/self.initial_residual_norm) <= tol)):
                 print("\nSolver converged!!!")
-                break
+                # update the system attributes
+                self.system.update(self.solution)
+                return
             else:
                 # reset the linear system
                 self.reset_system()
         # if the solver did not converge
-        if (i == Nmax-1):
-            sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
-        # update the system attributes
-        self.system.update(self.solution)
+        sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
 
 class ExplicitNewmarkSolver(DynamicSolver):
 
