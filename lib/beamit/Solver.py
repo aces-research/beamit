@@ -106,8 +106,7 @@ class NewtonRaphsonSolver(Solver):
     def __init__(self, system):
         # invoke the parent (Solver) class
         Solver.__init__(self, system)
-    
-    def solve(self, Nmax = 10, tol = 1.0E-05, stop_factor = 1.0E02, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # reset linear system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -164,9 +163,6 @@ class NewtonRaphsonSolver(Solver):
             else:
                 # reset the linear system
                 self.reset_system()
-        # stop the computations if the final residual norm is too high
-        if (res_L2_norm >= tol*stop_factor):
-            sys.exit("\nThe final residual norm is too high to proceed.")
         # update the system attributes
         self.system.update(self.solution)
 
@@ -213,7 +209,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         # invoke the parent (DynamicSolver) class
         DynamicSolver.__init__(self, system)
 
-    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, stop_factor = 1.0E02, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # constants in the time integration scheme
         c0 = 1.0/(beta*(dt**2.0))
         c1 = 1.0/(beta*dt)
@@ -295,9 +291,6 @@ class ImplicitNewmarkSolver(DynamicSolver):
             else:
                 # reset the linear system
                 self.reset_system()
-        # stop the computations if the final residual norm is too high
-        if (res_L2_norm >= tol*stop_factor):
-            sys.exit("\nThe final residual norm is too high to proceed.")
         # update the system attributes
         self.system.update(self.solution)
 
