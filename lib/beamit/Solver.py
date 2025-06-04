@@ -106,6 +106,9 @@ class NewtonRaphsonSolver(Solver):
     def __init__(self, system):
         # invoke the parent (Solver) class
         Solver.__init__(self, system)
+        # residual norm at the start of the iterations
+        self.initial_residual_norm = 1.0
+
     def solve(self, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # reset linear system before solving
         self.reset_system()
@@ -120,6 +123,10 @@ class NewtonRaphsonSolver(Solver):
             nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
             # generate the Dirichlet solution vector
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
+        # calculate the initial residual norm
+        initial_residual = np.zeros([self.system.nequations, 1])
+        self.system.assemble_residual(initial_residual, self.solution, nodal_loads, element_loads_info=None)
+        self.initial_residual_norm = np.linalg.norm(initial_residual[Neumann_dofs], ord=2)
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the linear system
@@ -153,16 +160,20 @@ class NewtonRaphsonSolver(Solver):
             # assess convergence
             # the current residual (= f_ext - f_int)
             updated_residual = np.zeros([self.system.nequations, 1])
-            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
+            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info=None)
             # the residual norm at all the NEUMANN NODES
             res_L2_norm = np.linalg.norm(updated_residual[Neumann_dofs], ord=2)
-            print("\nIteration:",i+1,", Residual L2-norm = %.2e" % (res_L2_norm))
-            if (res_L2_norm <= tol):
+            print("\nIteration:", i + 1, ", |R| = %.2e, |R|/|R0| = %.2e" % (res_L2_norm,
+                  res_L2_norm/self.initial_residual_norm))
+            if ((res_L2_norm <= tol) or ((res_L2_norm/self.initial_residual_norm) <= tol)):
                 print("\nSolver converged!!!")
                 break
             else:
                 # reset the linear system
                 self.reset_system()
+        # if the solver did not converge
+        if (i == Nmax-1):
+            sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
         # update the system attributes
         self.system.update(self.solution)
 
@@ -208,6 +219,8 @@ class ImplicitNewmarkSolver(DynamicSolver):
     def __init__(self, system):
         # invoke the parent (DynamicSolver) class
         DynamicSolver.__init__(self, system)
+        # residual norm at the start of the iterations
+        self.initial_residual_norm = 1.0
 
     def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
         # constants in the time integration scheme
@@ -242,6 +255,11 @@ class ImplicitNewmarkSolver(DynamicSolver):
             # velocity and acceleration of the Neumann Dofs from the previous step
             velocity_prev_Neumann = copy.deepcopy(self.velocity[Neumann_dofs])
             acceleration_prev_Neumann = copy.deepcopy(self.acceleration[Neumann_dofs])
+        # calculate the initial residual norm
+        initial_residual = np.zeros([self.system.nequations, 1])
+        self.system.assemble_residual(initial_residual, self.solution, nodal_loads, element_loads_info=None)
+        initial_residual -= np.matmul(self.M, self.acceleration)
+        self.initial_residual_norm = np.linalg.norm(initial_residual[Neumann_dofs], ord=2)
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
@@ -280,17 +298,21 @@ class ImplicitNewmarkSolver(DynamicSolver):
             # assess convergence
             # the current residual (= f_external - f_internal - f_inertial)
             updated_residual = np.zeros([self.system.nequations, 1])
-            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info = None)
+            self.system.assemble_residual(updated_residual, self.solution, nodal_loads, element_loads_info=None)
             updated_residual -= np.matmul(self.M, self.acceleration)
             # the residual norm at all the NEUMANN NODES
             res_L2_norm = np.linalg.norm(updated_residual[Neumann_dofs], ord=2)
-            print("\nIteration:",i+1,", Residual L2-norm = %.2e" % (res_L2_norm))
-            if (res_L2_norm <= tol):
+            print("\nIteration:", i + 1, ", |R| = %.2e, |R|/|R0| = %.2e" % (res_L2_norm,
+                  res_L2_norm/self.initial_residual_norm))
+            if ((res_L2_norm <= tol) or ((res_L2_norm/self.initial_residual_norm) <= tol)):
                 print("\nSolver converged!!!")
                 break
             else:
                 # reset the linear system
                 self.reset_system()
+        # if the solver did not converge
+        if (i == Nmax-1):
+            sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
         # update the system attributes
         self.system.update(self.solution)
 
