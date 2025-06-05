@@ -388,7 +388,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # assemble the residual
-        if (isinstance(self.system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
+        if (isinstance(self.system.weak_form.material, (Material.TFKLCohesiveInterfaceMaterial))):
             self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None, update_internal = True)
         else:
             self.system.assemble_residual(self.f, self.solution, nodal_loads, element_loads_info = None)

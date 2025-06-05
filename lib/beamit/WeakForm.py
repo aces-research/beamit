@@ -1,10 +1,9 @@
 import numpy as np
 from beamit import Material
 
-def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
-    return np.cross(arr1,arr2,axisa=a,axisb=b,axisc=c)
-
-class WeakFormCG:
+def cross_op(arr1:np.ndarray, arr2:np.ndarray, a:int, b:int, c:int)->np.ndarray:
+    return np.cross(arr1, arr2 ,axisa=a, axisb=b, axisc=c)
+class TFKLGeometricallyExactWeakFormCG:
     
     def __init__(self, function_space, material):
         # the geometrical information
@@ -307,11 +306,12 @@ class WeakFormCG:
             A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_inertia_stiffness(element_unknowns, element_velocities, element_accelerations)
         pass
 
-class WeakFormDG(WeakFormCG):
+class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
     def __init__(self, function_space, material, betaP, betaT):
-        # invoke the parent (WeakFormCG) class
-        WeakFormCG.__init__(self, function_space, material)
+        # invoke the parent (TFKLGeometricallyExactWeakFormCG) class
+        TFKLGeometricallyExactWeakFormCG.__init__(
+            self, function_space, material)
         # DG position jump penalty parameter
         self.betaP = betaP
         # DG tangent jump penalty parameter
@@ -343,7 +343,7 @@ class WeakFormDG(WeakFormCG):
     
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info, update_internal=False):
-        # compute system residual using the function in WeakFormCG
+        # compute system residual using the function in the parent class
         super().compute_system_residual(f, system_unknowns, element_loads_info)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
@@ -395,7 +395,7 @@ class WeakFormDG(WeakFormCG):
             cohesive_forces = np.zeros(average_forces_interface.shape)
             cohesive_bending_moments = np.zeros(average_mxt4_interface.shape)
             # perform CZM checks and calculations in the case of a cohesive interface material
-            if (isinstance(self.material, (Material.CohesiveInterfaceMaterial))):
+            if (isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))):
                 # just after damage initiation or damage not yet initiated
                 if (self.internal_variables[i:i+1, 2:3] == 0.0):
                     # just after damage initiation
@@ -504,7 +504,7 @@ class WeakFormDG(WeakFormCG):
 
     # Function to compute the system stiffness
     def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
-        # compute system stiffness using the function in WeakFormCG
+        # compute system stiffness using the function in the parent class
         super().compute_system_stiffness(A, system_unknowns, element_loads_info)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
@@ -597,11 +597,13 @@ class WeakFormDG(WeakFormCG):
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
         pass
 
-class EulerBernoulliWeakFormCG(WeakFormCG):
+class EulerBernoulliWeakFormCG:
     
     def __init__(self, function_space, material):
-        # invoke the parent (WeakFormCG) class
-        WeakFormCG.__init__(self, function_space, material)
+        # the geometrical information
+        self.function_space = function_space
+        # the physical information
+        self.material = material
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
@@ -613,6 +615,17 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
+    # Function to compute the overall system residual
+    def compute_system_residual(self, f, system_unknowns, element_loads_info):
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
+            )
+            element_unknowns = system_unknowns[global_element_dofs]
+            if (element_loads_info == None):  # No element loads
+                f[global_element_dofs] -= self.compute_element_internal_forces(
+                    element_unknowns)
+        pass
+    
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
@@ -620,6 +633,17 @@ class EulerBernoulliWeakFormCG(WeakFormCG):
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), phix) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
+    
+    # Function to compute the system stiffness
+    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
+            )
+            element_unknowns = system_unknowns[global_element_dofs]
+            if (element_loads_info == None):  # No element loads
+                A[np.ix_(global_element_dofs, global_element_dofs)
+                  ] += self.compute_element_internal_stiffness(element_unknowns)
+        pass
     
     # Function to compute the system mass
     def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):

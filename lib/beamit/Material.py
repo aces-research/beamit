@@ -1,8 +1,8 @@
 import numpy as np
 import sys
 
-class Material:
-    
+class TFKLMaterial:
+
     def __init__(self, rho, E, R = None, A = None, I = None):
         # the density
         self.rho = rho
@@ -23,11 +23,11 @@ class Material:
             sys.exit("\nEither R or A & I has to be given as an input.")
         print("\nCreated the material.")
 
-class CohesiveInterfaceMaterial(Material):
+class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
 
     def __init__(self, rho, E, R, Sc, Gc, alpha = 1.0):
-        # invoke the parent (Material) class
-        Material.__init__(self, rho, E, R=R)
+        # invoke the parent (TFKLMaterial) class
+        TFKLMaterial.__init__(self, rho, E, R=R)
         # critical effective cohesive strength of the material
         self.Sc = Sc
         # effective fracture energy of the material

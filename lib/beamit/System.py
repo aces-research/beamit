@@ -3,20 +3,21 @@ import numpy as np
 from beamit import FunctionSpace
 from beamit import WeakForm
 
-def cross_op(arr1:np.ndarray,arr2:np.ndarray,a:int,b:int,c:int)->np.ndarray:
-    return np.cross(arr1,arr2,axisa=a,axisb=b,axisc=c)
+def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
+    return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
 
 class System:
     
     def __init__(self, function_space, material, betaP = 10.0, betaT = 10.0):
-        # use beam KLTF weak form for usual function space
-        if (type(function_space) == FunctionSpace.FunctionSpace):
+        # use TFKL Geometrically Exact Function Space for TFKL geometrically exact function space
+        if (type(function_space) == FunctionSpace.TFKLGeometricallyExactFunctionSpace):
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
-                self.weak_form = WeakForm.WeakFormCG(function_space, material)
+                self.weak_form = WeakForm.TFKLGeometricallyExactWeakFormCG(function_space, material)
             elif (function_space.discretization_type == "DG"):
                 # the discontinuous Galerkin weak form
-                self.weak_form = WeakForm.WeakFormDG(function_space, material, betaP, betaT)
+                self.weak_form = WeakForm.TFKLGeometricallyExactWeakFormDG(
+                    function_space, material, betaP, betaT)
             else:
                 sys.exit("\nBeam KLTF weak form of the discretization is not available.")
             # the initial state of the system
@@ -47,7 +48,8 @@ class System:
 
     def assemble_stiffness(self, A, solution, nodal_loads, element_loads_info):
         self.weak_form.compute_system_stiffness(A, solution, element_loads_info)
-        if ((type(self.weak_form) == WeakForm.WeakFormCG) or (type(self.weak_form) == WeakForm.WeakFormDG)):
+        if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
+                (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
             dofs = self.weak_form.function_space.dof
             # contribution of external nodal moments to the system stiffness
             for i in range(0, self.weak_form.function_space.N):
@@ -65,7 +67,8 @@ class System:
         else:
             self.weak_form.compute_system_residual(f, solution, element_loads_info)
         # add nodal forces to the residual
-        if ((type(self.weak_form) == WeakForm.WeakFormCG) or (type(self.weak_form) == WeakForm.WeakFormDG)):
+        if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
+                (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
             dofs = self.weak_form.function_space.dof
             updated_nodal_loads = np.zeros(nodal_loads.shape)
             for i in range(0, self.weak_form.function_space.N):

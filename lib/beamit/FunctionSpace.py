@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-class FunctionSpace:
+class TFKLGeometricallyExactFunctionSpace:
 
     def __init__(self, s0, s1, E, discretization_type = "CG"):
         # the coordinate of the left end of the beam
@@ -134,7 +134,7 @@ class FunctionSpace:
         print("\nGenerated the function space.")
         pass
 
-class EulerBernoulliFunctionSpace():
+class EulerBernoulliFunctionSpace:
 
     def __init__(self, s0, s1, E, discretization_type = "CG"):
         # the coordinate of the left end of the beam

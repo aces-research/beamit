@@ -151,7 +151,8 @@ def write_output_vtk(output_file, system):
             x_plot[2*i], x_plot[(2*i)+1] = x[i], x[i+1]
             y_plot[2*i], y_plot[(2*i)+1] = y[i], y[i+1]
             z_plot[2*i], z_plot[(2*i)+1] = z[i], z[i+1]
-            if ((type(system.weak_form) == WeakForm.WeakFormCG) or (type(system.weak_form) == WeakForm.WeakFormDG)):
+            if ((type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
+                    (type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
                 disp_x_plot[2*i], disp_x_plot[(2*i)+1] = pos_x[i] - x[i], pos_x[i+1] - x[i+1]
                 disp_y_plot[2*i], disp_y_plot[(2*i)+1] = pos_y[i] - y[i], pos_y[i+1] - y[i+1]
                 disp_z_plot[2*i], disp_z_plot[(2*i)+1] = pos_z[i] - z[i], pos_z[i+1] - z[i+1]
@@ -167,14 +168,15 @@ def write_output_vtk(output_file, system):
                 internal_loads_z[i], internal_loads_z[i+1], internal_moments_z[i], internal_moments_z[i+1]
     elif (discretization_type == "DG"):
         x_plot, y_plot, z_plot = x, y, z
-        if ((type(system.weak_form) == WeakForm.WeakFormCG) or (type(system.weak_form) == WeakForm.WeakFormDG)):
+        if ((type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
+                (type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x - x, pos_y - y, pos_z - z
         else:
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x, pos_y, pos_z
         internal_loads_x_plot, internal_loads_y_plot, internal_loads_z_plot = internal_loads_x, internal_loads_y, internal_loads_z
         internal_moments_x_plot, internal_moments_y_plot, internal_moments_z_plot = internal_moments_x, internal_moments_y, internal_moments_z
         # write damage status output for a cohesive interface material
-        if (isinstance(system.weak_form.material, (Material.CohesiveInterfaceMaterial))):
+        if (isinstance(system.weak_form.material, (Material.TFKLCohesiveInterfaceMaterial))):
             damage_values = system.weak_form.internal_variables[:,2:3]/system.weak_form.material.delta_c
             damage_status[1::2][:-1] = damage_values.flatten()
             damage_status[2::2] = damage_values.flatten()
