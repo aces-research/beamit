@@ -10,12 +10,10 @@ def test_clamp():
     rho = 1
     # elastic modulus of beam
     E = 1
-    # area of cross section
-    A = 1
-    # area moment of inertia
-    I = 1
+    # radius of the beam
+    R = 1
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, R)
 
     # length of beam
     L = 1
@@ -59,12 +57,10 @@ def test_fix_position():
     rho = 1
     # elastic modulus of beam
     E = 1
-    # area of cross section
-    A = 1
-    # area moment of inertia
-    I = 1
+    # radius of the beam
+    R = 1
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, R)
 
     # length of beam
     L = 1
@@ -111,12 +107,10 @@ def test_fix_tangent():
     rho = 1
     # elastic modulus of beam
     E = 1
-    # area of cross section
-    A = 1
-    # area moment of inertia
-    I = 1
+    # radius of the beam
+    R = 1
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, R)
 
     # length of beam
     L = 1

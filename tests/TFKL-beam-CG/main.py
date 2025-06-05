@@ -13,12 +13,10 @@ def static_main():
     rho = 7850.0
     # elastic modulus of beam
     E = 2.0E11
-    # area of cross section
-    A = 3.14159E-02
-    # area moment of inertia
-    I = 7.85398E-05
+    # radius of the beam
+    R = 1.0E-01
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, R)
 
     # length of beam
     L = 10.0
@@ -173,12 +171,10 @@ def dynamic_main():
     rho = 7850.0
     # elastic modulus of beam
     E = 2.0E11
-    # area of cross section
-    A = 3.14159E-02
-    # area moment of inertia
-    I = 7.85398E-05
+    # radius of the beam
+    R = 1.0E-01
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, R)
 
     # length of beam
     L = 10.0
