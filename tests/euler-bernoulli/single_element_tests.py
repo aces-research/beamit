@@ -19,7 +19,7 @@ NUMERICAL_TOLERANCE = 1.0E-08
 def test_stiffness_and_residual():
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "CG")
@@ -60,7 +60,7 @@ def test_stiffness_and_residual():
 def test_consistent_mass():
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.EulerBernoulliFunctionSpace(0.0, L, Nel, discretization_type = "CG")

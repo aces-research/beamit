@@ -43,10 +43,10 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors

@@ -15,14 +15,14 @@ def test_clamp():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 1
     # number of elements
     Nel = 1
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
 
     # a system binding the function_space (math) and the material (physics) 
@@ -64,14 +64,14 @@ def test_fix_position():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 1
     # number of elements
     Nel = 1
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
 
     # a system binding the function_space (math) and the material (physics) 
@@ -116,14 +116,14 @@ def test_fix_tangent():
     # area moment of inertia
     I = 1
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 1
     # number of elements
     Nel = 1
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
 
     # a system binding the function_space (math) and the material (physics) 

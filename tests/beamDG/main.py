@@ -21,14 +21,14 @@ def static_main():
     # area moment of inertia
     I = 7.85398E-05
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 10.0
     # number of elements
     Nel = 10
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -181,14 +181,14 @@ def static_large_rotation():
     # area moment of inertia
     I = 829.04193E-16
     # physical information (material parameters)
-    material = Material.Material(rho, E, A=A, I=I)
+    material = Material.TFKLMaterial(rho, E, A=A, I=I)
 
     # length of beam
     L = 0.24
     # number of elements
     Nel = 10
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -273,14 +273,14 @@ def CZM_static_main():
     # effective fracture energy
     Gc = 3400000.0
     # physical information (material parameters)
-    material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
+    material = Material.TFKLCohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # length of beam
     L = 10.0
     # number of elements
     Nel = 2
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -384,14 +384,14 @@ def CZM_dynamic_main():
     # effective fracture energy
     Gc = 34.0
     # physical information (material parameters)
-    material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
+    material = Material.TFKLCohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # length of beam
     L = 10.0
     # number of elements
     Nel = 20
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors

@@ -46,10 +46,10 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # physical information (material parameters)
-    material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
+    material = Material.TFKLCohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     nodal_coordinates = copy.deepcopy(function_space.nodes)

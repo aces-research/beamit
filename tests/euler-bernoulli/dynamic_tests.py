@@ -28,7 +28,7 @@ time_steps = 10000
 def test_simply_supported():
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.EulerBernoulliFunctionSpace(0, L, Nel, discretization_type = "DG")
@@ -95,7 +95,7 @@ def test_simply_supported():
 def test_bar_tension():
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.EulerBernoulliFunctionSpace(0, L, Nel, discretization_type = "DG")

@@ -21,14 +21,14 @@ Sc = 400.0E06
 # effective fracture energy
 Gc = 34.0
 # physical information (material parameters)
-material = Material.CohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
+material = Material.TFKLCohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
 # length of beam
 L = 0.005
 # number of elements
 Nel = 80
 # geometric information (domain, no. of elements)
-function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "DG")
+function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
 function_space.discretize()
 # to avoid creating reference to the object attributes
 nodal_coordinates = copy.deepcopy(function_space.nodes)

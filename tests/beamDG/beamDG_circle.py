@@ -24,10 +24,10 @@ NUMERICAL_TOLERANCE = 1.0E-02
 def test_beamDG_circle():
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(
         0, L, Nel, discretization_type="DG")
     function_space.discretize()
     # to avoid creating reference to the object attributes

@@ -18,14 +18,14 @@ def static_main():
     # area moment of inertia
     I = 7.85398E-05
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 10.0
     # number of elements
     Nel = 10
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -178,14 +178,14 @@ def dynamic_main():
     # area moment of inertia
     I = 7.85398E-05
     # physical information (material parameters)
-    material = Material.Material(rho, E, A, I)
+    material = Material.TFKLMaterial(rho, E, A, I)
 
     # length of beam
     L = 10.0
     # number of elements
     Nel = 10
     # geometric information (domain, no. of elements)
-    function_space = FunctionSpace.FunctionSpace(0, L, Nel, discretization_type = "CG")
+    function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "CG")
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors

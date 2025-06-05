@@ -46,7 +46,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # physical information (material parameters)
-    material = Material.Material(rho, E, R=R)
+    material = Material.TFKLMaterial(rho, E, R=R)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.EulerBernoulliFunctionSpace(0, L, Nel, discretization_type = "DG")
