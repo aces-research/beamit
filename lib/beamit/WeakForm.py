@@ -1,15 +1,66 @@
+from abc import ABC, abstractmethod
 import numpy as np
 from beamit import Material
 
-def cross_op(arr1:np.ndarray, arr2:np.ndarray, a:int, b:int, c:int)->np.ndarray:
-    return np.cross(arr1, arr2 ,axisa=a, axisb=b, axisc=c)
-class TFKLGeometricallyExactWeakFormCG:
-    
+def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
+    return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
+
+class WeakForm(ABC):
+
     def __init__(self, function_space, material):
+        """
+        Initialize the WeakForm with a function space and material.
+        """
         # the geometrical information
         self.function_space = function_space
         # the physical information
         self.material = material
+
+    def compute_system_residual(self, f, system_unknowns, element_loads_info):
+        """
+        Compute the system residual based on the provided unknowns and element loads information.
+        """
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
+            )
+            element_unknowns = system_unknowns[global_element_dofs]
+            if (element_loads_info == None):  # No element loads
+                f[global_element_dofs] -= self.compute_element_internal_forces(
+                    element_unknowns)
+        pass
+
+    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
+        """
+        Compute the system stiffness matrix based on the provided unknowns and element loads information.
+        """
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
+            )
+            element_unknowns = system_unknowns[global_element_dofs]
+            if (element_loads_info == None):  # No element loads
+                A[np.ix_(global_element_dofs, global_element_dofs)
+                  ] += self.compute_element_internal_stiffness(element_unknowns)
+        pass
+
+    @abstractmethod
+    def compute_element_internal_forces(self, element_unknowns):
+        """
+        Compute the internal forces for an element based on its unknowns.
+        """
+        pass
+
+    @abstractmethod
+    def compute_element_internal_stiffness(self, element_unknowns):
+        """
+        Compute the internal stiffness for an element based on its unknowns.
+        """
+        pass
+
+class TFKLGeometricallyExactWeakFormCG(WeakForm):
+    
+    def __init__(self, function_space, material):
+        # initialize the parent (WeakForm) class
+        WeakForm.__init__(self, function_space, material)
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
@@ -162,15 +213,6 @@ class TFKLGeometricallyExactWeakFormCG:
         K_el_rot_inertia = np.sum((rot_stiff_integrand_1 + rot_stiff_integrand_2 + rot_stiff_integrand_3 + rot_stiff_integrand_4)*self.function_space.JxW, axis=0, keepdims=False)
         return K_el_rot_inertia
 
-    # Function to compute the overall system residual
-    def compute_system_residual(self, f, system_unknowns, element_loads_info):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            if (element_loads_info == None): # No element loads
-                f[global_element_dofs] -= self.compute_element_internal_forces(element_unknowns)
-        pass
-
     # Function to compute the system "damping inertia forces" contribution to the residual
     def compute_system_damping_inertia_forces(self, f, system_unknowns, system_velocities):
         for i in range(0, self.function_space.E):
@@ -247,15 +289,6 @@ class TFKLGeometricallyExactWeakFormCG:
                 moments_left_node = self.material.E*self.material.I*(cross_op(rp_left_node, rpp_left_node, 0, 0, 0)/(rp_left_node_L2**2.0))
                 f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
                 f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
-        pass
-
-    # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            if (element_loads_info == None): # No element loads
-                A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_internal_stiffness(element_unknowns)
         pass
     
     # Function to compute the system mass
@@ -597,13 +630,11 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
         pass
 
-class EulerBernoulliWeakFormCG:
+class EulerBernoulliWeakFormCG(WeakForm):
     
     def __init__(self, function_space, material):
-        # the geometrical information
-        self.function_space = function_space
-        # the physical information
-        self.material = material
+        # initialize the parent (WeakForm) class
+        WeakForm.__init__(self, function_space, material)
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
@@ -615,17 +646,6 @@ class EulerBernoulliWeakFormCG:
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
     
-    # Function to compute the overall system residual
-    def compute_system_residual(self, f, system_unknowns, element_loads_info):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
-            )
-            element_unknowns = system_unknowns[global_element_dofs]
-            if (element_loads_info == None):  # No element loads
-                f[global_element_dofs] -= self.compute_element_internal_forces(
-                    element_unknowns)
-        pass
-    
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
@@ -633,17 +653,6 @@ class EulerBernoulliWeakFormCG:
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), phix) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
-    
-    # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
-            )
-            element_unknowns = system_unknowns[global_element_dofs]
-            if (element_loads_info == None):  # No element loads
-                A[np.ix_(global_element_dofs, global_element_dofs)
-                  ] += self.compute_element_internal_stiffness(element_unknowns)
-        pass
     
     # Function to compute the system mass
     def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
