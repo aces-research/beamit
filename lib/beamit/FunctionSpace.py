@@ -1,20 +1,84 @@
+from abc import ABC, abstractmethod
 import numpy as np
 import sys
 
-class TFKLGeometricallyExactFunctionSpace:
+class FunctionSpace(ABC):
 
-    def __init__(self, s0, s1, E, discretization_type = "CG"):
-        # the coordinate of the left end of the beam
+    def __init__(self, s0, s1, E, discretization_type="CG"):
+        """
+        Initialize the FunctionSpace (abstract) class
+
+        Parameters:
+            s0: coordinate of the left end of the beam
+            s1: coordinate of the right end of the beam
+            E: number of elements
+            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+        """
         self.s0 = s0
-        # the coordinate of the right end of the beam
         self.s1 = s1
-        # the number of elements
         self.E = E
-        # the discretization type (CG (Continuous Galerkin) or DG (Discontinuous Galerkin))
         if ((discretization_type == "CG") or (discretization_type == "DG")):
             self.discretization_type = discretization_type
         else:
             sys.exit("\nUnknown discretization type in the function space.")
+        # the number of degrees of freedom per node
+        self.dof = None
+        # the number of dimensions in the problem
+        self.dim = None
+        # no. of nodes per element
+        self.npel = None
+        # global connectivity (element number -> global dof number), local connectivity (element number -> local dof number)
+        self.global_connectivity = None
+        self.local_connectivity = None
+        # the discretization nodes of the beam
+        self.nodes = None
+        # length of the elements
+        self.elL = None
+        # the number of quadrature points
+        self.Q = None
+        # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.shape_functions = None
+        # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        self.shape_first_gradients = None
+        # the jacobian of the transformation from parent to reference configuration (xi -> s)
+        self.jacobian = None
+        # the integration jacobian x weight for quadrature points
+        self.JxW = None
+
+    @abstractmethod
+    def compute_shapes(self, xi):
+        """
+        Compute the shape functions and their gradients at a given point xi.
+
+        Parameters:
+            xi: the point in the reference element (xi in [-1.0, 1.0])
+        Returns:
+            shape_functions: the shape functions evaluated at the point xi
+            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+        """
+        pass
+
+    @abstractmethod
+    def discretize(self):
+        """
+        Generate the nodal coordinates, and shape functions and their derivatives.
+        """
+        pass
+
+class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
+
+    def __init__(self, s0, s1, E, discretization_type = "CG"):
+        """
+        Initialize the function space for the torsion-free Kirchhoff-Love Geometrically exact beam.
+
+        Parameters:
+            s0: coordinate of the left end of the beam
+            s1: coordinate of the right end of the beam
+            E: number of elements
+            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+        """
+        # initialize the parent (FunctionSpace) class
+        FunctionSpace.__init__(self, s0, s1, E, discretization_type)
         # the number of degrees of freedom per node (3 positions, 3 rotations)
         self.dof = 6
         # the number of dimensions in the problem
@@ -53,8 +117,6 @@ class TFKLGeometricallyExactFunctionSpace:
         self.elL = (self.s1 - self.s0)/self.E
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
         self.Q = 4
-        # the number of shape functions per element (2 nodal displacements, 2 nodal tangents)
-        self.S = 4
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
         # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
@@ -66,8 +128,19 @@ class TFKLGeometricallyExactFunctionSpace:
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
         self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
 
-    # Function to compute shape functions and its gradients of the element at any point
     def compute_shapes(self, xi):
+        """
+        Compute the shape functions and their gradients at a given point xi.
+
+        Parameters:
+            xi: the point in the reference element (xi in [-1.0, 1.0])
+
+        Returns:
+            shape_functions: the shape functions evaluated at the point xi
+            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+            shape_second_gradients: the second gradients of the shape functions evaluated at the point xi
+            shape_third_gradients: the third gradients of the shape functions evaluated at the point xi
+        """
         # Hermite shape functions and its gradients on the reference element (xi in [-1.0, 1.0])
         Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
         Nt1 = 0.25*(1.0 + xi)*((1.0 - xi)**2.0)
@@ -108,8 +181,13 @@ class TFKLGeometricallyExactFunctionSpace:
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
     def discretize(self):
+        """
+        Generate the nodal coordinates, and shape functions and their derivatives.
+
+        Note: We assume that the initially straight beam and aligned along the x-axis.
+        """
         # subdivision of domain (reference configuration)
-        # assuming the "initially straight" beam is along the x-direction!!!
+        # assuming the "initially straight" beam is along the x-axis!!!
         self.nodes[0:1, 0:1] = self.s0
         self.nodes[self.N-1:self.N, 0:1] = self.s1
         if (self.discretization_type == "CG"):
@@ -132,22 +210,21 @@ class TFKLGeometricallyExactFunctionSpace:
             self.shape_second_gradients[i:i+1, :, :] = el_shape_second_gradients
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
-        pass
 
-class EulerBernoulliFunctionSpace:
+class EulerBernoulliFunctionSpace(FunctionSpace):
 
     def __init__(self, s0, s1, E, discretization_type = "CG"):
-        # the coordinate of the left end of the beam
-        self.s0 = s0
-        # the coordinate of the right end of the beam
-        self.s1 = s1
-        # the number of elements
-        self.E = E
-        # the discretization type (CG (Continuous Galerkin) or DG (Discontinuous Galerkin))
-        if ((discretization_type == "CG") or (discretization_type == "DG")):
-            self.discretization_type = discretization_type
-        else:
-            sys.exit("\nUnknown discretization type in the function space.")
+        """
+        Initialize the function space for the Euler-Bernoulli beam.
+
+        Parameters:
+            s0: coordinate of the left end of the beam
+            s1: coordinate of the right end of the beam
+            E: number of elements
+            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+        """
+        # initialize the parent (FunctionSpace) class
+        FunctionSpace.__init__(self, s0, s1, E, discretization_type)
         # the number of degrees of freedom per node (2 displacements, 1 rotation)
         self.dof = 3
         # the number of dimensions in the problem
@@ -180,8 +257,9 @@ class EulerBernoulliFunctionSpace:
         self.elL = (self.s1 - self.s0)/self.E
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
         self.Q = 4
-        # the lagrange shape functions and their gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        # the lagrange shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.lagrange_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        # the lagrange shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.lagrange_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
         # the hermite shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.hermite_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
@@ -193,10 +271,28 @@ class EulerBernoulliFunctionSpace:
         self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
         self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
-        
-    # Function to compute lagrange shape functions and their gradients of the element at any point
+
+    def compute_shapes(self, xi):
+        """
+        Compute the shape functions and their gradients at a given point xi.
+        Parameters:
+            xi: the point in the reference element (xi in [-1.0, 1.0])
+        Returns:
+            shape_functions: the shape functions evaluated at the point xi
+            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+        """
+        pass
+
     def compute_lagrange_shapes(self, xi):
-        # Lagrange shape functions and their gradients on the reference element (xi in [-1.0, 1.0])
+        """
+        Compute the lagrange shape functions and their first gradients at a given point xi.
+
+        Parameters:
+            xi: the point in the reference element (xi in [-1.0, 1.0])
+        Returns:
+            shape_functions: the shape functions evaluated at the point xi
+            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+        """
         Nu1 = 0.50*(1.0 - xi)
         Nu2 = 0.50*(1.0 + xi)
         Nu1_xi = -0.50
@@ -204,10 +300,19 @@ class EulerBernoulliFunctionSpace:
         shape_functions = np.array([[Nu1, 0.0, 0.0, Nu2, 0.0, 0.0]])
         shape_first_gradients = np.array([[Nu1_xi, 0.0, 0.0, Nu2_xi, 0.0, 0.0]])
         return shape_functions, shape_first_gradients
-    
-    # Function to compute hermite shape functions and its gradients of the element at any point
+
     def compute_hermite_shapes(self, xi):
-        # Hermite shape functions and their gradients on the reference element (xi in [-1.0, 1.0])
+        """
+        Compute the hermite shape functions and their gradients at a given point xi.
+
+        Parameters:
+            xi: the point in the reference element (xi in [-1.0, 1.0])
+        Returns:
+            shape_functions: the shape functions evaluated at the point xi
+            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+            shape_second_gradients: the second gradients of the shape functions evaluated at the point xi
+            shape_third_gradients: the third gradients of the shape functions evaluated at the point xi
+        """
         Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
         Nt1 = 0.25*(1.0 + xi)*((1.0 - xi)**2.0)
         Nd2 = 0.25*(2.0 - xi)*((1.0 + xi)**2.0)
@@ -235,7 +340,9 @@ class EulerBernoulliFunctionSpace:
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
     def discretize(self):
-        # assuming the "initially straight" beam is along the x-direction!!!
+        """
+        Generate the nodal coordinates, and shape functions and their derivatives.
+        """
         self.nodes[0:1, 0:1] = self.s0
         self.nodes[self.N-1:self.N, 0:1] = self.s1
         if (self.discretization_type == "CG"):
@@ -262,4 +369,3 @@ class EulerBernoulliFunctionSpace:
             self.hermite_shape_second_gradients[i:i+1, :, :] = el_HShape_second_gradients
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
-        pass
