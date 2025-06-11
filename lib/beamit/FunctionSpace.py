@@ -67,7 +67,7 @@ class FunctionSpace(ABC):
 
 class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
 
-    def __init__(self, s0, s1, E, discretization_type = "CG"):
+    def __init__(self, s0, s1, E, discretization_type="CG"):
         """
         Initialize the function space for the torsion-free Kirchhoff-Love Geometrically exact beam.
 
@@ -93,24 +93,31 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
-            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            self.global_connectivity = np.zeros(
+                [self.E, dofspel], dtype=np.int64)
             # not using for now!!!
-            self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
+            self.local_connectivity = np.ones(
+                [self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
-                self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
+                self.global_connectivity[i:i+1,
+                                         :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
         elif (self.discretization_type == "DG"):
             # number of nodes in the discretization
             self.N = self.E*self.npel
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
             local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
-            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            self.global_connectivity = np.zeros(
+                [self.E, dofspel], dtype=np.int64)
             # not using for now!!!
-            self.local_connectivity = np.ones([self.E, dofspel], dtype=np.int64)*local_dofs
+            self.local_connectivity = np.ones(
+                [self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
-                self.global_connectivity[i:i+1, :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+                self.global_connectivity[i:i+1,
+                                         :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
         else:
-            sys.exit("\nConnectivity cannot be generated for the discretization type.")
+            sys.exit(
+                "\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # assuming the elements are of equal length!!!
@@ -120,9 +127,11 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
         self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
         # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.shape_first_gradients = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.shape_second_gradients = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
         self.jacobian = (self.s1 - self.s0)/(2.0*self.E)
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
@@ -159,25 +168,29 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         Nd2_xixixi = -1.50
         Nt2_xixixi = 1.50
 
-        L = self.elL # length of the elements
+        L = self.elL  # length of the elements
 
         # elemental shape function and gradient matrices
-        shape_functions = np.array([[Nd1, 0.0, 0.0, 0.50*L*Nt1, 0.0, 0.0, Nd2, 0.0, 0.0, 0.50*L*Nt2, 0.0, 0.0], \
-                                    [0.0, Nd1, 0.0, 0.0, 0.50*L*Nt1, 0.0, 0.0, Nd2, 0.0, 0.0, 0.50*L*Nt2, 0.0], \
+        shape_functions = np.array([[Nd1, 0.0, 0.0, 0.50*L*Nt1, 0.0, 0.0, Nd2, 0.0, 0.0, 0.50*L*Nt2, 0.0, 0.0],
+                                    [0.0, Nd1, 0.0, 0.0, 0.50*L*Nt1, 0.0,
+                                        0.0, Nd2, 0.0, 0.0, 0.50*L*Nt2, 0.0],
                                     [0.0, 0.0, Nd1, 0.0, 0.0, 0.50*L*Nt1, 0.0, 0.0, Nd2, 0.0, 0.0, 0.50*L*Nt2]])
 
-        shape_first_gradients = np.array([[Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0, 0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi, 0.0, 0.0], \
-                                    [0.0, Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0, 0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi, 0.0], \
-                                    [0.0, 0.0, Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0, 0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi]])
+        shape_first_gradients = np.array([[Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0, 0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi, 0.0, 0.0],
+                                          [0.0, Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0,
+                                              0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi, 0.0],
+                                          [0.0, 0.0, Nd1_xi, 0.0, 0.0, 0.50*L*Nt1_xi, 0.0, 0.0, Nd2_xi, 0.0, 0.0, 0.50*L*Nt2_xi]])
 
-        shape_second_gradients = np.array([[Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0, 0.0], \
-                                    [0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0], \
-                                    [0.0, 0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi]])
+        shape_second_gradients = np.array([[Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0, 0.0],
+                                           [0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0,
+                                               0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi, 0.0],
+                                           [0.0, 0.0, Nd1_xixi, 0.0, 0.0, 0.50*L*Nt1_xixi, 0.0, 0.0, Nd2_xixi, 0.0, 0.0, 0.50*L*Nt2_xixi]])
 
-        shape_third_gradients = np.array([[Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0, 0.0], \
-                                    [0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0], \
-                                    [0.0, 0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi]])
-        
+        shape_third_gradients = np.array([[Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0, 0.0],
+                                          [0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0,
+                                              0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi, 0.0],
+                                          [0.0, 0.0, Nd1_xixixi, 0.0, 0.0, 0.50*L*Nt1_xixixi, 0.0, 0.0, Nd2_xixixi, 0.0, 0.0, 0.50*L*Nt2_xixixi]])
+
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
     def discretize(self):
@@ -199,21 +212,24 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
                 self.nodes[i+1:i+2, 0:1] = self.nodes[i:i+1, 0:1]
 
         # quadrature rule on reference element
-        integration_points, integration_weights = np.polynomial.legendre.leggauss(self.Q)
+        integration_points, integration_weights = np.polynomial.legendre.leggauss(
+            self.Q)
 
         # evaluate shape functions, their gradients and weights at the quadrature points
         for i in range(0, self.Q):
             el_shape_functions, el_shape_first_gradients, el_shape_second_gradients, _ = \
-                                    self.compute_shapes(integration_points[i])
+                self.compute_shapes(integration_points[i])
             self.shape_functions[i:i+1, :, :] = el_shape_functions
             self.shape_first_gradients[i:i+1, :, :] = el_shape_first_gradients
-            self.shape_second_gradients[i:i+1, :, :] = el_shape_second_gradients
+            self.shape_second_gradients[i:i+1,
+                                        :, :] = el_shape_second_gradients
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
 
+
 class EulerBernoulliFunctionSpace(FunctionSpace):
 
-    def __init__(self, s0, s1, E, discretization_type = "CG"):
+    def __init__(self, s0, s1, E, discretization_type="CG"):
         """
         Initialize the function space for the Euler-Bernoulli beam.
 
@@ -238,19 +254,24 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
             self.N = self.E + 1
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
-            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            self.global_connectivity = np.zeros(
+                [self.E, dofspel], dtype=np.int64)
             for i in range(0, self.E):
-                self.global_connectivity[i:i+1, :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
+                self.global_connectivity[i:i+1,
+                                         :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
         elif (self.discretization_type == "DG"):
             # number of nodes in the discretization
             self.N = self.E*self.npel
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
-            self.global_connectivity = np.zeros([self.E, dofspel], dtype=np.int64)
+            self.global_connectivity = np.zeros(
+                [self.E, dofspel], dtype=np.int64)
             for i in range(0, self.E):
-                self.global_connectivity[i:i+1, :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+                self.global_connectivity[i:i+1,
+                                         :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
         else:
-            sys.exit("\nConnectivity cannot be generated for the discretization type.")
+            sys.exit(
+                "\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # assuming the elements are of equal length!!!
@@ -258,15 +279,20 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
         self.Q = 4
         # the lagrange shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.lagrange_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.lagrange_shape_functions = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the lagrange shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.lagrange_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.lagrange_shape_first_gradients = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the hermite shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.hermite_shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.hermite_shape_functions = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the hermite shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.hermite_shape_first_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.hermite_shape_first_gradients = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the hermite shape function second gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.hermite_shape_second_gradients = np.zeros([self.Q, self.dim, self.npel*self.dof])
+        self.hermite_shape_second_gradients = np.zeros(
+            [self.Q, self.dim, self.npel*self.dof])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
         self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
@@ -298,7 +324,8 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         Nu1_xi = -0.50
         Nu2_xi = 0.50
         shape_functions = np.array([[Nu1, 0.0, 0.0, Nu2, 0.0, 0.0]])
-        shape_first_gradients = np.array([[Nu1_xi, 0.0, 0.0, Nu2_xi, 0.0, 0.0]])
+        shape_first_gradients = np.array(
+            [[Nu1_xi, 0.0, 0.0, Nu2_xi, 0.0, 0.0]])
         return shape_functions, shape_first_gradients
 
     def compute_hermite_shapes(self, xi):
@@ -332,11 +359,15 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
 
         # elemental shape function and gradient matrices
         L = self.elL
-        shape_functions = np.array([[0.0, Nd1, 0.50*L*Nt1, 0.0, Nd2, 0.50*L*Nt2]])
-        shape_first_gradients = np.array([[0.0, Nd1_xi, 0.50*L*Nt1_xi, 0.0, Nd2_xi, 0.50*L*Nt2_xi]])
-        shape_second_gradients = np.array([[0.0, Nd1_xixi, 0.50*L*Nt1_xixi, 0.0, Nd2_xixi, 0.50*L*Nt2_xixi]])
-        shape_third_gradients = np.array([[0.0, Nd1_xixixi, 0.50*L*Nt1_xixixi, 0.0, Nd2_xixixi, 0.50*L*Nt2_xixixi]])
-        
+        shape_functions = np.array(
+            [[0.0, Nd1, 0.50*L*Nt1, 0.0, Nd2, 0.50*L*Nt2]])
+        shape_first_gradients = np.array(
+            [[0.0, Nd1_xi, 0.50*L*Nt1_xi, 0.0, Nd2_xi, 0.50*L*Nt2_xi]])
+        shape_second_gradients = np.array(
+            [[0.0, Nd1_xixi, 0.50*L*Nt1_xixi, 0.0, Nd2_xixi, 0.50*L*Nt2_xixi]])
+        shape_third_gradients = np.array(
+            [[0.0, Nd1_xixixi, 0.50*L*Nt1_xixixi, 0.0, Nd2_xixixi, 0.50*L*Nt2_xixixi]])
+
         return shape_functions, shape_first_gradients, shape_second_gradients, shape_third_gradients
 
     def discretize(self):
@@ -354,18 +385,22 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
                 self.nodes[i+1:i+2, 0:1] = self.nodes[i:i+1, 0:1]
 
         # quadrature rule on reference element
-        integration_points, integration_weights = np.polynomial.legendre.leggauss(self.Q)
+        integration_points, integration_weights = np.polynomial.legendre.leggauss(
+            self.Q)
 
         # evaluate shape functions, their gradients and weights at the quadrature points
         for i in range(0, self.Q):
             el_LShape_functions, el_LShape_first_gradients = \
-                                        self.compute_lagrange_shapes(integration_points[i])
+                self.compute_lagrange_shapes(integration_points[i])
             self.lagrange_shape_functions[i:i+1, :, :] = el_LShape_functions
-            self.lagrange_shape_first_gradients[i:i+1, :, :] = el_LShape_first_gradients
+            self.lagrange_shape_first_gradients[i:i +
+                                                1, :, :] = el_LShape_first_gradients
             el_HShape_functions, el_HShape_first_gradients, el_HShape_second_gradients, _ = \
-                                    self.compute_hermite_shapes(integration_points[i])
+                self.compute_hermite_shapes(integration_points[i])
             self.hermite_shape_functions[i:i+1, :, :] = el_HShape_functions
-            self.hermite_shape_first_gradients[i:i+1, :, :] = el_HShape_first_gradients
-            self.hermite_shape_second_gradients[i:i+1, :, :] = el_HShape_second_gradients
+            self.hermite_shape_first_gradients[i:i +
+                                               1, :, :] = el_HShape_first_gradients
+            self.hermite_shape_second_gradients[i:i +
+                                                1, :, :] = el_HShape_second_gradients
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
