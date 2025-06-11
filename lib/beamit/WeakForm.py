@@ -27,7 +27,6 @@ class WeakForm(ABC):
             if (element_loads_info == None):  # No element loads
                 f[global_element_dofs] -= self.compute_element_internal_forces(
                     element_unknowns)
-        pass
 
     def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
         """
@@ -40,7 +39,6 @@ class WeakForm(ABC):
             if (element_loads_info == None):  # No element loads
                 A[np.ix_(global_element_dofs, global_element_dofs)
                   ] += self.compute_element_internal_stiffness(element_unknowns)
-        pass
 
     @abstractmethod
     def compute_element_internal_forces(self, element_unknowns):
@@ -220,7 +218,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             element_unknowns = system_unknowns[global_element_dofs]
             element_velocities = system_velocities[global_element_dofs]
             f[global_element_dofs] -= self.compute_element_damping_inertia_forces(element_unknowns, element_velocities)
-        pass
     
     # Function to compute the system inertia forces contribution to the residual
     def compute_system_inertia_forces(self, f, system_unknowns, system_velocities, system_accelerations):
@@ -230,7 +227,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             element_velocities = system_velocities[global_element_dofs]
             element_accelerations = system_accelerations[global_element_dofs]
             f[global_element_dofs] -= self.compute_element_inertia_forces(element_unknowns, element_velocities, element_accelerations)
-        pass
     
     # Helper function to compute 't_i' vectors
     def compute_ti_vectors(self, rp, rpp, rppp):
@@ -289,7 +285,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                 moments_left_node = self.material.E*self.material.I*(cross_op(rp_left_node, rpp_left_node, 0, 0, 0)/(rp_left_node_L2**2.0))
                 f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
                 f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
-        pass
     
     # Function to compute the system mass
     def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
@@ -318,7 +313,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                     M_el_rot = np.zeros([self.function_space.npel*self.function_space.dof, self.function_space.npel*self.function_space.dof])
                     np.fill_diagonal(M_el_rot, diag_elements)
                 M[np.ix_(global_element_dofs, global_element_dofs)] += M_el_rot
-        pass
 
     # Function to compute the system damping
     def compute_system_damping(self, C, system_unknowns, system_velocities):
@@ -327,7 +321,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             element_unknowns = system_unknowns[global_element_dofs]
             element_velocities = system_velocities[global_element_dofs]
             C[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_damping(element_unknowns, element_velocities)
-        pass
 
     # Function to compute the system rotational inertia stiffness
     def compute_system_rotational_inertia_stiffness(self, A, system_unknowns, system_velocities, system_accelerations):
@@ -337,7 +330,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             element_velocities = system_velocities[global_element_dofs]
             element_accelerations = system_accelerations[global_element_dofs]
             A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_inertia_stiffness(element_unknowns, element_velocities, element_accelerations)
-        pass
 
 class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
@@ -506,7 +498,6 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), cohesive_forces)))
             f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_left_interface), cohesive_bending_moments)))
             f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_right_interface), cohesive_bending_moments)))
-        pass
     
     # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
     def compute_jump_stiffness_coefficients(self, rp, rpp, rppp):
@@ -587,7 +578,6 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_left_interface)))
             A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_right_interface)))
             A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_right_interface)))
-        pass
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
@@ -628,7 +618,6 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
             f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
-        pass
 
 class EulerBernoulliWeakFormCG(WeakForm):
     
@@ -681,7 +670,6 @@ class EulerBernoulliWeakFormCG(WeakForm):
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             M[np.ix_(global_element_dofs, global_element_dofs)] += (M_el_axial + M_el_bending)
-        pass
     
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
@@ -723,7 +711,6 @@ class EulerBernoulliWeakFormCG(WeakForm):
                 f[global_element_dofs_left_node[0:1]] += axial_force_left_node
                 f[global_element_dofs_left_node[1:2]] += shear_force_left_node
                 f[global_element_dofs_left_node[2:3]] += bending_moment_left_node
-        pass
 
 class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
     
@@ -815,7 +802,6 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
                     np.matmul(np.transpose(self.phi_right_interface), axial_forces_interface) + \
                     np.matmul(np.transpose(self.N_right_interface), shear_forces_interface) + \
                     np.matmul(np.transpose(self.Nx_right_interface), bending_moments_interface)
-        pass
 
     # Function to compute the system stiffness
     def compute_system_stiffness(self, A, system_unknowns, element_loads_info):
@@ -885,7 +871,6 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
                     np.matmul(np.transpose(self.N_right_interface), self.N_right_interface)) + \
                 (self.beta*((self.material.E*self.material.I)/self.function_space.elL) * \
                     np.matmul(np.transpose(self.Nx_right_interface), self.Nx_right_interface))
-        pass
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
@@ -927,4 +912,3 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
             f[global_element_dofs_right_node[0:1]] += axial_force_right_node
             f[global_element_dofs_right_node[1:2]] += shear_force_right_node
             f[global_element_dofs_right_node[2:3]] += bending_moment_right_node
-        pass

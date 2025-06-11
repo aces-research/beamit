@@ -26,7 +26,6 @@ class Solver:
     # Function to initialize unknowns to the undeformed state of the beam
     def initialize(self):
         self.solution = np.reshape(self.system.state, [self.system.nequations, 1])
-        pass
     
     # Function to set the boundary conditions types (Dirichlet and Neumann) and values
     # for each pair (node, dof) of the beam
@@ -58,7 +57,6 @@ class Solver:
     def reset_system(self):
         self.A = np.zeros([self.system.nequations, self.system.nequations])
         self.f = np.zeros([self.system.nequations, 1])
-        pass
 
     # Create arrays with entries being the global dof numbers of Dirichlet and Neumann dofs
     def create_dof_arrays(self):
@@ -196,7 +194,6 @@ class DynamicSolver(Solver):
         super().reset_system()
         self.M = np.zeros([self.system.nequations, self.system.nequations])
         self.C = np.zeros([self.system.nequations, self.system.nequations])
-        pass
     
     # Function to set the initial conditions (position and velocity) of the system
     def set_initial_conditions(self, initial_position, initial_velocity):

@@ -59,7 +59,6 @@ class System:
                 nodal_rp_dyd_rp = np.matmul(nodal_tangents, np.transpose(nodal_tangents))
                 nodal_dt4dd_coeff = (np.eye(self.weak_form.function_space.dim)/(nodal_tangents_L2**2.0)) - ((2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
                 A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
-        pass
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads_info, update_internal=False):
         if (update_internal):
@@ -82,27 +81,21 @@ class System:
             f += updated_nodal_loads
         else:
             f += nodal_loads
-        pass
 
     def assemble_damping_inertia_forces(self, f, solution, velocity):
         self.weak_form.compute_system_damping_inertia_forces(f, solution, velocity)
-        pass
     
     def assemble_inertia_forces(self, f, solution, velocity, acceleration):
         self.weak_form.compute_system_inertia_forces(f, solution, velocity, acceleration)
-        pass
     
     def assemble_mass(self, M, solution):
         self.weak_form.compute_system_mass(M, solution)
-        pass
 
     def assemble_damping(self, C, solution, velocity):
         self.weak_form.compute_system_damping(C, solution, velocity)
-        pass
 
     def assemble_rotational_inertia_stiffness(self, A, solution, velocity, acceleration):
         self.weak_form.compute_system_rotational_inertia_stiffness(A, solution, velocity, acceleration)
-        pass
 
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
 
@@ -123,4 +116,3 @@ class System:
         self.weak_form.compute_system_nodal_forces(internal_force_vector, solution)
         self.internal_forces = np.reshape(internal_force_vector, [self.weak_form.function_space.N, \
                                 self.weak_form.function_space.dof])
-        pass
