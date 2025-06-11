@@ -9,10 +9,10 @@ class FunctionSpace(ABC):
         Initialize the FunctionSpace (abstract) class
 
         Parameters:
-            s0: coordinate of the left end of the beam
-            s1: coordinate of the right end of the beam
-            E: number of elements
-            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+            s0: Coordinate of the left end of the beam
+            s1: Coordinate of the right end of the beam
+            E: Number of elements
+            discretization_type: Discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
         """
         self.s0 = s0
         self.s1 = s1
@@ -51,10 +51,10 @@ class FunctionSpace(ABC):
         Compute the shape functions and their gradients at a given point xi.
 
         Parameters:
-            xi: the point in the reference element (xi in [-1.0, 1.0])
+            xi: The point in the reference element (xi in [-1.0, 1.0])
         Returns:
-            shape_functions: the shape functions evaluated at the point xi
-            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+            shape_functions: The shape functions evaluated at the point xi
+            shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
         """
         pass
 
@@ -72,10 +72,10 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         Initialize the function space for the torsion-free Kirchhoff-Love Geometrically exact beam.
 
         Parameters:
-            s0: coordinate of the left end of the beam
-            s1: coordinate of the right end of the beam
-            E: number of elements
-            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+            s0: Coordinate of the left end of the beam
+            s1: Coordinate of the right end of the beam
+            E: Number of elements
+            discretization_type: Discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
         """
         # initialize the parent (FunctionSpace) class
         FunctionSpace.__init__(self, s0, s1, E, discretization_type)
@@ -129,13 +129,13 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         Compute the shape functions and their gradients at a given point xi.
 
         Parameters:
-            xi: the point in the reference element (xi in [-1.0, 1.0])
+            xi: The point in the reference element (xi in [-1.0, 1.0])
 
         Returns:
-            shape_functions: the shape functions evaluated at the point xi
-            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
-            shape_second_gradients: the second gradients of the shape functions evaluated at the point xi
-            shape_third_gradients: the third gradients of the shape functions evaluated at the point xi
+            shape_functions: The shape functions evaluated at the point xi
+            shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
+            shape_second_gradients: The second gradients of the shape functions evaluated at the point xi
+            shape_third_gradients: The third gradients of the shape functions evaluated at the point xi
         """
         # Hermite shape functions and its gradients on the reference element (xi in [-1.0, 1.0])
         Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
@@ -184,10 +184,9 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         """
         Generate the nodal coordinates, and shape functions and their derivatives.
 
-        Note: We assume that the initially straight beam and aligned along the x-axis.
+        Note: We assume that the **initially straight beam** is aligned along the x-axis.
         """
         # subdivision of domain (reference configuration)
-        # assuming the "initially straight" beam is along the x-axis!!!
         self.nodes[0:1, 0:1] = self.s0
         self.nodes[self.N-1:self.N, 0:1] = self.s1
         if (self.discretization_type == "CG"):
@@ -220,10 +219,10 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         Initialize the function space for the Euler-Bernoulli beam.
 
         Parameters:
-            s0: coordinate of the left end of the beam
-            s1: coordinate of the right end of the beam
-            E: number of elements
-            discretization_type: discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
+            s0: Coordinate of the left end of the beam
+            s1: Coordinate of the right end of the beam
+            E: Number of elements
+            discretization_type: Discretization type, either "CG" (Continuous Galerkin) or "DG" (Discontinuous Galerkin)
         """
         # initialize the parent (FunctionSpace) class
         FunctionSpace.__init__(self, s0, s1, E, discretization_type)
@@ -283,10 +282,10 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         """
         Compute the shape functions and their gradients at a given point xi.
         Parameters:
-            xi: the point in the reference element (xi in [-1.0, 1.0])
+            xi: The point in the reference element (xi in [-1.0, 1.0])
         Returns:
-            shape_functions: the shape functions evaluated at the point xi
-            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+            shape_functions: The shape functions evaluated at the point xi
+            shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
         """
         pass
 
@@ -295,10 +294,10 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         Compute the lagrange shape functions and their first gradients at a given point xi.
 
         Parameters:
-            xi: the point in the reference element (xi in [-1.0, 1.0])
+            xi: The point in the reference element (xi in [-1.0, 1.0])
         Returns:
-            shape_functions: the shape functions evaluated at the point xi
-            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
+            shape_functions: The shape functions evaluated at the point xi
+            shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
         """
         Nu1 = 0.50*(1.0 - xi)
         Nu2 = 0.50*(1.0 + xi)
@@ -314,12 +313,12 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         Compute the hermite shape functions and their gradients at a given point xi.
 
         Parameters:
-            xi: the point in the reference element (xi in [-1.0, 1.0])
+            xi: The point in the reference element (xi in [-1.0, 1.0])
         Returns:
-            shape_functions: the shape functions evaluated at the point xi
-            shape_first_gradients: the first gradients of the shape functions evaluated at the point xi
-            shape_second_gradients: the second gradients of the shape functions evaluated at the point xi
-            shape_third_gradients: the third gradients of the shape functions evaluated at the point xi
+            shape_functions: The shape functions evaluated at the point xi
+            shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
+            shape_second_gradients: The second gradients of the shape functions evaluated at the point xi
+            shape_third_gradients: The third gradients of the shape functions evaluated at the point xi
         """
         Nd1 = 0.25*(2.0 + xi)*((1.0 - xi)**2.0)
         Nt1 = 0.25*(1.0 + xi)*((1.0 - xi)**2.0)
