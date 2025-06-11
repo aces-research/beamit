@@ -1,6 +1,34 @@
 import numpy as np
 
-class TFKLMaterial:
+class ShearFlexibleMaterial:
+
+    def __init__(self, rho, E, nu, A, I, I_minor):
+        """
+        Initialize Material.
+
+        Note: Only rectangular and circular beam cross sections are supported in this class.
+
+        Parameters:
+            rho: Density of the material
+            E: Elastic modulus of the material
+            nu: Poisson's ratio of the material
+            A: Area of the beam cross section
+            I: Area moment of inertia about the major axis
+            I_minor: Area moment of inertia about the minor axis
+        """
+        self.rho = rho
+        self.E = E
+        self.A = A
+        self.I = I
+        self.I_minor = I_minor
+        # the shear modulus
+        self.G = E/(2.0*(1.0 + nu))
+        # the reduced area of cross section (same for both rectangular and circular cross sections)
+        self.A_red = (5/6)*A
+        # the torsional moment of inertia
+        self.I_T = self.I + self.I_minor  # works for symmetrical cross-sections
+
+class TFKLMaterial(ShearFlexibleMaterial):
 
     def __init__(self, rho, E, R):
         """
@@ -10,16 +38,16 @@ class TFKLMaterial:
 
         Parameters:
             rho: Density of the material
-            E: Elastic modulus
+            E: Elastic modulus of the material
             R: Beam radius
         """
+        # initialize the parent (ShearFlexibleMaterial) class
+        ShearFlexibleMaterial.__init__(
+            self, rho, E, nu=0.0, A=np.pi*(R**2.0), I=(np.pi*(R**4.0))/4.0, I_minor=(np.pi*(R**4.0))/4.0)
         self.rho = rho
         self.E = E
         self.R = R
-        # the area of the beam cross section
-        self.A = np.pi*(R**2.0)
-        # the area moment of inertia
-        self.I = (np.pi*(R**4.0))/4.0
+        self.G = None # shear modulus is not defined for TFKLMaterial
         print("\nCreated the material.")
 
 class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
