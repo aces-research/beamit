@@ -27,13 +27,13 @@ class FunctionSpace(ABC):
         self.dim = None
         # no. of nodes per element
         self.npel = None
-        # global connectivity (element number -> global dof number), local connectivity (element number -> local dof number)
+        # global connectivity (element number -> global dof number)
         self.global_connectivity = None
-        self.local_connectivity = None
         # the discretization nodes of the beam
         self.nodes = None
         # length of the elements
-        self.elL = None
+        # assuming the elements are of equal length!!!
+        self.elL = (self.s1 - self.s0)/self.E
         # the number of quadrature points
         self.Q = None
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
@@ -85,19 +85,15 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         self.dim = 3
         # no. of nodes per element
         self.npel = 2
-        # assuming the elements are connected like a simple chain!!!
         # global connectivity (element number -> global dof number), local connectivity (element number -> local dof number)
+        # assuming the elements are connected like a simple chain!!!
         if (self.discretization_type == "CG"):
             # number of nodes in the discretization
             self.N = self.E + 1
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
-            local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
             self.global_connectivity = np.zeros(
                 [self.E, dofspel], dtype=np.int64)
-            # not using for now!!!
-            self.local_connectivity = np.ones(
-                [self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[self.dof*i:(self.dof*i)+dofspel]
@@ -106,22 +102,13 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
             self.N = self.E*self.npel
             global_dofs = np.arange(0, self.N*self.dof, 1, dtype=np.int64)
             dofspel = self.npel*self.dof
-            local_dofs = np.arange(0, dofspel, 1, dtype=np.int64)
             self.global_connectivity = np.zeros(
                 [self.E, dofspel], dtype=np.int64)
-            # not using for now!!!
-            self.local_connectivity = np.ones(
-                [self.E, dofspel], dtype=np.int64)*local_dofs
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
-        else:
-            sys.exit(
-                "\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
-        # assuming the elements are of equal length!!!
-        self.elL = (self.s1 - self.s0)/self.E
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
         self.Q = 4
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
@@ -133,7 +120,7 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
         self.shape_second_gradients = np.zeros(
             [self.Q, self.dim, self.npel*self.dof])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
-        self.jacobian = (self.s1 - self.s0)/(2.0*self.E)
+        self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
         self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
 
@@ -226,7 +213,6 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
         print("\nGenerated the function space.")
 
-
 class EulerBernoulliFunctionSpace(FunctionSpace):
 
     def __init__(self, s0, s1, E, discretization_type="CG"):
@@ -247,8 +233,8 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
         self.dim = 1
         # no. of nodes per element
         self.npel = 2
-        # assuming the elements are connected like a simple chain!!!
         # global connectivity (element number -> global dof number)
+        # assuming the elements are connected like a simple chain!!!
         if (self.discretization_type == "CG"):
             # number of nodes in the discretization
             self.N = self.E + 1
@@ -269,13 +255,8 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
-        else:
-            sys.exit(
-                "\nConnectivity cannot be generated for the discretization type.")
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
-        # assuming the elements are of equal length!!!
-        self.elL = (self.s1 - self.s0)/self.E
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
         self.Q = 4
         # the lagrange shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
