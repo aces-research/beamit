@@ -47,7 +47,7 @@ class System:
         return initial_state
 
     def assemble_stiffness(self, A, solution, nodal_loads, element_loads_info):
-        self.weak_form.compute_system_stiffness(A, solution, element_loads_info)
+        self.weak_form.compute_system_stiffness(A, solution, nodal_loads, element_loads_info)
         if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
                 (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
             dofs = self.weak_form.function_space.dof
@@ -61,10 +61,8 @@ class System:
                 A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads_info, update_internal=False):
-        if (update_internal):
-            self.weak_form.compute_system_residual(f, solution, element_loads_info, update_internal)
-        else:
-            self.weak_form.compute_system_residual(f, solution, element_loads_info)
+        self.weak_form.compute_system_residual(
+            f, solution, nodal_loads, element_loads_info, update_internal)
         # add nodal forces to the residual
         if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
                 (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
