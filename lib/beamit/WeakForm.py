@@ -103,40 +103,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         bending_integrand_2 = self.material.E*self.material.I*np.matmul(np.transpose(Npp, axes=(0, 2, 1)), t3)
         r_el_int = np.sum((axial_integrand + bending_integrand_1 + bending_integrand_2)*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_int
-    
-    # Function to compute element inertia forces
-    def compute_element_inertia_forces(self, element_unknowns, element_velocities, element_accelerations):
-        Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
-        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
-        Npt = np.transpose(Np, axes=(0, 2, 1))
-        rp = np.matmul(Np, element_unknowns)
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
-        rp_dot = np.matmul(Np, element_velocities)
-        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
-        r_ddot = np.matmul(self.function_space.shape_functions, element_accelerations)
-        rp_ddot = np.matmul(Np, element_accelerations)
-        rp_dot_rp_ddot = np.sum(rp*rp_ddot, axis=1, keepdims=True)
-        translational_integrand = self.material.rho*self.material.A*np.matmul(Nt, r_ddot)
-        rotational_integrand_1 = ((self.material.rho*self.material.I)/(rp_L2**2.0))*np.matmul(Npt, rp_ddot)
-        rotational_integrand_2 = ((2.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**6.0))*np.matmul(Npt, rp)
-        rotational_integrand_3 = -((2.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**4.0))*np.matmul(Npt, rp_dot)
-        rotational_integrand_4 = -((self.material.rho*self.material.I*rp_dot_rp_ddot)/(rp_L2**4.0))*np.matmul(Npt, rp)
-        f_el_inertia = np.sum((translational_integrand + rotational_integrand_1 + rotational_integrand_2 + rotational_integrand_3 + rotational_integrand_4)*self.function_space.JxW, axis=0, keepdims=False)
-        return f_el_inertia
 
-    # Function to compute the element "damping inertia forces"
-    def compute_element_damping_inertia_forces(self, element_unknowns, element_velocities):
-        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
-        Npt = np.transpose(Np, axes=(0, 2, 1))
-        rp = np.matmul(Np, element_unknowns)
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
-        rp_dot = np.matmul(Np, element_velocities)
-        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
-        damping_integrand_1 = ((2.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**6.0))*np.matmul(Npt, rp)
-        damping_integrand_2 = -((2.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**4.0))*np.matmul(Npt, rp_dot)
-        f_el_damping = np.sum((damping_integrand_1 + damping_integrand_2)*self.function_space.JxW, axis=0, keepdims=False)
-        return f_el_damping
-    
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
@@ -185,74 +152,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         r_el_dist_moments = np.sum(moment_integrand*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_dist_forces + r_el_dist_moments
 
-    # Function to compute element rotational mass
-    def compute_element_rotational_mass(self, element_unknowns):
-        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
-        Npt = np.transpose(Np, axes=(0, 2, 1))
-        rp = np.matmul(Np, element_unknowns)
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
-        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
-        rotational_mass_integrand_1 = ((self.material.rho*self.material.I)/(rp_L2**2.0))*np.matmul(Npt, Np)
-        rotational_mass_integrand_2 = -((self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))
-        M_el_rot = np.sum((rotational_mass_integrand_1 + rotational_mass_integrand_2)*self.function_space.JxW, axis=0, keepdims=False)
-        return M_el_rot
-
-    # Function to compute element damping
-    def compute_element_damping(self, element_unknowns, element_velocities):
-        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
-        Npt = np.transpose(Np, axes=(0, 2, 1))
-        rp = np.matmul(Np, element_unknowns)
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
-        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
-        rp_dot = np.matmul(Np, element_velocities)
-        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
-        rp_dot_dyd_rp = np.matmul(rp_dot, np.transpose(rp, axes=(0, 2, 1)))
-        damping_integrand_1 = ((4.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))
-        damping_integrand_2 = -((2.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**4.0))*np.matmul(Npt, Np)
-        damping_integrand_3 = -((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp, Np))
-        M_el_damp = np.sum((damping_integrand_1 + damping_integrand_2 + damping_integrand_3)*self.function_space.JxW, axis=0, keepdims=False)
-        return M_el_damp
-
-    # Function to compute the element rotational inertia stiffness
-    def compute_element_rotational_inertia_stiffness(self, element_unknowns, element_velocities, element_accelerations):
-        Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
-        Npt = np.transpose(Np, axes=(0, 2, 1))
-        rp = np.matmul(Np, element_unknowns)
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=1, keepdims=True)
-        rp_dyd_rp = np.matmul(rp, np.transpose(rp, axes=(0, 2, 1)))
-        rp_dot = np.matmul(Np, element_velocities)
-        rp_dot_rp_dot = np.sum(rp*rp_dot, axis=1, keepdims=True)
-        rp_ddot = np.matmul(Np, element_accelerations)
-        rp_dot_rp_ddot = np.sum(rp*rp_ddot, axis=1, keepdims=True)
-        rp_dyd_rp_dot = np.matmul(rp, np.transpose(rp_dot, axes=(0, 2, 1)))
-        rp_dot_dyd_rp = np.matmul(rp_dot, np.transpose(rp, axes=(0, 2, 1)))
-        rp_dot_dyd_rp_dot = np.matmul(rp_dot, np.transpose(rp_dot, axes=(0, 2, 1)))
-        rp_dyd_rp_ddot = np.matmul(rp, np.transpose(rp_ddot, axes=(0, 2, 1)))
-        rp_ddot_dyd_rp = np.matmul(rp_ddot, np.transpose(rp, axes=(0, 2, 1)))
-        rot_stiff_integrand_1 = -((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_ddot_dyd_rp, Np))
-        rot_stiff_integrand_2 = (((8.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp, Np))) -(((2.0*self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dot_dyd_rp_dot, Np)))
-        rot_stiff_integrand_3 = (((2.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**6.0))*np.matmul(Npt, Np)) + (((4.0*self.material.rho*self.material.I*rp_dot_rp_dot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp_dot, Np))) - (((12.0*self.material.rho*self.material.I*(rp_dot_rp_dot**2.0))/(rp_L2**8.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np)))
-        rot_stiff_integrand_4 = (((4.0*self.material.rho*self.material.I*rp_dot_rp_ddot)/(rp_L2**6.0))*np.matmul(Npt, np.matmul(rp_dyd_rp, Np))) - (((self.material.rho*self.material.I*rp_dot_rp_ddot)/(rp_L2**4.0))*np.matmul(Npt, Np)) - (((self.material.rho*self.material.I)/(rp_L2**4.0))*np.matmul(Npt, np.matmul(rp_dyd_rp_ddot, Np)))
-        K_el_rot_inertia = np.sum((rot_stiff_integrand_1 + rot_stiff_integrand_2 + rot_stiff_integrand_3 + rot_stiff_integrand_4)*self.function_space.JxW, axis=0, keepdims=False)
-        return K_el_rot_inertia
-
-    # Function to compute the system "damping inertia forces" contribution to the residual
-    def compute_system_damping_inertia_forces(self, f, system_unknowns, system_velocities):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            element_velocities = system_velocities[global_element_dofs]
-            f[global_element_dofs] -= self.compute_element_damping_inertia_forces(element_unknowns, element_velocities)
-    
-    # Function to compute the system inertia forces contribution to the residual
-    def compute_system_inertia_forces(self, f, system_unknowns, system_velocities, system_accelerations):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            element_velocities = system_velocities[global_element_dofs]
-            element_accelerations = system_accelerations[global_element_dofs]
-            f[global_element_dofs] -= self.compute_element_inertia_forces(element_unknowns, element_velocities, element_accelerations)
-
     @staticmethod
     def _compute_residual_vectors(rp, rpp, rppp):
         """
@@ -275,7 +174,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         t4 = rp/(rp_L2**2.0)
         t5 = ((2.0*rpp*rp_dot_rpp)/(rp_L2**4.0)) - ((2.0*rp*(rp_dot_rpp**2.0))/(rp_L2**6.0)) + ((rp*rp_dot_rppp)/(rp_L2**4.0)) - (rppp/(rp_L2**2.0))
         return t1, t2, t3, t4, t5
-    
+
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
@@ -322,9 +221,9 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                 moments_left_node = self.material.E*self.material.I*(cross_op(rp_left_node, rpp_left_node, 0, 0, 0)/(rp_left_node_L2**2.0))
                 f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
                 f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
-    
+
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
+    def compute_system_mass(self, M, system_unknowns, lump=True):
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         translational_mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)
         # the element translational mass matrix
@@ -338,35 +237,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             np.fill_diagonal(M_el_trans, diag_elements)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
             M[np.ix_(global_element_dofs, global_element_dofs)] += M_el_trans
-            if (use_rotational_mass):
-                M_el_rot = self.compute_element_rotational_mass(element_unknowns)
-                # apply "special lumping" to the element rotational mass matrix
-                if (lump):
-                    sum_all_entries = np.sum(M_el_rot)
-                    sum_diag_entries = np.sum(np.diag(M_el_rot))
-                    diag_elements = (sum_all_entries / sum_diag_entries) * np.diag(M_el_rot)
-                    M_el_rot = np.zeros([self.function_space.npel*self.function_space.dof, self.function_space.npel*self.function_space.dof])
-                    np.fill_diagonal(M_el_rot, diag_elements)
-                M[np.ix_(global_element_dofs, global_element_dofs)] += M_el_rot
-
-    # Function to compute the system damping
-    def compute_system_damping(self, C, system_unknowns, system_velocities):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            element_velocities = system_velocities[global_element_dofs]
-            C[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_damping(element_unknowns, element_velocities)
-
-    # Function to compute the system rotational inertia stiffness
-    def compute_system_rotational_inertia_stiffness(self, A, system_unknowns, system_velocities, system_accelerations):
-        for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            element_velocities = system_velocities[global_element_dofs]
-            element_accelerations = system_accelerations[global_element_dofs]
-            A[np.ix_(global_element_dofs, global_element_dofs)] += self.compute_element_rotational_inertia_stiffness(element_unknowns, element_velocities, element_accelerations)
 
 class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
@@ -389,7 +260,7 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         # eighth to tenth columns = tangent jumps at an interface at damage initiation
         # eleventh column = binary parameter to switch between axial DG and CZM terms in case of recontact at an interface "after damage initiation"
         self.internal_variables = np.zeros([self.function_space.E-1, 11])
-    
+
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads_info,
                                 update_internal=False):
@@ -673,7 +544,7 @@ class EulerBernoulliWeakFormCG(WeakForm):
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), ux) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), wxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
-    
+
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
@@ -681,9 +552,9 @@ class EulerBernoulliWeakFormCG(WeakForm):
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), phix) + \
                             self.material.E*self.material.I*np.matmul(np.transpose(Nxx, axes=(0, 2, 1)), Nxx)
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
-    
+
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns, use_rotational_mass=False, lump=True):
+    def compute_system_mass(self, M, system_unknowns, lump=True):
         phit = np.transpose(self.function_space.lagrange_shape_functions, axes=(0, 2, 1))
         Nt = np.transpose(self.function_space.hermite_shape_functions, axes=(0, 2, 1))
         axial_integrand = self.material.rho*self.material.A * \
@@ -709,7 +580,7 @@ class EulerBernoulliWeakFormCG(WeakForm):
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             M[np.ix_(global_element_dofs, global_element_dofs)] += (M_el_axial + M_el_bending)
-    
+
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):

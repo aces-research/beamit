@@ -181,9 +181,8 @@ class DynamicSolver(Solver):
     def __init__(self, system):
         # invoke the parent (Solver) class
         Solver.__init__(self, system)
-        # initialize the mass and damping matrices
+        # initialize the mass matrix
         self.M = np.zeros([system.nequations, system.nequations])
-        self.C = np.zeros([system.nequations, system.nequations])
         # the "velocity" (linear velocities and time derivative of the tangents)
         self.velocity = np.zeros([system.nequations, 1])
         # the "acceleration" (linear accelerations and double time derivative of the tangents)
@@ -193,8 +192,7 @@ class DynamicSolver(Solver):
     def reset_system(self):
         super().reset_system()
         self.M = np.zeros([self.system.nequations, self.system.nequations])
-        self.C = np.zeros([self.system.nequations, self.system.nequations])
-    
+
     # Function to set the initial conditions (position and velocity) of the system
     def set_initial_conditions(self, initial_position, initial_velocity):
         self.solution = copy.deepcopy(np.reshape(initial_position, [self.system.nequations, 1]))

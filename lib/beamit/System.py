@@ -80,23 +80,10 @@ class System:
         else:
             f += nodal_loads
 
-    def assemble_damping_inertia_forces(self, f, solution, velocity):
-        self.weak_form.compute_system_damping_inertia_forces(f, solution, velocity)
-    
-    def assemble_inertia_forces(self, f, solution, velocity, acceleration):
-        self.weak_form.compute_system_inertia_forces(f, solution, velocity, acceleration)
-    
     def assemble_mass(self, M, solution):
         self.weak_form.compute_system_mass(M, solution)
 
-    def assemble_damping(self, C, solution, velocity):
-        self.weak_form.compute_system_damping(C, solution, velocity)
-
-    def assemble_rotational_inertia_stiffness(self, A, solution, velocity, acceleration):
-        self.weak_form.compute_system_rotational_inertia_stiffness(A, solution, velocity, acceleration)
-
     def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
-
         # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!
         # assemble residual
         self.assemble_residual(f, solution, nodal_loads, element_loads_info)
