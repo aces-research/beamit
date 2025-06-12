@@ -138,7 +138,6 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         dt3dd_term2 = ((2.0/(rp_L2**4.0))*rpp_dyd_rp) + ((1.0/(rp_L2**4.0))*rp_dyd_rpp)
         dt3dd_term3 = ((1.0/(rp_L2**2.0))*imat) - ((1.0/(rp_L2**4.0))*rp_dyd_rp) 
         dt3dd = np.matmul((dt3dd_term1 - dt3dd_term2), Np) + np.matmul((dt3dd_term3), Npp)
-        dt4dd = np.matmul(((1.0/(rp_L2**2.0))*imat - (2.0/(rp_L2**4.0))*(rp_dyd_rp)), Np)
         axial_integrand = self.material.E*self.material.A*np.matmul(np.transpose(Np, axes=(0, 2, 1)), dt1dd)
         bending_integrand_1 = self.material.E*self.material.I*np.matmul(np.transpose(Np, axes=(0, 2, 1)), dt2dd)
         bending_integrand_2 = self.material.E*self.material.I*np.matmul(np.transpose(Npp, axes=(0, 2, 1)), dt3dd)
@@ -227,9 +226,19 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             element_velocities = system_velocities[global_element_dofs]
             element_accelerations = system_accelerations[global_element_dofs]
             f[global_element_dofs] -= self.compute_element_inertia_forces(element_unknowns, element_velocities, element_accelerations)
-    
-    # Helper function to compute 't_i' vectors
-    def compute_ti_vectors(self, rp, rpp, rppp):
+
+    @staticmethod
+    def _compute_residual_vectors(rp, rpp, rppp):
+        """
+        Compute the 't_i' vectors in the residual.
+
+        Parameters:
+            rp: The first derivative of the position vector.
+            rpp: The second derivative of the position vector.
+            rppp: The third derivative of the position vector.
+        Returns:
+            t1, t2, t3, t4, t5: The computed 't_i' vectors.
+        """
         rp_L2 = np.linalg.norm(rp, ord=2, axis=0, keepdims=True)
         rp_dot_rpp = np.sum(rp*rpp, axis=0, keepdims=True)
         rpp_dot_rpp = np.sum(rpp*rpp, axis=0, keepdims=True)
@@ -262,7 +271,8 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             rpp_right_node = np.matmul(Npp_right_node, element_unknowns)
             rppp_right_node = np.matmul(Nppp_right_node, element_unknowns)
             rp_right_node_L2 = np.linalg.norm(rp_right_node, ord=2, axis=0, keepdims=True) 
-            t1_right_node, _, _, _, t5_right_node = self.compute_ti_vectors(rp_right_node, rpp_right_node, rppp_right_node)
+            t1_right_node, _, _, _, t5_right_node = self._compute_residual_vectors(
+                rp_right_node, rpp_right_node, rppp_right_node)
             # forces at the right node
             if (element_loads_info == None): # No element loads
                 forces_right_node = (self.material.E*self.material.A*t1_right_node) + (self.material.E*self.material.I*t5_right_node)
@@ -277,7 +287,8 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                 rpp_left_node = np.matmul(Npp_left_node, element_unknowns)
                 rppp_left_node = np.matmul(Nppp_left_node, element_unknowns)
                 rp_left_node_L2 = np.linalg.norm(rp_left_node, ord=2, axis=0, keepdims=True)
-                t1_left_node, _, _, _, t5_left_node = self.compute_ti_vectors(rp_left_node, rpp_left_node, rppp_left_node)
+                t1_left_node, _, _, _, t5_left_node = self._compute_residual_vectors(
+                    rp_left_node, rpp_left_node, rppp_left_node)
                 # forces at the left node
                 if (element_loads_info == None): # No element loads
                     forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
@@ -353,19 +364,6 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         # eleventh column = binary parameter to switch between axial DG and CZM terms in case of recontact at an interface "after damage initiation"
         self.internal_variables = np.zeros([self.function_space.E-1, 11])
     
-    # Helper function to compute 't_i' vectors in the residual
-    def compute_residual_vectors(self, rp, rpp, rppp):
-        rp_L2 = np.linalg.norm(rp, ord=2, axis=0, keepdims=True)
-        rp_dot_rpp = np.sum(rp*rpp, axis=0, keepdims=True)
-        rpp_dot_rpp = np.sum(rpp*rpp, axis=0, keepdims=True)
-        rp_dot_rppp = np.sum(rp*rppp, axis=0, keepdims=True)
-        t1 = (rp*(rp_L2 - 1.0))/rp_L2
-        t2 = (2.0*rp*((rp_dot_rpp**2.0)/(rp_L2**6.0))) - ((rp*rpp_dot_rpp)/(rp_L2**4.0)) - ((rpp*rp_dot_rpp)/(rp_L2**4.0))
-        t3 = (rpp/(rp_L2**2.0)) - (rp*rp_dot_rpp)/(rp_L2**4.0)
-        t4 = rp/(rp_L2**2.0)
-        t5 = ((2.0*rpp*rp_dot_rpp)/(rp_L2**4.0)) - ((2.0*rp*(rp_dot_rpp**2.0))/(rp_L2**6.0)) + ((rp*rp_dot_rppp)/(rp_L2**4.0)) - (rppp/(rp_L2**2.0))
-        return t1, t2, t3, t4, t5
-    
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, element_loads_info, update_internal=False):
         # compute system residual using the function in the parent class
@@ -400,8 +398,8 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
             rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
             rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-            t1_left_interface, _, _, t4_left_interface, t5_left_interface = self.compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
-            t1_right_interface, _, _, t4_right_interface, t5_right_interface = self.compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
+            t1_left_interface, _, _, t4_left_interface, t5_left_interface = self._compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
+            t1_right_interface, _, _, t4_right_interface, t5_right_interface = self._compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
             # position and tangent jumps at the interface
             r_jump_interface = r_right_interface - r_left_interface
             rp_jump_interface = rp_right_interface - rp_left_interface
@@ -498,10 +496,19 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(N_right_interface), cohesive_forces)))
             f[global_element_dofs_left] += (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_left_interface), cohesive_bending_moments)))
             f[global_element_dofs_right] -= (self.internal_variables[i:i+1, 1:2]*(np.matmul(np.transpose(Np_right_interface), cohesive_bending_moments)))
-    
-    # Helper function to compute coefficients of 't_i' vector gradients in the jump stiffness
-    def compute_jump_stiffness_coefficients(self, rp, rpp, rppp):
-        imat = np.eye(self.function_space.dim)
+
+    @staticmethod
+    def _compute_jump_stiffness_coefficients(rp, rpp, rppp):
+        """
+        Computes the coefficients of the 't_i' vector gradients in the jump stiffness.
+        Parameters:
+            rp (np.ndarray): Position vector.
+            rpp (np.ndarray): First derivative of the position vector.
+            rppp (np.ndarray): Second derivative of the position vector.
+        Returns:
+            tuple: Coefficients dt1dd_Np, dt3dd_Np, dt3dd_Npp, dt5dd_Np, dt5dd_Npp, dt5dd_Nppp.
+        """
+        imat = np.eye(rp.shape[0])
         rp_L2 = np.linalg.norm(rp, ord=2, axis=0, keepdims=True)
         rp_dot_rpp = np.sum(rp*rpp, axis=0, keepdims=True)
         rp_dot_rppp = np.sum(rp*rppp, axis=0, keepdims=True)
@@ -558,8 +565,10 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
             ############## flux and compatibility term derivatives ##############
             # coefficients of 't_i' vector gradients at the interface
-            dt1dd_Np_left_interface, dt3dd_Np_left_interface, dt3dd_Npp_left_interface, dt5dd_Np_left_interface, dt5dd_Npp_left_interface, dt5dd_Nppp_left_interface = self.compute_jump_stiffness_coefficients(rp_left_interface, rpp_left_interface, rppp_left_interface)
-            dt1dd_Np_right_interface, dt3dd_Np_right_interface, dt3dd_Npp_right_interface, dt5dd_Np_right_interface, dt5dd_Npp_right_interface, dt5dd_Nppp_right_interface = self.compute_jump_stiffness_coefficients(rp_right_interface, rpp_right_interface, rppp_right_interface)
+            dt1dd_Np_left_interface, dt3dd_Np_left_interface, dt3dd_Npp_left_interface, dt5dd_Np_left_interface, dt5dd_Npp_left_interface, dt5dd_Nppp_left_interface = self._compute_jump_stiffness_coefficients(
+                rp_left_interface, rpp_left_interface, rppp_left_interface)
+            dt1dd_Np_right_interface, dt3dd_Np_right_interface, dt3dd_Npp_right_interface, dt5dd_Np_right_interface, dt5dd_Npp_right_interface, dt5dd_Nppp_right_interface = self._compute_jump_stiffness_coefficients(
+                rp_right_interface, rpp_right_interface, rppp_right_interface)
             # 't_i' vector gradients at the interface
             dt1dd_left_interface = np.matmul(dt1dd_Np_left_interface, Np_left_interface)
             dt1dd_right_interface = np.matmul(dt1dd_Np_right_interface, Np_right_interface)
@@ -605,8 +614,8 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             rppp_right_node = np.matmul(Nppp_right_node, element_unknowns)
             rp_left_node_L2 = np.linalg.norm(rp_left_node, ord=2, axis=0, keepdims=True)
             rp_right_node_L2 = np.linalg.norm(rp_right_node, ord=2, axis=0, keepdims=True)
-            t1_left_node, _, _, _, t5_left_node = self.compute_residual_vectors(rp_left_node, rpp_left_node, rppp_left_node)
-            t1_right_node, _, _, _, t5_right_node = self.compute_residual_vectors(rp_right_node, rpp_right_node, rppp_right_node)
+            t1_left_node, _, _, _, t5_left_node = self._compute_residual_vectors(rp_left_node, rpp_left_node, rppp_left_node)
+            t1_right_node, _, _, _, t5_right_node = self._compute_residual_vectors(rp_right_node, rpp_right_node, rppp_right_node)
             # forces at the nodes
             if (element_loads_info == None): # No element loads
                 forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
