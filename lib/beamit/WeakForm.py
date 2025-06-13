@@ -358,7 +358,7 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         cohesive_forces = np.zeros((self.function_space.dim, 1))
         cohesive_bending_moments = np.zeros((self.function_space.dim, 1))
         # perform CZM checks and calculations in the case of a cohesive interface material
-        if (isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))):
+        if ((isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))) and update_internal):
             # position and tangent jumps at the interface
             r_jump_interface = r_right_interface - r_left_interface
             rp_jump_interface = rp_right_interface - rp_left_interface
