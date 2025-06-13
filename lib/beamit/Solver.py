@@ -203,7 +203,7 @@ class DynamicSolver(Solver):
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         self.reset_system()
-        self.system.assemble_residual(self.f, self.solution, nodal_loads = nodal_loads, element_loads_info = None)
+        self.system.assemble_residual(self.f, self.solution, nodal_loads=nodal_loads)
         self.system.assemble_mass(self.M, self.solution)
         self.acceleration = self.linear_system_solver(self.M, self.f)
         # update the system attributes
@@ -383,7 +383,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
         # assemble the residual
         self.system.assemble_residual(
-            self.f, self.solution, nodal_loads, element_loads_info=None, update_internal=True)
+            self.f, self.solution, nodal_loads, element_loads=None, update_internal=True)
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
         self.acceleration[Neumann_dofs] = self.f[Neumann_dofs] / self.lumpedMass[Neumann_dofs]
