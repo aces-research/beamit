@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import numpy as np
 import scipy as sp
 import scipy.sparse.linalg as spla
@@ -5,7 +6,7 @@ from scipy.sparse import csc_matrix
 import sys
 import copy
 
-class Solver:
+class Solver(ABC):
 
     def __init__(self, system):
         self.system = system
@@ -98,6 +99,14 @@ class Solver:
             x = np.linalg.solve(A, f)
         return x
 
+    @abstractmethod
+    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
+              LSmaxiter=None):
+        """
+        Solve the system of equations using the specified method.
+        """
+        pass
+
 class NewtonRaphsonSolver(Solver):
 
     def __init__(self, system):
@@ -106,7 +115,8 @@ class NewtonRaphsonSolver(Solver):
         # residual norm at the start of the iterations
         self.initial_residual_norm = 1.0
 
-    def solve(self, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
+              LSmaxiter=None):
         # reset linear system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -129,7 +139,7 @@ class NewtonRaphsonSolver(Solver):
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the linear system
-            self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
+            self.system.assemble(self.A, self.f, self.solution, nodal_loads=nodal_loads)
             # forces to be applied after static condensation of Dirichlet dofs
             if (i == 0): # in the first iteration
                 static_condensation_forces = np.matmul(self.A[np.ix_(Neumann_dofs, Dirichlet_dofs)], Dirichlet_solution)
@@ -209,6 +219,14 @@ class DynamicSolver(Solver):
         # update the system attributes
         self.system.update(self.solution)
 
+    @abstractmethod
+    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
+              LSmaxiter=None):
+        """
+        Solve the system of equations using the specified method.
+        """
+        pass
+
 class ImplicitNewmarkSolver(DynamicSolver):
 
     def __init__(self, system):
@@ -217,7 +235,8 @@ class ImplicitNewmarkSolver(DynamicSolver):
         # residual norm at the start of the iterations
         self.initial_residual_norm = 1.0
 
-    def solve(self, dt, beta = 0.25, gamma = 0.50, Nmax = 10, tol = 1.0E-05, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
+              LSmaxiter=None):
         # constants in the time integration scheme
         c0 = 1.0/(beta*(dt**2.0))
         c1 = 1.0/(beta*dt)
@@ -354,7 +373,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
-    def solve(self, dt = None, LSsolver = None, LSprecon = None, LStol = 1.0E-06, LSmaxiter = None):
+    def solve(self, dt, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
+              LSmaxiter=None):
         # if the time step size input is not provided
         if (dt == None):
             dt = self.stable_time_step

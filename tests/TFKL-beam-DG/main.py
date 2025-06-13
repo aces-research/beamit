@@ -524,7 +524,6 @@ def CZM_dynamic_main():
         # apply the boundary conditions
         solver.set_boundary_conditions(bctypes, bcvalues)
         solver.solve(dt)
-        # solver.solve(dt, tol=1.0E-03)
         if ((i+1) % save_time == 0):
             output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_output_vtk(output_file, system)

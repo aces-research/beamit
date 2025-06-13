@@ -44,7 +44,7 @@ def test_clamp():
     solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
-    solver.solve(1, 1.0E-05)
+    solver.solve(Nmax=1, tol=1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
@@ -93,7 +93,7 @@ def test_fix_position():
     solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
-    solver.solve(1, 1.0E-05)
+    solver.solve(Nmax=1, tol=1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
@@ -146,7 +146,7 @@ def test_fix_tangent():
     solver.set_boundary_conditions(bctypes, bcvalues)
 
     # solve the nonlinear static problem and update the nodal position in system 
-    solver.solve(1, 1.0E-05)
+    solver.solve(Nmax=1, tol=1.0E-05)
 
     # assert that the solution is a straight beam aligned with the x-axis
     assert(np.all(np.transpose(solver.solution) -
