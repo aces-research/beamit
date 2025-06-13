@@ -46,7 +46,7 @@ class System:
         initial_state[:, 3:4] = 1.0
         return initial_state
 
-    def assemble_stiffness(self, A, solution, nodal_loads, element_loads_info):
+    def assemble_stiffness(self, A, solution, nodal_loads, element_loads_info=None):
         self.weak_form.compute_system_stiffness(A, solution, nodal_loads, element_loads_info)
         if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
                 (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
@@ -60,7 +60,7 @@ class System:
                 nodal_dt4dd_coeff = (np.eye(self.weak_form.function_space.dim)/(nodal_tangents_L2**2.0)) - ((2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
                 A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
 
-    def assemble_residual(self, f, solution, nodal_loads, element_loads_info, update_internal=False):
+    def assemble_residual(self, f, solution, nodal_loads, element_loads_info=None, update_internal=False):
         self.weak_form.compute_system_residual(
             f, solution, nodal_loads, element_loads_info, update_internal)
         # add nodal forces to the residual
@@ -83,13 +83,12 @@ class System:
     def assemble_mass(self, M, solution):
         self.weak_form.compute_system_mass(M, solution)
 
-    def assemble(self, A, f, solution, nodal_loads = 0.0, element_loads_info = None):
-        # order of assembly (residual followed by stiffness) is important to ensure correct CZM calculations!!!
-        # assemble residual
-        self.assemble_residual(f, solution, nodal_loads, element_loads_info)
-
+    def assemble(self, A, f, solution, nodal_loads, element_loads_info=None):
         # assemble stiffness
         self.assemble_stiffness(A, solution, nodal_loads, element_loads_info)
+
+        # assemble residual
+        self.assemble_residual(f, solution, nodal_loads, element_loads_info)
 
     # Function to update the variables in the system
     def update(self, solution):
@@ -98,6 +97,7 @@ class System:
                                 self.weak_form.function_space.dof])
         # update the internal forces
         internal_force_vector = np.zeros([self.nequations, 1])
-        self.weak_form.compute_system_nodal_forces(internal_force_vector, solution)
-        self.internal_forces = np.reshape(internal_force_vector, [self.weak_form.function_space.N, \
-                                self.weak_form.function_space.dof])
+        self.weak_form.compute_system_nodal_forces(
+            internal_force_vector, solution, element_loads_info=None)
+        self.internal_forces = np.reshape(internal_force_vector, [
+                                          self.weak_form.function_space.N, self.weak_form.function_space.dof])
