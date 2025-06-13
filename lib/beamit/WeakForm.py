@@ -21,7 +21,7 @@ class WeakForm(ABC):
         self.material = material
 
     def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads_info,
-                                update_internal=False):
+                                update_internal):
         """
         Compute the system residual based on the provided unknowns and element loads information.
 
@@ -40,8 +40,7 @@ class WeakForm(ABC):
                 f[global_element_dofs] -= self.compute_element_internal_forces(
                     element_unknowns)
 
-    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info,
-                                 update_internal=False):
+    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info):
         """
         Compute the system stiffness matrix based on the provided unknowns and element loads information.
 
@@ -50,7 +49,6 @@ class WeakForm(ABC):
             system_unknowns: The unknowns of the system.
             nodal_loads: The nodal loads applied to the system.
             element_loads_info: Information about the distributed loads on the elements (if any).
-            update_internal: If True, update the internal variables in the weak form.
         """
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
@@ -177,7 +175,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info):
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, Nxi_left_node, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_shapes(-1.0)
@@ -261,22 +259,206 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         # eleventh column = binary parameter to switch between axial DG and CZM terms in case of recontact at an interface "after damage initiation"
         self.internal_variables = np.zeros([self.function_space.E-1, 11])
 
+    # Function to compute interface forces
+    def __compute_interface_forces(self, element_unknowns_left, element_unknowns_right, 
+                                   element_internal_variables, element_loads_info, update_internal):
+        # shape functions derivatives at the interfaces (left (-) & right (+))
+        N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = \
+            self.function_space.compute_shapes(1.0)
+        Np_left_interface = Nxi_left_interface * (1.0/self.function_space.jacobian)
+        Npp_left_interface = Nxixi_left_interface * ((1.0/self.function_space.jacobian)**2.0)
+        Nppp_left_interface = Nxixixi_left_interface * ((1.0/self.function_space.jacobian)**3.0)
+        N_right_interface, Nxi_right_interface, Nxixi_right_interface, Nxixixi_right_interface = \
+            self.function_space.compute_shapes(-1.0)
+        Np_right_interface = Nxi_right_interface * (1.0/self.function_space.jacobian)
+        Npp_right_interface = Nxixi_right_interface * ((1.0/self.function_space.jacobian)**2.0)
+        Nppp_right_interface = Nxixixi_right_interface * ((1.0/self.function_space.jacobian)**3.0)
+        # parameterization and its derivatives at the interface
+        r_left_interface = np.matmul(N_left_interface, element_unknowns_left)
+        r_right_interface = np.matmul(N_right_interface, element_unknowns_right)
+        rp_left_interface = np.matmul(Np_left_interface, element_unknowns_left)
+        rp_right_interface = np.matmul(Np_right_interface, element_unknowns_right)
+        rpp_left_interface = np.matmul(Npp_left_interface, element_unknowns_left)
+        rpp_right_interface = np.matmul(Npp_right_interface, element_unknowns_right)
+        rppp_left_interface = np.matmul(Nppp_left_interface, element_unknowns_left)
+        rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
+        rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
+        rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
+        t1_left_interface, _, _, t4_left_interface, t5_left_interface = self._compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
+        t1_right_interface, _, _, t4_right_interface, t5_right_interface = self._compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
+        # forces at the interface
+        if (element_loads_info == None): # No element loads
+            forces_left_interface = (self.material.E*self.material.A*t1_left_interface) + (self.material.E*self.material.I*t5_left_interface)
+            forces_right_interface = (self.material.E*self.material.A*t1_right_interface) + (self.material.E*self.material.I*t5_right_interface)
+        average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
+        # moments at the interface
+        moments_left_interface = self.material.E*self.material.I*(cross_op(rp_left_interface, rpp_left_interface, 0, 0, 0)/(rp_left_interface_L2**2.0))
+        moments_right_interface = self.material.E*self.material.I*(cross_op(rp_right_interface, rpp_right_interface, 0, 0, 0)/(rp_right_interface_L2**2.0))
+        mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
+        mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
+        average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
+        # compute the cohesive forces and bending moments at the interface
+        cohesive_forces, cohesive_bending_moments = self.__compute_CZM_interface_forces(
+            r_left_interface, r_right_interface, 
+            rp_left_interface, rp_right_interface, 
+            forces_left_interface, forces_right_interface, 
+            moments_left_interface, moments_right_interface, 
+            element_internal_variables, update_internal)
+        return average_forces_interface, average_mxt4_interface, cohesive_forces, cohesive_bending_moments
+
+    def __compute_CZM_interface_forces(self, r_left_interface, r_right_interface, 
+                                       rp_left_interface, rp_right_interface, forces_left_interface, 
+                                       forces_right_interface, moments_left_interface, 
+                                       moments_right_interface, element_internal_variables, 
+                                       update_internal):
+        # initialize cohesive forces and bending moments
+        cohesive_forces = np.zeros((self.function_space.dim, 1))
+        cohesive_bending_moments = np.zeros((self.function_space.dim, 1))
+        # perform CZM checks and calculations in the case of a cohesive interface material
+        if (isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))):
+            # position and tangent jumps at the interface
+            r_jump_interface = r_right_interface - r_left_interface
+            rp_jump_interface = rp_right_interface - rp_left_interface
+            # average forces at the interface
+            average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
+            # just after damage initiation or damage not yet initiated
+            if (element_internal_variables[0:1, 2:3] == 0.0):
+                # just after damage initiation
+                if (element_internal_variables[0:1, 0:1] == 1.0):
+                    # effective separation at the interface
+                    delta = self.material.compute_effective_separation(r_left_interface, 
+                                                                       r_right_interface, 
+                                                                       rp_left_interface, 
+                                                                       rp_right_interface,
+                                                                       position_jumps_DI=element_internal_variables[0:1, 4:7].T, tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                    if (delta == 0.0):  # fall back to DG terms
+                        element_internal_variables[0:1, 1:2] = 0.0
+                    else:  # perform CZM calculations
+                        element_internal_variables[0:1, 1:2] = 1.0
+                        axial_jump = self.material.compute_axial_separation(
+                            r_left_interface, r_right_interface, rp_left_interface, 
+                            rp_right_interface, position_jumps_DI=element_internal_variables[0:1, 4:7].T)
+                        if (axial_jump < 0.0):  # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
+                            element_internal_variables[0:1, 10:11] = 0.0
+                        else:
+                            element_internal_variables[0:1, 10:11] = 1.0
+                        # evaluate cohesive forces according to the TSL
+                        cohesive_axial_forces = \
+                            self.material.compute_cohesive_axial_forces(r_left_interface, 
+                                                                        r_right_interface, 
+                                                                        rp_left_interface, 
+                                                                        rp_right_interface, 
+                                                                        delta_max=element_internal_variables[0:1, 2:3], 
+                                                                        position_jumps_DI=element_internal_variables[0:1, 4:7].T, 
+                                                                        tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                        # compute the cohesive forces and bending moments
+                        # for complete damage
+                        if ((delta >= self.material.delta_c) or 
+                            (element_internal_variables[0:1, 2:3] == self.material.delta_c)):
+                            interface_constrained_shear_forces = np.zeros(
+                                average_forces_interface.shape)
+                        else:
+                            effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(
+                                rp_left_interface, rp_right_interface)
+                            tangeff_dyd_tangeff = np.matmul(
+                                effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+                            interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*(
+                                (self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
+                        cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
+                        cohesive_bending_moments = \
+                            self.material.compute_cohesive_bending_moments(r_left_interface, 
+                                                                           r_right_interface, 
+                                                                           rp_left_interface, 
+                                                                           rp_right_interface, 
+                                                                           delta_max=element_internal_variables[0:1, 2:3],
+                                                                           position_jumps_DI=element_internal_variables[0:1, 4:7].T, tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                        if (update_internal):
+                            # update the maximum effective separation
+                            new_delta_max = self.material.compute_effective_maximum_separation(
+                                delta, delta_max=element_internal_variables[0:1, 2:3])
+                            element_internal_variables[0:1, 2:3] = new_delta_max
+                # damage not yet initiated
+                # evaluate the damage initiation criterion
+                elif (self.material.evaluate_damage_initiation_criterion(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface)):
+                    # damage just initiated at the interface
+                    element_internal_variables[0:1, 0:1] = 1.0
+                    # keep the DG flux and compatibility terms active immediately after damage initiation (since delta = 0.0)
+                    element_internal_variables[0:1, 1:2] = 0.0
+                    # update the internal variables at damage initiation
+                    element_internal_variables[0:1, 3:4] = self.material.compute_effective_force(
+                        rp_left_interface, rp_right_interface, forces_left_interface, 
+                        forces_right_interface, moments_left_interface, moments_right_interface)
+                    element_internal_variables[0:1, 4:7] = r_jump_interface.T
+                    element_internal_variables[0:1, 7:10] = rp_jump_interface.T
+                else:  # no damage at the interface
+                    element_internal_variables[0:1, 1:2] = 0.0
+            # damage already initiated at the interface (loading | unloading | damage after recontact)
+            else:
+                # effective separation at the interface
+                delta = self.material.compute_effective_separation(r_left_interface, 
+                                                                   r_right_interface, 
+                                                                   rp_left_interface, 
+                                                                   rp_right_interface,
+                                                                   position_jumps_DI=element_internal_variables[0:1, 4:7].T, 
+                                                                   tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                if (delta == 0.0):  # fall back to DG terms
+                    element_internal_variables[0:1, 1:2] = 0.0
+                else:  # perform CZM calculations
+                    element_internal_variables[0:1, 1:2] = 1.0
+                    axial_jump = self.material.compute_axial_separation(
+                        r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, 
+                        position_jumps_DI=element_internal_variables[0:1, 4:7].T)
+                    if (axial_jump < 0.0):  # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
+                        element_internal_variables[0:1, 10:11] = 0.0
+                    else:
+                        element_internal_variables[0:1, 10:11] = 1.0
+                    # evaluate cohesive forces according to the TSL
+                    cohesive_axial_forces = \
+                        self.material.compute_cohesive_axial_forces(r_left_interface, 
+                                                                    r_right_interface, 
+                                                                    rp_left_interface, 
+                                                                    rp_right_interface, 
+                                                                    delta_max=element_internal_variables[0:1, 2:3], 
+                                                                    position_jumps_DI=element_internal_variables[0:1, 4:7].T, tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                    # compute the cohesive forces and bending moments
+                    # for complete damage
+                    if ((delta >= self.material.delta_c) or (element_internal_variables[0:1, 2:3] == self.material.delta_c)):
+                        interface_constrained_shear_forces = np.zeros(
+                            average_forces_interface.shape)
+                    else:
+                        effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(
+                            rp_left_interface, rp_right_interface)
+                        tangeff_dyd_tangeff = np.matmul(
+                            effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
+                        interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*(
+                            (self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
+                    cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
+                    cohesive_bending_moments = \
+                        self.material.compute_cohesive_bending_moments(r_left_interface, 
+                                                                       r_right_interface, 
+                                                                       rp_left_interface, 
+                                                                       rp_right_interface, 
+                                                                       delta_max=element_internal_variables[0:1, 2:3],
+                                                                       position_jumps_DI=element_internal_variables[0:1, 4:7].T, tangent_jumps_DI=element_internal_variables[0:1, 7:10].T)
+                    if (update_internal):
+                        # update the maximum effective separation
+                        new_delta_max = self.material.compute_effective_maximum_separation(
+                            delta, delta_max=element_internal_variables[0:1, 2:3])
+                        element_internal_variables[0:1, 2:3] = new_delta_max
+        return cohesive_forces, cohesive_bending_moments
+
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads_info,
-                                update_internal=False):
+                                update_internal):
         # compute system residual using the function in the parent class
         super().compute_system_residual(f, system_unknowns, nodal_loads, element_loads_info,
                                         update_internal)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
-        N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
+        N_left_interface, Nxi_left_interface, _, _ = self.function_space.compute_shapes(1.0)
         Np_left_interface = Nxi_left_interface*(1.0/self.function_space.jacobian)
-        Npp_left_interface = Nxixi_left_interface*((1.0/self.function_space.jacobian)**2.0)
-        Nppp_left_interface = Nxixixi_left_interface*((1.0/self.function_space.jacobian)**3.0)
-        N_right_interface, Nxi_right_interface, Nxixi_right_interface, Nxixixi_right_interface = self.function_space.compute_shapes(-1.0)
+        N_right_interface, Nxi_right_interface, _, _ = self.function_space.compute_shapes(-1.0)
         Np_right_interface = Nxi_right_interface*(1.0/self.function_space.jacobian)
-        Npp_right_interface = Nxixi_right_interface*((1.0/self.function_space.jacobian)**2.0)
-        Nppp_right_interface = Nxixixi_right_interface*((1.0/self.function_space.jacobian)**3.0)
         # loop over the interfaces
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
@@ -286,107 +468,19 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             # unknowns of the left and right elements
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
-            # parameterizations at the interface
+            # parameterization and its derivatives at the interface
             r_left_interface = np.matmul(N_left_interface, element_unknowns_left)
             r_right_interface = np.matmul(N_right_interface, element_unknowns_right)
             rp_left_interface = np.matmul(Np_left_interface, element_unknowns_left)
             rp_right_interface = np.matmul(Np_right_interface, element_unknowns_right)
-            rpp_left_interface = np.matmul(Npp_left_interface, element_unknowns_left)
-            rpp_right_interface = np.matmul(Npp_right_interface, element_unknowns_right)
-            rppp_left_interface = np.matmul(Nppp_left_interface, element_unknowns_left)
-            rppp_right_interface = np.matmul(Nppp_right_interface, element_unknowns_right)
-            rp_left_interface_L2 = np.linalg.norm(rp_left_interface, ord=2, axis=0, keepdims=True)
-            rp_right_interface_L2 = np.linalg.norm(rp_right_interface, ord=2, axis=0, keepdims=True)
-            t1_left_interface, _, _, t4_left_interface, t5_left_interface = self._compute_residual_vectors(rp_left_interface, rpp_left_interface, rppp_left_interface)
-            t1_right_interface, _, _, t4_right_interface, t5_right_interface = self._compute_residual_vectors(rp_right_interface, rpp_right_interface, rppp_right_interface)
             # position and tangent jumps at the interface
             r_jump_interface = r_right_interface - r_left_interface
             rp_jump_interface = rp_right_interface - rp_left_interface
-            # forces at the interface
-            if (element_loads_info == None): # No element loads
-                forces_left_interface = (self.material.E*self.material.A*t1_left_interface) + (self.material.E*self.material.I*t5_left_interface)
-                forces_right_interface = (self.material.E*self.material.A*t1_right_interface) + (self.material.E*self.material.I*t5_right_interface)
-            average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
-            # moments at the interface
-            moments_left_interface = self.material.E*self.material.I*(cross_op(rp_left_interface, rpp_left_interface, 0, 0, 0)/(rp_left_interface_L2**2.0))
-            moments_right_interface = self.material.E*self.material.I*(cross_op(rp_right_interface, rpp_right_interface, 0, 0, 0)/(rp_right_interface_L2**2.0))
-            mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
-            mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
-            average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
-            # initialize cohesive forces and bending moments
-            cohesive_forces = np.zeros(average_forces_interface.shape)
-            cohesive_bending_moments = np.zeros(average_mxt4_interface.shape)
-            # perform CZM checks and calculations in the case of a cohesive interface material
-            if (isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))):
-                # just after damage initiation or damage not yet initiated
-                if (self.internal_variables[i:i+1, 2:3] == 0.0):
-                    # just after damage initiation
-                    if (self.internal_variables[i:i+1, 0:1] == 1.0):
-                        # effective separation at the interface
-                        delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                        if (delta == 0.0): # fall back to DG terms
-                            self.internal_variables[i:i+1, 1:2] = 0.0
-                        else: # perform CZM calculations
-                            self.internal_variables[i:i+1, 1:2] = 1.0
-                            axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
-                            if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
-                                self.internal_variables[i:i+1, 10:11] = 0.0
-                            else:
-                                self.internal_variables[i:i+1, 10:11] = 1.0
-                            # evaluate cohesive forces according to the TSL
-                            cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                            # compute the cohesive forces and bending moments
-                            if ((delta >= self.material.delta_c) or (self.internal_variables[i:i+1, 2:3] == self.material.delta_c)): # for complete damage
-                                interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
-                            else:
-                                effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-                                tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-                                interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
-                            cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
-                            cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                            if (update_internal):
-                                # update the maximum effective separation
-                                new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
-                                self.internal_variables[i:i+1, 2:3] = new_delta_max
-                    # damage not yet initiated
-                    elif (self.material.evaluate_damage_initiation_criterion(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface)): # evaluate the damage initiation criterion
-                        # damage just initiated at the interface
-                        self.internal_variables[i:i+1, 0:1] = 1.0
-                        # keep the DG flux and compatibility terms active immediately after damage initiation (since delta = 0.0)
-                        self.internal_variables[i:i+1, 1:2] = 0.0
-                        # update the internal variables at damage initiation
-                        self.internal_variables[i:i+1, 3:4] = self.material.compute_effective_force(rp_left_interface, rp_right_interface, forces_left_interface, forces_right_interface, moments_left_interface, moments_right_interface)
-                        self.internal_variables[i:i+1, 4:7] = r_jump_interface.T
-                        self.internal_variables[i:i+1, 7:10] = rp_jump_interface.T
-                    else: # no damage at the interface
-                        self.internal_variables[i:i+1, 1:2] = 0.0
-                else: # damage already initiated at the interface (loading | unloading | damage after recontact)
-                    # effective separation at the interface
-                    delta = self.material.compute_effective_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                    if (delta == 0.0): # fall back to DG terms
-                        self.internal_variables[i:i+1, 1:2] = 0.0
-                    else: # perform CZM calculations
-                        self.internal_variables[i:i+1, 1:2] = 1.0
-                        axial_jump = self.material.compute_axial_separation(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI=self.internal_variables[i:i+1, 4:7].T)
-                        if (axial_jump < 0.0): # recontact at the interface - NOT USING THIS ONE FOR NOW!!!
-                            self.internal_variables[i:i+1, 10:11] = 0.0
-                        else:
-                            self.internal_variables[i:i+1, 10:11] = 1.0
-                        # evaluate cohesive forces according to the TSL
-                        cohesive_axial_forces = self.material.compute_cohesive_axial_forces(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                        # compute the cohesive forces and bending moments
-                        if ((delta >= self.material.delta_c) or (self.internal_variables[i:i+1, 2:3] == self.material.delta_c)): # for complete damage
-                            interface_constrained_shear_forces = np.zeros(average_forces_interface.shape)
-                        else:
-                            effective_unit_tangent_interface = self.material.compute_effective_unit_tangent(rp_left_interface, rp_right_interface)
-                            tangeff_dyd_tangeff = np.matmul(effective_unit_tangent_interface, np.transpose(effective_unit_tangent_interface))
-                            interface_constrained_shear_forces = np.matmul((np.eye(3)-tangeff_dyd_tangeff), average_forces_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul((np.eye(3)-tangeff_dyd_tangeff), r_jump_interface))
-                        cohesive_forces = cohesive_axial_forces + interface_constrained_shear_forces
-                        cohesive_bending_moments = self.material.compute_cohesive_bending_moments(r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max=self.internal_variables[i:i+1, 2:3], position_jumps_DI=self.internal_variables[i:i+1, 4:7].T, tangent_jumps_DI=self.internal_variables[i:i+1, 7:10].T)
-                        if (update_internal):
-                            # update the maximum effective separation
-                            new_delta_max = self.material.compute_effective_maximum_separation(delta, delta_max=self.internal_variables[i:i+1, 2:3])
-                            self.internal_variables[i:i+1, 2:3] = new_delta_max
+            # compute the interface forces and moments
+            average_forces_interface, average_mxt4_interface, cohesive_forces, \
+                cohesive_bending_moments = self.__compute_interface_forces(
+                    element_unknowns_left, element_unknowns_right, 
+                    self.internal_variables[i:i+1, :], element_loads_info, update_internal)
             # DG FLUX AND COMPATIBILITY TERMS
             f[global_element_dofs_left] += (1.0-self.internal_variables[i:i+1, 1:2])*(np.matmul(np.transpose(N_left_interface), average_forces_interface) + np.matmul(np.transpose(Np_left_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_left_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_left_interface), rp_jump_interface)))
             f[global_element_dofs_right] -= (1.0-self.internal_variables[i:i+1, 1:2])*(np.matmul(np.transpose(N_right_interface), average_forces_interface) + np.matmul(np.transpose(Np_right_interface), average_mxt4_interface) + (self.betaP*((self.material.E*self.material.A)/self.function_space.elL)*np.matmul(np.transpose(N_right_interface), r_jump_interface)) + (self.betaT*((self.material.E*self.material.I)/self.function_space.elL)*np.matmul(np.transpose(Np_right_interface), rp_jump_interface)))
@@ -433,11 +527,9 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         return dt1dd_Np, dt3dd_Np, dt3dd_Npp, dt5dd_Np, dt5dd_Npp, dt5dd_Nppp
 
     # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info,
-                                 update_internal=False):
+    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info):
         # compute system stiffness using the function in the parent class
-        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads_info,
-                                         update_internal)
+        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads_info)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = self.function_space.compute_shapes(1.0)
@@ -491,7 +583,7 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info):
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, Nxi_left_node, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_shapes(-1.0)
@@ -583,7 +675,7 @@ class EulerBernoulliWeakFormCG(WeakForm):
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info):
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, phixi_left_node = self.function_space.compute_lagrange_shapes(-1.0)
@@ -650,7 +742,7 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         self.Nxxx_right_interface = Nxixixi_right_interface*((1.0/self.function_space.jacobian)**3.0)
 
     # Function to compute interface forces
-    def compute_interface_forces(self, element_unknowns_left, element_unknowns_right):
+    def __compute_interface_forces(self, element_unknowns_left, element_unknowns_right):
         # dofs and their derivaitives at the interface
         # left side
         u_left = np.matmul(self.phi_left_interface, element_unknowns_left)
@@ -689,7 +781,7 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         return axial_forces_interface, shear_forces_interface, bending_moments_interface
 
     # Function to compute the system residual
-    def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads_info, update_internal=False):
+    def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads_info, update_internal):
         # compute system residual using the function in EulerBernoulliWeakFormCG
         super().compute_system_residual(f, system_unknowns, nodal_loads, element_loads_info,
                                         update_internal)
@@ -703,7 +795,7 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
             axial_forces_interface, shear_forces_interface, bending_moments_interface = \
-                self.compute_interface_forces(element_unknowns_left, element_unknowns_right)
+                self.__compute_interface_forces(element_unknowns_left, element_unknowns_right)
             # assemble the interface forces
             f[global_element_dofs_left] += \
                     np.matmul(np.transpose(self.phi_left_interface), axial_forces_interface) + \
@@ -715,11 +807,9 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
                     np.matmul(np.transpose(self.Nx_right_interface), bending_moments_interface)
 
     # Function to compute the system stiffness
-    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info,
-                                 update_internal=False):
+    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads_info):
         # compute system stiffness using the function in EulerBernoulliWeakFormCG
-        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads_info,
-                                         update_internal)
+        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads_info)
         # loop over the interfaces
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
@@ -787,7 +877,7 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info=None):
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads_info):
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, phixi_left_node = self.function_space.compute_lagrange_shapes(-1.0)
