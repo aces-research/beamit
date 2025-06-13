@@ -3,9 +3,6 @@ import numpy as np
 from beamit import FunctionSpace
 from beamit import WeakForm
 
-def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
-    return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
-
 class System:
     
     def __init__(self, function_space, material, betaP = 10.0, betaT = 10.0):
