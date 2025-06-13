@@ -58,6 +58,17 @@ class WeakForm(ABC):
                 A[np.ix_(global_element_dofs, global_element_dofs)
                   ] += self.compute_element_internal_stiffness(element_unknowns)
 
+    def add_nodal_loads_to_residual(self, f, system_unknowns, nodal_loads):
+        """
+        Add the nodal loads to the residual vector.
+
+        Parameters:
+            f: The residual vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+        """
+        f += nodal_loads
+
     @abstractmethod
     def compute_element_internal_forces(self, element_unknowns):
         """
@@ -149,6 +160,38 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         moment_integrand = np.matmul(Npt, mdist_cross_t4)
         r_el_dist_moments = np.sum(moment_integrand*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_dist_forces + r_el_dist_moments
+
+    # Function to add nodal loads to the residual
+    def add_nodal_loads_to_residual(self, f, system_unknowns, nodal_loads):
+        # update the contribution of external nodal moments to the residual
+        dofs = self.function_space.dof
+        updated_nodal_loads = np.zeros(nodal_loads.shape)
+        # loop over the nodes
+        for i in range(0, self.function_space.N):
+            updated_nodal_loads[dofs*i:(dofs*i)+3, :] += nodal_loads[dofs*i:(dofs*i)+3, :]
+            nodal_tangents = system_unknowns[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
+            t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
+            # compute the cross-product for the nodal moments
+            updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += cross_op(
+                nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
+        f += updated_nodal_loads
+
+    # Function to compute the system stiffness matrix
+    def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
+        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
+        # add the contribution of external nodal moments to the system stiffness
+        dofs = self.function_space.dof
+        # loop over the nodes
+        for i in range(0, self.function_space.N):
+            nodal_tangents = system_unknowns[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
+            nodal_moments = nodal_loads[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_rp_dyd_rp = np.matmul(nodal_tangents, np.transpose(nodal_tangents))
+            nodal_dt4dd_coeff = (np.eye(self.function_space.dim)/(nodal_tangents_L2**2.0)) - (
+                (2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
+            A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i) +
+              6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
 
     @staticmethod
     def _compute_residual_vectors(rp, rpp, rppp):

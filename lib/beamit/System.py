@@ -48,37 +48,15 @@ class System:
 
     def assemble_stiffness(self, A, solution, nodal_loads, element_loads=None):
         self.weak_form.compute_system_stiffness(A, solution, nodal_loads, element_loads)
-        if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
-                (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
-            dofs = self.weak_form.function_space.dof
-            # contribution of external nodal moments to the system stiffness
-            for i in range(0, self.weak_form.function_space.N):
-                nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
-                nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
-                nodal_moments = nodal_loads[(dofs*i)+3:(dofs*i)+6, :]
-                nodal_rp_dyd_rp = np.matmul(nodal_tangents, np.transpose(nodal_tangents))
-                nodal_dt4dd_coeff = (np.eye(self.weak_form.function_space.dim)/(nodal_tangents_L2**2.0)) - ((2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
-                A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads=None, update_internal=False):
         self.weak_form.compute_system_residual(
             f, solution, nodal_loads, element_loads, update_internal)
-        # add nodal forces to the residual
-        if ((type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
-                (type(self.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
-            dofs = self.weak_form.function_space.dof
-            updated_nodal_loads = np.zeros(nodal_loads.shape)
-            for i in range(0, self.weak_form.function_space.N):
-                updated_nodal_loads[dofs*i:(dofs*i)+3, :] += nodal_loads[dofs*i:(dofs*i)+3, :]
-                nodal_tangents = solution[(dofs*i)+3:(dofs*i)+6, :]
-                nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
-                t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
-                # compute the cross-product for the nodal moments
-                updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += \
-                            cross_op(nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
-            f += updated_nodal_loads
-        else:
-            f += nodal_loads
+        # add nodal loads to the residual
+        # Generally, the addition of nodal loads just involves a direction addition to the residual. 
+        # But for the TFKL geometrically exact weak form, a special treatment is needed which is 
+        # implemented in the following function in the respective weak form
+        self.weak_form.add_nodal_loads_to_residual(f, solution, nodal_loads)
 
     def assemble_mass(self, M, solution):
         self.weak_form.compute_system_mass(M, solution)
