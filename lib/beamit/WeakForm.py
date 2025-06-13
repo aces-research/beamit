@@ -1,9 +1,21 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 import numpy as np
 from beamit import Material
 
 def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
     return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
+
+class SolutionUpdateType(Enum):
+    """
+    Enum for the type of update to be applied to the solution.
+
+    Attributes:
+        ADD_DIS_ADD_ROT: Additive update to both displacements and rotations.
+        ADD_DIS_MUL_ROT: Additive update to displacements and multiplicative update to rotations.
+    """
+    ADD_DIS_ADD_ROT = 1
+    ADD_DIS_MUL_ROT = 2
 
 class WeakForm(ABC):
 
@@ -19,6 +31,8 @@ class WeakForm(ABC):
         self.function_space = function_space
         # the physical information
         self.material = material
+        # the type of update to be applied to the solution
+        self.solution_update_type = SolutionUpdateType.ADD_DIS_ADD_ROT
 
     def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads,
                                 update_internal):
