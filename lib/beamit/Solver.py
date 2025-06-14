@@ -100,8 +100,7 @@ class Solver(ABC):
         return x
 
     @abstractmethod
-    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
-              LSmaxiter=None):
+    def solve(self, *args, **kwargs):
         """
         Solve the system of equations using the specified method.
         """
@@ -115,7 +114,7 @@ class NewtonRaphsonSolver(Solver):
         # residual norm at the start of the iterations
         self.initial_residual_norm = 1.0
 
-    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
+    def solve(self, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
         # reset linear system before solving
         self.reset_system()
@@ -218,14 +217,6 @@ class DynamicSolver(Solver):
         self.acceleration = self.linear_system_solver(self.M, self.f)
         # update the system attributes
         self.system.update(self.solution)
-
-    @abstractmethod
-    def solve(self, dt=None, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
-              LSmaxiter=None):
-        """
-        Solve the system of equations using the specified method.
-        """
-        pass
 
 class ImplicitNewmarkSolver(DynamicSolver):
 
@@ -373,8 +364,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
-    def solve(self, dt, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06,
-              LSmaxiter=None):
+    def solve(self, dt):
         # if the time step size input is not provided
         if (dt == None):
             dt = self.stable_time_step
