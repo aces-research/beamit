@@ -5,6 +5,7 @@ import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
 import copy
+from beamit.WeakForm import SolutionUpdateType
 
 class Solver(ABC):
 
@@ -114,6 +115,20 @@ class NewtonRaphsonSolver(Solver):
         # residual norm at the start of the iterations
         self.initial_residual_norm = 1.0
 
+    def __update_solution(self, solution_increment):
+        """
+        Update the solution vector with the given increment.
+
+        Parameters:
+            solution_increment : The increment to be added to the current solution vector.
+        """
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+            self.solution += solution_increment
+        else:
+            raise NotImplementedError(
+                "Solution update type %s is not implemented in the Newton-Raphson solver." % 
+                self.system.weak_form.solution_update_type.name)
+
     def solve(self, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
         # reset linear system before solving
@@ -143,7 +158,9 @@ class NewtonRaphsonSolver(Solver):
             if (i == 0): # in the first iteration
                 static_condensation_forces = np.matmul(self.A[np.ix_(Neumann_dofs, Dirichlet_dofs)], Dirichlet_solution)
                 # add the Dirichlet solution to the overall solution vector
-                self.solution[Dirichlet_dofs] += Dirichlet_solution
+                solution_increment = np.zeros([self.system.nequations, 1])
+                solution_increment[Dirichlet_dofs] = Dirichlet_solution
+                self.__update_solution(solution_increment)
             else: # after the first iteration
                 static_condensation_forces = np.zeros([Neumann_dofs.shape[0], 1])
             # apply the Dirichlet BCs
@@ -162,9 +179,12 @@ class NewtonRaphsonSolver(Solver):
                 if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
-            solution_increment = self.linear_system_solver(self.A, (self.f)-static_condensation_forces, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
+            solution_increment = np.zeros([self.system.nequations, 1])
+            solution_increment[Neumann_dofs] = self.linear_system_solver(
+                self.A, (self.f)-static_condensation_forces, solver_type=LSsolver, 
+                precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # update the overall solution vector
-            self.solution[Neumann_dofs] += solution_increment
+            self.__update_solution(solution_increment)
             # assess convergence
             # the current residual (= f_ext - f_int)
             updated_residual = np.zeros([self.system.nequations, 1])
@@ -225,16 +245,72 @@ class ImplicitNewmarkSolver(DynamicSolver):
         DynamicSolver.__init__(self, system)
         # residual norm at the start of the iterations
         self.initial_residual_norm = 1.0
+        # constants for the Newmark time integration scheme
+        self.beta = 0.25
+        self.gamma = 0.50
+
+    def __initialize_state(self, dt):
+        """
+        Initialize the solution, velocity and acceleration vectors in the current step.
+
+        Parameters:
+            dt : The time step size.
+        """
+        # constants in the time integration scheme
+        c0 = 1.0/(self.beta*(dt**2.0))
+        c1 = (1.0-self.gamma)*dt
+        c2 = self.gamma*dt
+        c3 = (0.5-self.beta)*(dt**2.0)
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+            # initialize the solution, velocity and acceleration vectors
+            acceleration_prev = copy.deepcopy(self.acceleration)
+            self.acceleration = -((dt*self.velocity)+(c3*acceleration_prev))*c0
+            self.velocity += (c1*acceleration_prev) + \
+                (c2*self.acceleration)
+            ############## For the Dirichlet dofs ##############
+            # create the Dirichlet dof array
+            Dirichlet_dofs, _ = self.create_dof_arrays()
+            # generate the Dirichlet solution vector
+            Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[
+                Dirichlet_dofs]
+            # update the solution, velocity and acceleration of Dirichlet Dofs
+            self.solution[Dirichlet_dofs] += Dirichlet_solution
+            self.velocity[Dirichlet_dofs] += Dirichlet_solution*c0*c2
+            self.acceleration[Dirichlet_dofs] += Dirichlet_solution*c0
+        else:
+            raise NotImplementedError(
+                "Solution update type %s is not implemented in the Implicit Newmark solver." %
+                self.system.weak_form.solution_update_type.name)
+
+    def __update_state(self, dt, solution_increment_neumann):
+        """
+        Update the solution, velocity and acceleration vectors with the given increment for Neumann dofs.
+
+        Parameters:
+            dt : The time step size.
+            solution_increment_neumann : The increment to be added to the current solution vector for Neumann dofs.
+        """
+        # constants in the time integration scheme
+        c0 = self.gamma/(self.beta*dt)
+        c1 = 1.0/(self.beta*(dt**2.0))
+        # create the Neumann dof array
+        _, Neumann_dofs = self.create_dof_arrays()
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+            # update the solution, velocity and acceleration of Neumann Dofs
+            self.solution[Neumann_dofs] += solution_increment_neumann
+            self.velocity[Neumann_dofs] += c0*solution_increment_neumann
+            self.acceleration[Neumann_dofs] += c1*solution_increment_neumann
+        else:
+            raise NotImplementedError(
+                "Solution update type %s is not implemented in the Implicit Newmark solver." %
+                self.system.weak_form.solution_update_type.name)
 
     def solve(self, dt, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
         # constants in the time integration scheme
-        c0 = 1.0/(beta*(dt**2.0))
-        c1 = 1.0/(beta*dt)
-        c2 = (1.0/(2.0*beta)) - 1.0
-        c3 = (1.0-gamma)*dt
-        c4 = gamma*dt
-        c5 = (0.5-beta)*(dt**2.0)
+        c0 = 1.0/(self.beta*(dt**2.0))
+        c1 = 1.0/(self.beta*dt)
+        c2 = (1.0/(2.0*self.beta)) - 1.0
         # reset the system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -246,20 +322,8 @@ class ImplicitNewmarkSolver(DynamicSolver):
             # generate the nodal load vector
             nodal_loads = np.zeros([self.system.nequations, 1])
             nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
-            # generate the Dirichlet solution vector
-            Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
-            # update the solution, velocity and acceleration of Dirichlet Dofs
-            # Assuming only displacements are applied at the Dirichlet boundaries!!!
-            acceleration_prev_Dirichlet = copy.deepcopy(self.acceleration[Dirichlet_dofs])
-            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
-            self.acceleration[Dirichlet_dofs] = (Dirichlet_solution - (dt*velocity_prev_Dirichlet) - (c5*acceleration_prev_Dirichlet))*c0
-            self.velocity[Dirichlet_dofs] = velocity_prev_Dirichlet + (c3*acceleration_prev_Dirichlet) + (c4*self.acceleration[Dirichlet_dofs])
-            self.solution[Dirichlet_dofs] += Dirichlet_solution
-            # initialize total solution increment in the current step
-            solution_step = np.zeros([Neumann_dofs.shape[0], 1])
-            # velocity and acceleration of the Neumann Dofs from the previous step
-            velocity_prev_Neumann = copy.deepcopy(self.velocity[Neumann_dofs])
-            acceleration_prev_Neumann = copy.deepcopy(self.acceleration[Neumann_dofs])
+            # initialize the solution, velocity and acceleration vectors
+            self.__initialize_state(dt)
         # calculate the initial residual norm
         initial_residual = np.zeros([self.system.nequations, 1])
         self.system.assemble_residual(initial_residual, self.solution, nodal_loads)
@@ -295,13 +359,11 @@ class ImplicitNewmarkSolver(DynamicSolver):
                 if ((log_det_A == np.inf) or (log_det_A == -np.inf)):
                     sys.exit("\nInstability encountered in the system.")
             # solve the linear system
-            solution_increment = self.linear_system_solver(self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
-            # update the total solution increment in the current step
-            solution_step += solution_increment
-            # update the overall solution, velocity and acceleration vectors of the Neumann Dofs
-            self.solution[Neumann_dofs] += solution_increment
-            self.acceleration[Neumann_dofs] = (c0*solution_step) - (c1*velocity_prev_Neumann) - (c2*acceleration_prev_Neumann)
-            self.velocity[Neumann_dofs] = velocity_prev_Neumann + (c3*acceleration_prev_Neumann) + (c4*self.acceleration[Neumann_dofs])
+            solution_increment_neumann = self.linear_system_solver(
+                self.A, self.f, solver_type=LSsolver, precon_type=LSprecon, 
+                tol=LStol, maxiter=LSmaxiter)
+            # update the state of the system
+            self.__update_state(dt, solution_increment_neumann)
             # assess convergence
             # the current residual (= f_external - f_internal - f_inertial)
             updated_residual = np.zeros([self.system.nequations, 1])
@@ -364,6 +426,59 @@ class ExplicitNewmarkSolver(DynamicSolver):
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
+    def __initialize_state(self, dt):
+        """
+        Initialize the solution, velocity and acceleration vectors in the current step.
+
+        Parameters:
+            dt : The time step size.
+        """
+        # create the Dirichlet and Neumann dof arrays
+        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+            ############# For the Dirichlet dofs #############
+            # generate the Dirichlet solution vector
+            Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[
+                Dirichlet_dofs]
+            solution_prev_Dirichlet = copy.deepcopy(
+                self.solution[Dirichlet_dofs])
+            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
+            self.solution[Dirichlet_dofs] += Dirichlet_solution
+            self.velocity[Dirichlet_dofs] = (
+                self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
+            self.acceleration[Dirichlet_dofs] = (
+                self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
+            ############# For the Neumann dofs #############
+            solution_increment_neumann = (dt*self.velocity[Neumann_dofs]) + (
+                ((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
+            self.solution[Neumann_dofs] += solution_increment_neumann
+            self.velocity[Neumann_dofs] += ((dt/2.0)
+                                            * self.acceleration[Neumann_dofs])
+        else:
+            raise NotImplementedError(
+                "Solution update type %s is not implemented in the Explicit Newmark solver." %
+                self.system.weak_form.solution_update_type.name)
+
+    def __update_state(self, dt, accelerations_neumann):
+        """
+        Update the velocity and acceleration vectors of the Neumann dofs.
+
+        Parameters:
+            dt : The time step size.
+            accelerations_neumann : The accelerations to be applied to the Neumann dofs.
+        """
+        # create the Neumann dof array
+        _, Neumann_dofs = self.create_dof_arrays()
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+            # update the velocity and acceleration of Neumann Dofs
+            self.acceleration[Neumann_dofs] = accelerations_neumann
+            self.velocity[Neumann_dofs] += ((dt/2.0)
+                                            * self.acceleration[Neumann_dofs])
+        else:
+            raise NotImplementedError(
+                "Solution update type %s is not implemented in the Explicit Newmark solver." %
+                self.system.weak_form.solution_update_type.name)
+
     def solve(self, dt):
         # if the time step size input is not provided
         if (dt == None):
@@ -374,29 +489,18 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # reset the system before solving
         Solver.reset_system(self)
         # create the Dirichlet and Neumann global dof arrays
-        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        _, Neumann_dofs = self.create_dof_arrays()
         # generate the nodal load vector
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
-        # generate the Dirichlet solution vector
-        Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
-        # Assuming only displacements are applied at the Dirichlet boundaries!!!
         # the PREDICTOR
-        solution_prev_Dirichlet = copy.deepcopy(self.solution[Dirichlet_dofs])
-        velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
-        # for the Dirichlet DoFs
-        self.solution[Dirichlet_dofs] += Dirichlet_solution
-        self.velocity[Dirichlet_dofs] = (self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
-        self.acceleration[Dirichlet_dofs] = (self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
-        # for the Neumann DoFs
-        self.solution[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
-        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+        self.__initialize_state(dt)
         # assemble the residual
         self.system.assemble_residual(
             self.f, self.solution, nodal_loads, element_loads=None, update_internal=True)
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
-        self.acceleration[Neumann_dofs] = self.f[Neumann_dofs] / self.lumpedMass[Neumann_dofs]
-        self.velocity[Neumann_dofs] += ((dt/2.0)*self.acceleration[Neumann_dofs])
+        accelerations_neumann = self.f[Neumann_dofs]/self.lumpedMass[Neumann_dofs]
+        self.__update_state(dt, accelerations_neumann)
         # update the system attributes
         self.system.update(self.solution)
