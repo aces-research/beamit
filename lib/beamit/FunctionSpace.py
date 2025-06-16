@@ -447,15 +447,15 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
         self.nodes = np.zeros([self.N, self.dim])
         # the number of quadrature points (Gauss quadrature, degree of exactness = 2)
         self.Q = 2
-        # the shape functions evaluated at quadrature points (size = (integration points, dimensions, total dofs))
-        self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dof])
-        # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, total dofs))
+        # the shape functions evaluated at quadrature points (size = (integration points, dimensions, translational/rotational dofs))
+        self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dim])
+        # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, translational/rotational dofs))
         self.shape_first_gradients = np.zeros(
-            [self.Q, self.dim, self.npel*self.dof])
+            [self.Q, self.dim, self.npel*self.dim])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
         self.jacobian = self.elL / 2.0
-        # the integration jacobian x weight for quadrature points (size = (integration points, total dofs, 1))
-        self.JxW = np.ones([self.Q, self.npel*self.dof, 1])
+        # the integration jacobian x weight for quadrature points (size = (integration points, translational/rotational dofs, 1))
+        self.JxW = np.ones([self.Q, self.npel*self.dim, 1])
 
     def compute_shapes(self, xi):
         """
@@ -466,13 +466,17 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
             shape_functions: The shape functions evaluated at the point xi
             shape_first_gradients: The first gradients of the shape functions evaluated at the point xi
         """
-        Nu1 = 0.50*(1.0 - xi)
-        Nu2 = 0.50*(1.0 + xi)
-        Nu1_xi = -0.50
-        Nu2_xi = 0.50
-        shape_functions = np.array([[Nu1, 0.0, 0.0, Nu2, 0.0, 0.0]])
-        shape_first_gradients = np.array(
-            [[Nu1_xi, 0.0, 0.0, Nu2_xi, 0.0, 0.0]])
+        N1 = 0.50*(1.0 - xi)
+        N2 = 0.50*(1.0 + xi)
+        N1_xi = -0.50
+        N2_xi = 0.50
+        # elemental shape function and gradient matrices
+        shape_functions = np.array([[N1, 0.0, 0.0, N2, 0.0, 0.0],
+                                    [0.0, N1, 0.0, 0.0, N2, 0.0],
+                                    [0.0, 0.0, N1, 0.0, 0.0, N2]])
+        shape_first_gradients = np.array([[N1_xi, 0.0, 0.0, N2_xi, 0.0, 0.0],
+                                          [0.0, N1_xi, 0.0, 0.0, N2_xi, 0.0],
+                                          [0.0, 0.0, N1_xi, 0.0, 0.0, N2_xi]])
         return shape_functions, shape_first_gradients
 
     def discretize(self):
