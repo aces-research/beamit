@@ -29,6 +29,10 @@ class FunctionSpace(ABC):
         self.npel = None
         # global connectivity (element number -> global dof number)
         self.global_connectivity = None
+        # local translational dof numbers
+        self.local_translational_dofs = None
+        # local rotational dof numbers
+        self.local_rotational_dofs = None
         # the discretization nodes of the beam
         self.nodes = None
         # length of the elements
@@ -107,6 +111,10 @@ class TFKLGeometricallyExactFunctionSpace(FunctionSpace):
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+        # local translational dof numbers
+        self.local_translational_dofs = np.array([0, 1, 2, 6, 7, 8], dtype=np.int64)
+        # local rotational dof numbers
+        self.local_rotational_dofs = np.array([3, 4, 5, 9, 10, 11], dtype=np.int64)
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
@@ -254,6 +262,10 @@ class EulerBernoulliFunctionSpace(FunctionSpace):
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+        # local translational dof numbers
+        self.local_translational_dofs = np.array([0, 1, 3, 4], dtype=np.int64)
+        # local rotational dof numbers
+        self.local_rotational_dofs = np.array([2, 5], dtype=np.int64)
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # the number of quadrature points (Gauss quadrature, degree of exactness = 6)
@@ -427,6 +439,10 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
             for i in range(0, self.E):
                 self.global_connectivity[i:i+1,
                                          :] = global_dofs[dofspel*i:(dofspel*i)+dofspel]
+        # local translational dof numbers
+        self.local_translational_dofs = np.array([0, 1, 2, 6, 7, 8], dtype=np.int64)
+        # local rotational dof numbers
+        self.local_rotational_dofs = np.array([3, 4, 5, 9, 10, 11], dtype=np.int64)
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # the number of quadrature points (Gauss quadrature, degree of exactness = 2)
