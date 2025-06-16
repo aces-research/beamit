@@ -11,11 +11,11 @@ class SolutionUpdateType(Enum):
     Enum for the type of update to be applied to the solution.
 
     Attributes:
-        ADD_DIS_ADD_ROT: Additive update to both displacements and rotations.
-        ADD_DIS_MUL_ROT: Additive update to displacements and multiplicative update to rotations.
+        ADD_TNS_ADD_ROT: Additive update to both translations and rotations.
+        ADD_TNS_MUL_ROT: Additive update to translations and multiplicative update to rotations.
     """
-    ADD_DIS_ADD_ROT = 1
-    ADD_DIS_MUL_ROT = 2
+    ADD_TNS_ADD_ROT = 1
+    ADD_TNS_MUL_ROT = 2
 
 class WeakForm(ABC):
 
@@ -32,7 +32,7 @@ class WeakForm(ABC):
         # the physical information
         self.material = material
         # the type of update to be applied to the solution
-        self.solution_update_type = SolutionUpdateType.ADD_DIS_ADD_ROT
+        self.solution_update_type = SolutionUpdateType.ADD_TNS_ADD_ROT
 
     def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads,
                                 update_internal):
@@ -369,8 +369,8 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
                                        moments_right_interface, element_internal_variables, 
                                        update_internal):
         # initialize cohesive forces and bending moments
-        cohesive_forces = np.zeros((self.function_space.dim, 1))
-        cohesive_bending_moments = np.zeros((self.function_space.dim, 1))
+        cohesive_forces = np.zeros([self.function_space.dim, 1])
+        cohesive_bending_moments = np.zeros([self.function_space.dim, 1])
         # perform CZM checks and calculations in the case of a cohesive interface material
         if ((isinstance(self.material, (Material.TFKLCohesiveInterfaceMaterial))) and update_internal):
             # position and tangent jumps at the interface

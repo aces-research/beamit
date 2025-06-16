@@ -122,7 +122,7 @@ class NewtonRaphsonSolver(Solver):
         Parameters:
             solution_increment : The increment to be added to the current solution vector.
         """
-        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             self.solution += solution_increment
         else:
             raise NotImplementedError(
@@ -261,7 +261,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         c1 = (1.0-self.gamma)*dt
         c2 = self.gamma*dt
         c3 = (0.5-self.beta)*(dt**2.0)
-        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             # initialize the solution, velocity and acceleration vectors
             acceleration_prev = copy.deepcopy(self.acceleration)
             self.acceleration = -((dt*self.velocity)+(c3*acceleration_prev))*c0
@@ -295,7 +295,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         c1 = 1.0/(self.beta*(dt**2.0))
         # create the Neumann dof array
         _, Neumann_dofs = self.create_dof_arrays()
-        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             # update the solution, velocity and acceleration of Neumann Dofs
             self.solution[Neumann_dofs] += solution_increment_neumann
             self.velocity[Neumann_dofs] += c0*solution_increment_neumann
@@ -435,7 +435,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         """
         # create the Dirichlet and Neumann dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
-        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             ############# For the Dirichlet dofs #############
             # generate the Dirichlet solution vector
             Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[
@@ -469,7 +469,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         """
         # create the Neumann dof array
         _, Neumann_dofs = self.create_dof_arrays()
-        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_DIS_ADD_ROT):
+        if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             # update the velocity and acceleration of Neumann Dofs
             self.acceleration[Neumann_dofs] = accelerations_neumann
             self.velocity[Neumann_dofs] += ((dt/2.0)
