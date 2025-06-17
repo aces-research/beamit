@@ -103,6 +103,15 @@ class WeakForm(ABC):
         """
         pass
 
+    def update_bulk_internal_variables(self, system_unknowns_increment):
+        """
+        Update the internal variables in the weak form based on the increment in the system unknowns.
+
+        Parameters:
+            system_unknowns_increment: The increment in the system unknowns.
+        """
+        pass
+
 class TFKLGeometricallyExactWeakFormCG(WeakForm):
     
     def __init__(self, function_space, material):
