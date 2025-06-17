@@ -5,6 +5,7 @@ import scipy.sparse.linalg as spla
 from scipy.sparse import csc_matrix
 import sys
 import copy
+import quaternion
 from beamit.WeakForm import SolutionUpdateType
 
 class Solver(ABC):
@@ -23,6 +24,15 @@ class Solver(ABC):
         self.bctypes = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof], dtype=np.int64)
         # boundary condition values matrix
         self.bcvalues = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
+        # translational and rotational dof indices
+        dofspel = self.system.weak_form.function_space.npel * \
+            self.system.weak_form.function_space.dof  # dofs per element
+        self.translational_dof_indices = np.concatenate(
+            [self.system.weak_form.function_space.local_translational_dofs + 
+             dofspel*i for i in range(self.system.weak_form.function_space.N)])
+        self.rotational_dof_indices = np.concatenate(
+            [self.system.weak_form.function_space.local_rotational_dofs + 
+             dofspel*i for i in range(self.system.weak_form.function_space.N)])
 
     # Function to initialize unknowns to the undeformed state of the beam
     def initialize(self):
@@ -124,10 +134,33 @@ class NewtonRaphsonSolver(Solver):
         """
         if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
             self.solution += solution_increment
+        elif (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_MUL_ROT):
+            # perform additive update for translations
+            self.solution[self.translational_dof_indices] += \
+                solution_increment[self.translational_dof_indices]
+            # perform multiplicative update for rotations
+            rotation_solution = self.solution[self.rotational_dof_indices]
+            rotation_increment = solution_increment[self.rotational_dof_indices]
+            rotation_solution_vectors = rotation_solution.reshape([-1, 3])
+            rotation_increment_vectors = rotation_increment.reshape([-1, 3])
+            # convert the rotation vectors to quaternions
+            rotation_solution_quats = quaternion.from_rotation_vector(rotation_solution_vectors)
+            rotation_increment_quats = quaternion.from_rotation_vector(rotation_increment_vectors)
+            # update the rotations using quaternion multiplication
+            # NOTE: Here, we need to be careful with the order of multiplication since quaternion
+            # multiplication is not commutative!!!
+            updated_rotation_quats = rotation_increment_quats * rotation_solution_quats
+            # convert the updated quaternions back to rotation vectors
+            updated_rotation_vectors = quaternion.as_rotation_vector(updated_rotation_quats)
+            # update the solution vector with the updated rotation vectors
+            self.solution[self.rotational_dof_indices] = updated_rotation_vectors.reshape([-1, 1])
         else:
             raise NotImplementedError(
                 "Solution update type %s is not implemented in the Newton-Raphson solver." % 
                 self.system.weak_form.solution_update_type.name)
+        # update the bulk internal variables in the weak form
+        self.system.weak_form.update_bulk_internal_variables(
+            solution_increment)
 
     def solve(self, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
