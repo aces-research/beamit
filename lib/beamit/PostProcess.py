@@ -185,5 +185,5 @@ def write_output_vtk(output_file, system):
     linesToVTK(output_file, x_plot, y_plot, z_plot, pointData = {"displacements": (disp_x_plot, disp_y_plot, disp_z_plot), \
                                                     "forces": (internal_loads_x_plot, internal_loads_y_plot, internal_loads_z_plot), \
                                                     "moments": (internal_moments_x_plot, internal_moments_y_plot, internal_moments_z_plot), \
-                                                    "damage status": damage_status})
+                                                    "damage": damage_status})
     print("\nOutput file is generated.")

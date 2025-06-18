@@ -18,7 +18,7 @@ files.sort(key=lambda x: int(x.split("output-")[-1].split(".")[0]))
 
 # create a new 'XML Unstructured Grid Reader'
 output = XMLUnstructuredGridReader(registrationName='output-*', FileName=files)
-output.PointArrayStatus = ['displacements', 'forces', 'moments', 'damage status']
+output.PointArrayStatus = ['displacements', 'forces', 'moments', 'damage']
 
 # get animation scene
 animationScene = GetAnimationScene()
