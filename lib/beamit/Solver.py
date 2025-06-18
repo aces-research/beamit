@@ -25,14 +25,28 @@ class Solver(ABC):
         # boundary condition values matrix
         self.bcvalues = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
         # translational and rotational dof indices
-        dofspel = self.system.weak_form.function_space.npel * \
-            self.system.weak_form.function_space.dof  # dofs per element
-        self.translational_dof_indices = np.concatenate(
-            [self.system.weak_form.function_space.local_translational_dofs + 
-             dofspel*i for i in range(self.system.weak_form.function_space.N)])
-        self.rotational_dof_indices = np.concatenate(
-            [self.system.weak_form.function_space.local_rotational_dofs + 
-             dofspel*i for i in range(self.system.weak_form.function_space.N)])
+        if (self.system.weak_form.function_space.discretization_type == "CG"):
+            dof = self.system.weak_form.function_space.dof
+            # number of translational and rotational dofs per node
+            num_tns_dofs = (int)(self.system.weak_form.function_space.local_translational_dofs.size /
+                                 self.system.weak_form.function_space.npel)
+            num_rot_dofs = (int)(self.system.weak_form.function_space.local_rotational_dofs.size /
+                                 self.system.weak_form.function_space.npel)
+            self.translational_dof_indices = np.concatenate(
+                [self.system.weak_form.function_space.local_translational_dofs[0:num_tns_dofs] +
+                dof*i for i in range(self.system.weak_form.function_space.N)])
+            self.rotational_dof_indices = np.concatenate(
+                [self.system.weak_form.function_space.local_rotational_dofs[0:num_rot_dofs] +
+                dof*i for i in range(self.system.weak_form.function_space.N)])
+        elif (self.system.weak_form.function_space.discretization_type == "DG"):
+            dofspel = self.system.weak_form.function_space.npel * \
+                self.system.weak_form.function_space.dof  # dofs per element
+            self.translational_dof_indices = np.concatenate(
+                [self.system.weak_form.function_space.local_translational_dofs + 
+                dofspel*i for i in range(self.system.weak_form.function_space.E)])
+            self.rotational_dof_indices = np.concatenate(
+                [self.system.weak_form.function_space.local_rotational_dofs + 
+                dofspel*i for i in range(self.system.weak_form.function_space.E)])
 
     # Function to initialize unknowns to the undeformed state of the beam
     def initialize(self):
