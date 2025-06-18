@@ -4,9 +4,9 @@ from beamit import FunctionSpace
 from beamit import WeakForm
 
 class System:
-    
+
     def __init__(self, function_space, material, betaP = 10.0, betaT = 10.0):
-        # use TFKL Geometrically Exact Function Space for TFKL geometrically exact function space
+        # use TFKL geometrically exact weak form for TFKL geometrically exact function space
         if (type(function_space) == FunctionSpace.TFKLGeometricallyExactFunctionSpace):
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
@@ -18,7 +18,11 @@ class System:
             else:
                 sys.exit("\nBeam KLTF weak form of the discretization is not available.")
             # the initial state of the system
-            self.state = self.initialize_state()
+            self.state = np.zeros(
+                [self.weak_form.function_space.N, self.weak_form.function_space.dof])
+            self.state[:, 0:3] = self.weak_form.function_space.nodes
+            # assuming initially straight beams are along the x-axis!!!
+            self.state[:, 3:4] = 1.0
         # use Euler-Bernoulli (EB) weak form for EB function space
         elif (type(function_space) == FunctionSpace.EulerBernoulliFunctionSpace):
             if (function_space.discretization_type == "CG"):
@@ -28,20 +32,24 @@ class System:
                 self.weak_form = WeakForm.EulerBernoulliWeakFormDG(function_space, material, betaP)
             else:
                 sys.exit("\nEuler-Bernoulli weak form of the discretization is not available.")
-            self.state = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
+            # the initial state of the system
+            self.state = np.zeros(
+                [self.weak_form.function_space.N, self.weak_form.function_space.dof])
+        # use shear flexible geometrically exact weak form for shear flexible geometrically exact function space
+        elif (type(function_space) == FunctionSpace.ShearFlexibleGeometricallyExactFunctionSpace):
+            if (function_space.discretization_type == "CG"):
+                # the continuous Galerkin weak form
+                self.weak_form = WeakForm.ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
+            else:
+                sys.exit("\nShear flexible geometrically exact weak form of the discretization is not available.")
+            # the initial state of the system
+            self.state = np.zeros(
+                [self.weak_form.function_space.N, self.weak_form.function_space.dof])
+            self.state[:, 0:3] = self.weak_form.function_space.nodes
         # the internal forces of the system
         self.internal_forces = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
         # the number of equations
         self.nequations = self.weak_form.function_space.N*self.weak_form.function_space.dof
-
-    # Function to initialize the state of the system
-    def initialize_state(self):
-        initial_state = np.zeros([self.weak_form.function_space.N, self.weak_form.function_space.dof])
-        # set the initial positions as the nodal co-ordinates
-        initial_state[:, 0:3] = self.weak_form.function_space.nodes
-        # assuming initially straight beams are along the x-axis!!!
-        initial_state[:, 3:4] = 1.0
-        return initial_state
 
     def assemble_stiffness(self, A, solution, nodal_loads, element_loads=None):
         self.weak_form.compute_system_stiffness(A, solution, nodal_loads, element_loads)
