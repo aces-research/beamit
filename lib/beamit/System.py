@@ -48,7 +48,7 @@ class System:
 
     def assemble_residual(self, f, solution, nodal_loads, element_loads=None, update_internal=False):
         self.weak_form.compute_system_residual(
-            f, solution, nodal_loads, element_loads, update_internal)
+            f, solution, element_loads, update_internal)
         # add nodal loads to the residual
         # Generally, the addition of nodal loads just involves a direction addition to the residual. 
         # But for the TFKL geometrically exact weak form, a special treatment is needed which is 

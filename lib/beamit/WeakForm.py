@@ -34,15 +34,13 @@ class WeakForm(ABC):
         # the type of update to be applied to the solution
         self.solution_update_type = SolutionUpdateType.ADD_TNS_ADD_ROT
 
-    def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads,
-                                update_internal):
+    def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         """
         Compute the system residual based on the provided unknowns and element loads information.
 
         Parameters:
             f: The residual vector to be assembled.
             system_unknowns: The unknowns of the system.
-            nodal_loads: The nodal loads applied to the system.
             element_loads: The distributed loads on the elements.
             update_internal: If True, update the internal variables in the weak form.
         """
@@ -514,11 +512,9 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
         return cohesive_forces, cohesive_bending_moments
 
     # Function to compute the system residual
-    def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads,
-                                update_internal):
+    def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         # compute system residual using the function in the parent class
-        super().compute_system_residual(f, system_unknowns, nodal_loads, element_loads,
-                                        update_internal)
+        super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # add the contributions of jump terms at the interfaces to the residual
         # shape functions and their derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, _, _ = self.function_space.compute_shapes(1.0)
@@ -847,10 +843,9 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
         return axial_forces_interface, shear_forces_interface, bending_moments_interface
 
     # Function to compute the system residual
-    def compute_system_residual(self, f, system_unknowns, nodal_loads, element_loads, update_internal):
+    def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         # compute system residual using the function in EulerBernoulliWeakFormCG
-        super().compute_system_residual(f, system_unknowns, nodal_loads, element_loads,
-                                        update_internal)
+        super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # loop over the interfaces
         for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
