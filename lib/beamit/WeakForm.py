@@ -1232,7 +1232,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         return element_material_stiffness
 
     def __compute_element_geometric_stiffness(self, element_unknowns, element_orientations, 
-                                      element_curvatures):
+                                              element_curvatures):
         element_geometric_stiffness = np.zeros(
             [self.function_space.dof*self.function_space.npel, 
              self.function_space.dof*self.function_space.npel])
@@ -1315,3 +1315,19 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                   ] += self.compute_element_internal_stiffness(element_unknowns, 
                                                                self.orientation[i, :, :], 
                                                                self.curvature[i, :, :])
+
+    # Function to compute the system nodal forces
+    # Computed by approaching every node from the left side!!!
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
+        _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
+        Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
+        _, Nxi_right_node = self.function_space.compute_shapes(1.0)
+        Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            global_element_dofs_left_node = global_element_dofs[0:dofs]
+            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
+            # IMPLEMENT THIS FUNCTION FOR GETTING FORCE AND MOMENT OUTPUTS LATER!!!
