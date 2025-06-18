@@ -6,6 +6,29 @@ from beamit import Material
 def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
     return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
 
+def skew_symmetric_matrices(vectors):
+        """
+        Given an (n, 3) array of **vectors**, return an (n, 3, 3) array of their skew-symmetric matrix form.
+        """
+        # check if vectors have shape (n, 3)
+        if (vectors.ndim != 2 or vectors.shape[1] != 3):
+            raise ValueError("Input must be an (n, 3) array of vectors.")
+
+        n = vectors.shape[0]
+        x = vectors[:, 0]
+        y = vectors[:, 1]
+        z = vectors[:, 2]
+
+        skew = np.zeros((n, 3, 3), dtype=vectors.dtype)
+        skew[:, 0, 1] = -z
+        skew[:, 0, 2] = y
+        skew[:, 1, 0] = z
+        skew[:, 1, 2] = -x
+        skew[:, 2, 0] = -y
+        skew[:, 2, 1] = x
+
+        return skew
+
 class SolutionUpdateType(Enum):
     """
     Enum for the type of update to be applied to the solution.
