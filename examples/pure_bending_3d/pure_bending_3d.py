@@ -26,7 +26,7 @@ INITIAL_MOMENT = 10.0
 SPATIAL_TOLERANCE = 1.0E-10
 
 # the load / time steps and output
-load_steps = 500
+load_steps = 1000
 vtk_dump = 10
 
 if __name__ == "__main__":
