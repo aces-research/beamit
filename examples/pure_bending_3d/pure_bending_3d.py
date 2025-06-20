@@ -92,7 +92,7 @@ if __name__ == "__main__":
                 bcvalues[n, 5] = load_level * INITIAL_MOMENT
         solver.modify_boundary_condition_values(bcvalues)
         # solve the problem and update the system
-        solver.solve(Nmax=100, tol=1.0E-06)
+        solver.solve(Nmax=100, tol=1.0E-08)
         if ((i+1) % vtk_dump == 0):
             output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_output_vtk(output_file, system)
