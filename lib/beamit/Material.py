@@ -27,6 +27,7 @@ class ShearFlexibleMaterial:
         self.A_red = (5/6)*A
         # the torsional moment of inertia
         self.I_T = self.I + self.I_minor  # works for symmetrical cross-sections
+        print("\nCreated the material.")
 
 class TFKLMaterial(ShearFlexibleMaterial):
 
@@ -43,12 +44,12 @@ class TFKLMaterial(ShearFlexibleMaterial):
         """
         # initialize the parent (ShearFlexibleMaterial) class
         ShearFlexibleMaterial.__init__(
-            self, rho, E, nu=0.0, A=np.pi*(R**2.0), I=(np.pi*(R**4.0))/4.0, I_minor=(np.pi*(R**4.0))/4.0)
+            self, rho, E, nu=0.0, A=np.pi*(R**2.0), I=(np.pi*(R**4.0))/4.0, 
+            I_minor=(np.pi*(R**4.0))/4.0)
         self.rho = rho
         self.E = E
         self.R = R
         self.G = None # shear modulus is not defined for TFKLMaterial
-        print("\nCreated the material.")
 
 class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
 
