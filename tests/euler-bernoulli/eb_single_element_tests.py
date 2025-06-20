@@ -1,5 +1,5 @@
 import numpy as np
-from beamit import FunctionSpace, Material
+from beamit import FunctionSpace
 from beamit import Material
 from beamit import System
 
