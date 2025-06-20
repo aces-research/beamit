@@ -4,9 +4,6 @@ import numpy as np
 import quaternion
 from beamit import Material
 
-def cross_op(arr1: np.ndarray, arr2: np.ndarray, a: int, b: int, c: int) -> np.ndarray:
-    return np.cross(arr1, arr2, axisa=a, axisb=b, axisc=c)
-
 def skew_symmetric_matrices(vectors):
         """
         Given an (n, 3) array of **vectors**, return an (n, 3, 3) array of their skew-symmetric matrix form.
@@ -201,7 +198,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         t4 = rp/(rp_L2**2.0)
         force_integrand = np.matmul(Nt, el_dist_forces)
         r_el_dist_forces = np.sum(force_integrand*self.function_space.JxW, axis=0, keepdims=False)
-        mdist_cross_t4 = cross_op(el_dist_moments, t4, 1, 0, 1)
+        mdist_cross_t4 = np.cross(el_dist_moments, t4, axisa=1, axisb=0, axisc=1)
         moment_integrand = np.matmul(Npt, mdist_cross_t4)
         r_el_dist_moments = np.sum(moment_integrand*self.function_space.JxW, axis=0, keepdims=False)
         return r_el_dist_forces + r_el_dist_moments
@@ -218,8 +215,8 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             nodal_tangents_L2 = np.linalg.norm(nodal_tangents, ord=2, axis=0, keepdims=True)
             t4_nodal = nodal_tangents/(nodal_tangents_L2**2.0)
             # compute the cross-product for the nodal moments
-            updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += cross_op(
-                nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, 0, 0, 0)
+            updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += np.cross(
+                nodal_loads[(dofs*i)+3:(dofs*i)+6, :], t4_nodal, axis=0)
         f += updated_nodal_loads
 
     # Function to compute the system stiffness matrix
@@ -236,7 +233,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             nodal_dt4dd_coeff = (np.eye(self.function_space.dim)/(nodal_tangents_L2**2.0)) - (
                 (2.0*nodal_rp_dyd_rp)/(nodal_tangents_L2**4.0))
             A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i) +
-              6] -= cross_op(nodal_moments, nodal_dt4dd_coeff, 0, 0, 0)
+              6] -= np.cross(nodal_moments, nodal_dt4dd_coeff, axis=0)
 
     @staticmethod
     def _compute_residual_vectors(rp, rpp, rppp):
@@ -288,7 +285,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             if (element_loads == None): # No element loads
                 forces_right_node = (self.material.E*self.material.A*t1_right_node) + (self.material.E*self.material.I*t5_right_node)
             # moments at the right node
-            moments_right_node = self.material.E*self.material.I*(cross_op(rp_right_node, rpp_right_node, 0, 0, 0)/(rp_right_node_L2**2.0))
+            moments_right_node = self.material.E*self.material.I*(np.cross(rp_right_node, rpp_right_node, axis=0)/(rp_right_node_L2**2.0))
             f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
             # Assuming the elements are connected like a simple chain!!!
@@ -304,7 +301,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                 if (element_loads == None): # No element loads
                     forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
                 # moments at the left node
-                moments_left_node = self.material.E*self.material.I*(cross_op(rp_left_node, rpp_left_node, 0, 0, 0)/(rp_left_node_L2**2.0))
+                moments_left_node = self.material.E*self.material.I*(np.cross(rp_left_node, rpp_left_node, axis=0)/(rp_left_node_L2**2.0))
                 f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
                 f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
 
@@ -380,10 +377,10 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             forces_right_interface = (self.material.E*self.material.A*t1_right_interface) + (self.material.E*self.material.I*t5_right_interface)
         average_forces_interface = (forces_left_interface + forces_right_interface)/2.0
         # moments at the interface
-        moments_left_interface = self.material.E*self.material.I*(cross_op(rp_left_interface, rpp_left_interface, 0, 0, 0)/(rp_left_interface_L2**2.0))
-        moments_right_interface = self.material.E*self.material.I*(cross_op(rp_right_interface, rpp_right_interface, 0, 0, 0)/(rp_right_interface_L2**2.0))
-        mxt4_left_interface = cross_op(moments_left_interface, t4_left_interface, 0, 0, 0)
-        mxt4_right_interface = cross_op(moments_right_interface, t4_right_interface, 0, 0, 0)
+        moments_left_interface = self.material.E*self.material.I*(np.cross(rp_left_interface, rpp_left_interface, axis=0)/(rp_left_interface_L2**2.0))
+        moments_right_interface = self.material.E*self.material.I*(np.cross(rp_right_interface, rpp_right_interface, axis=0)/(rp_right_interface_L2**2.0))
+        mxt4_left_interface = np.cross(moments_left_interface, t4_left_interface, axis=0)
+        mxt4_right_interface = np.cross(moments_right_interface, t4_right_interface, axis=0)
         average_mxt4_interface = (mxt4_left_interface + mxt4_right_interface)/2.0
         # compute the cohesive forces and bending moments at the interface
         cohesive_forces, cohesive_bending_moments = self.__compute_CZM_interface_forces(
@@ -700,8 +697,8 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
                 forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
                 forces_right_node = (self.material.E*self.material.A*t1_right_node) + (self.material.E*self.material.I*t5_right_node)
             # moments at the nodes
-            moments_left_node = self.material.E*self.material.I*(cross_op(rp_left_node, rpp_left_node, 0, 0, 0)/(rp_left_node_L2**2.0))
-            moments_right_node = self.material.E*self.material.I*(cross_op(rp_right_node, rpp_right_node, 0, 0, 0)/(rp_right_node_L2**2.0))
+            moments_left_node = self.material.E*self.material.I*(np.cross(rp_left_node, rpp_left_node, axis=0)/(rp_left_node_L2**2.0))
+            moments_right_node = self.material.E*self.material.I*(np.cross(rp_right_node, rpp_right_node, axis=0)/(rp_right_node_L2**2.0))
             f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
             f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
             f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
@@ -1155,7 +1152,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         internal_moments_integrand = np.matmul(
             np.transpose(Np, axes=(0, 2, 1)), internal_moments)
         internal_moments_integrand -= np.matmul(
-            np.transpose(N, axes=(0, 2, 1)), cross_op(rp, internal_forces, 1, 1, 1))
+            np.transpose(N, axes=(0, 2, 1)), np.cross(rp, internal_forces, axis=1))
         element_internal_forces[self.function_space.local_rotational_dofs] += \
             np.sum(internal_moments_integrand *
                    self.function_space.JxW, axis=0, keepdims=False)
