@@ -16,26 +16,30 @@ E = 5.50E09
 R = 5.70E-04
 # length of beam
 L = 0.24
+# cohesive strength
+Sc = 25.0E06
+# fracture energy
+Gc = 1500.0
 # number of elements
-Nel = 10
+Nel = 100
 
 # applied loads and tolerances
 INITIAL_MOMENT = 0.006466
-SPATIAL_TOLERANCE = 1.0E-08
+SPATIAL_TOLERANCE = 1.0E-10
 
 # the load / time steps and output
 load_steps = 10
 static_dump = 10
-dt = 1.0E-06
+dt = 1.0E-07
 final_time = 1.0E-02
-dynamic_dump = 100
+dynamic_dump = 1000
 
 if __name__ == "__main__":
 
     start_time = time.time()
 
     # physical information (material parameters)
-    material = Material.TFKLMaterial(rho, E, R=R)
+    material = Material.TFKLCohesiveInterfaceMaterial(rho, E, R, Sc, Gc)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.TFKLGeometricallyExactFunctionSpace(0, L, Nel, discretization_type = "DG")
@@ -99,7 +103,7 @@ if __name__ == "__main__":
                 bcvalues[n, 5] = load_level * INITIAL_MOMENT
         static_solver.modify_boundary_condition_values(bcvalues)
         # solve the nonlinear static problem and update the system
-        static_solver.solve(Nmax=10, tol=1.0E-10)
+        static_solver.solve(Nmax=10, tol=1.0E-08)
         if ((i+1) % static_dump == 0):
             output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_output_vtk(output_file, system)
