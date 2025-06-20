@@ -330,18 +330,20 @@ def test_stiffness():
         # the geometric part of the stiffness matrix
         stiffness_expected[np.ix_(translation_dofs, rotation_dofs)] -= \
             np.matmul(np.transpose(shape_first_gradients), np.matmul(skew(
-                element_internal_forces[..., 0]), shape_first_gradients)) * (L/2) * quad_weights[i]
+                element_internal_forces[..., 0]), shapes)) * (L/2) * quad_weights[i]
         stiffness_expected[np.ix_(rotation_dofs, translation_dofs)] += \
-            np.matmul(np.transpose(shape_first_gradients), np.matmul(skew(
+            np.matmul(np.transpose(shapes), np.matmul(skew(
                 element_internal_forces[..., 0]), shape_first_gradients)) * (L/2) * quad_weights[i]
-        stiffness_expected[np.ix_(rotation_dofs, rotation_dofs)] += \
+        stiffness_expected[np.ix_(rotation_dofs, rotation_dofs)] -= \
             np.matmul(np.transpose(shape_first_gradients), np.matmul(skew(
                 element_internal_moments[..., 0]), shapes)) * (L/2) * quad_weights[i]
+        term4_pre_factor = np.outer(element_internal_forces, rp_element) - \
+            np.dot(element_internal_forces[..., 0],
+                   rp_element[..., 0])*np.eye(3)
         stiffness_expected[np.ix_(rotation_dofs, rotation_dofs)] += \
-            np.matmul(np.matmul(np.transpose(shape_first_gradients), skew(
-                rp_element[..., 0])), np.matmul(skew(element_internal_forces[..., 0]), 
-                                                shape_first_gradients)) * (L/2) * quad_weights[i]
-        
+            np.matmul(np.transpose(shapes), np.matmul(
+                term4_pre_factor, shapes)) * (L/2) * quad_weights[i]
+
     # check the stiffness matrix
     assert np.allclose(stiffness_computed, stiffness_expected, atol=NUMERICAL_TOLERANCE), \
         "Stiffness matrix computed does not match the expected stiffness matrix."

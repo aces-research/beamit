@@ -1230,10 +1230,10 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
         return element_material_stiffness
 
-    def __compute_element_geometric_stiffness(self, element_unknowns, element_orientations, 
+    def __compute_element_geometric_stiffness(self, element_unknowns, element_orientations,
                                               element_curvatures):
         element_geometric_stiffness = np.zeros(
-            [self.function_space.dof*self.function_space.npel, 
+            [self.function_space.dof*self.function_space.npel,
              self.function_space.dof*self.function_space.npel])
         N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
@@ -1248,7 +1248,6 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # compute the internal forces and moments
         internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
             element_unknowns, element_orientations, element_curvatures)
-        rp_skew_matrix = skew_symmetric_matrices(rp[..., 0])
         internal_forces_skew_matrix = skew_symmetric_matrices(
             internal_forces[..., 0])
         internal_moments_skew_matrix = skew_symmetric_matrices(
@@ -1256,27 +1255,32 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # force derivatives w.r.t the rotational dofs
         df_dtheta = -1.0 * \
             np.matmul(np.transpose(Np, axes=(0, 2, 1)),
-                      np.matmul(internal_forces_skew_matrix, Np))
+                      np.matmul(internal_forces_skew_matrix, N))
         element_geometric_stiffness[np.ix_(self.function_space.local_translational_dofs,
                                            self.function_space.local_rotational_dofs)] += \
             np.sum(df_dtheta*self.function_space.JxW, axis=0, keepdims=False)
         # moment derivatives w.r.t the translational dofs
-        dm_dd = np.matmul(np.transpose(Np, axes=(0, 2, 1)),
+        dm_dd = np.matmul(np.transpose(N, axes=(0, 2, 1)),
                           np.matmul(internal_forces_skew_matrix, Np))
         element_geometric_stiffness[np.ix_(self.function_space.local_rotational_dofs,
                                            self.function_space.local_translational_dofs)] += \
             np.sum(dm_dd*self.function_space.JxW, axis=0, keepdims=False)
         # moment derivatives w.r.t the rotational dofs
         ########## term 1 ##########
-        dm_dtheta_term1 = np.matmul(np.transpose(
+        dm_dtheta_term1 = -1.0 * np.matmul(np.transpose(
             Np, axes=(0, 2, 1)), np.matmul(internal_moments_skew_matrix, N))
         element_geometric_stiffness[np.ix_(self.function_space.local_rotational_dofs,
                                            self.function_space.local_rotational_dofs)] += \
             np.sum(dm_dtheta_term1*self.function_space.JxW, axis=0, keepdims=False)
         ########## term 2 ##########
-        dm_dtheta_term2_pre_multiplier = np.matmul(rp_skew_matrix, internal_forces_skew_matrix)
-        dm_dtheta_term2 = np.matmul(np.transpose(Np, axes=(0, 2, 1)),
-                                    np.matmul(dm_dtheta_term2_pre_multiplier, Np))
+        internal_forces_rp_outer = internal_forces @ np.transpose(
+            rp, axes=(0, 2, 1))
+        internal_forces_rp_dot = np.matmul(
+            np.transpose(internal_forces, (0, 2, 1)), rp)
+        dm_dtheta_term2_pre_multiplier = internal_forces_rp_outer - \
+            internal_forces_rp_dot * np.eye(3)[np.newaxis, :, :]
+        dm_dtheta_term2 = np.matmul(np.transpose(N, axes=(0, 2, 1)),
+                                    np.matmul(dm_dtheta_term2_pre_multiplier, N))
         element_geometric_stiffness[np.ix_(self.function_space.local_rotational_dofs,
                                            self.function_space.local_rotational_dofs)] += \
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
