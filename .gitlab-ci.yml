@@ -4,6 +4,8 @@ test:
   stage: test
   script:
     - export PYTHONPATH="${PYTHONPATH}:$PWD/lib"
+    - apt install -y python3-pip
+    - python3 -m pip install numpy-quaternion
     - cd tests
     - python3 -m pytest -vv .
   tags:
