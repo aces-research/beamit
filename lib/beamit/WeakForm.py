@@ -1113,11 +1113,9 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         C_F[:, 1, 1] = self.material.G * self.material.A_red
         C_F[:, 2, 2] = self.material.G * self.material.A_red
         # internal forces
-        internal_forces = np.matmul(np.transpose(
-            element_orientations_tensor, axes=(0, 2, 1)), element_strains)
-        internal_forces = np.matmul(C_F, internal_forces)
-        internal_forces = np.matmul(
-            element_orientations_tensor, internal_forces)
+        C_F_transformed = np.matmul(element_orientations_tensor, np.matmul(
+            C_F, np.transpose(element_orientations_tensor, axes=(0, 2, 1))))
+        internal_forces = np.matmul(C_F_transformed, element_strains)
         ################# internal moments #################
         # check if the element curvatures are of size (Q, dim)
         if (element_curvatures.shape != (self.function_space.Q, self.function_space.dim)):
@@ -1129,17 +1127,17 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         C_M[:, 1, 1] = self.material.E * self.material.I
         C_M[:, 2, 2] = self.material.E * self.material.I_minor
         # NOTE: Since the beam is initially straight, there is no initial curvature!!!
-        internal_moments = np.matmul(np.transpose(
-            element_orientations_tensor, axes=(0, 2, 1)), element_curvatures[..., None])
-        internal_moments = np.matmul(C_M, internal_moments)
+        C_M_transformed = np.matmul(element_orientations_tensor, np.matmul(
+            C_M, np.transpose(element_orientations_tensor, axes=(0, 2, 1))))
         internal_moments = np.matmul(
-            element_orientations_tensor, internal_moments)
+            C_M_transformed, element_curvatures[..., None])
         return internal_forces, internal_moments
 
     def compute_element_internal_forces(self, element_unknowns, element_orientations, 
                                         element_curvatures):
         element_internal_forces = np.zeros(
             [self.function_space.dof*self.function_space.npel, 1])
+        N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
         rp = np.matmul(
@@ -1157,7 +1155,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         internal_moments_integrand = np.matmul(
             np.transpose(Np, axes=(0, 2, 1)), internal_moments)
         internal_moments_integrand -= np.matmul(
-            np.transpose(Np, axes=(0, 2, 1)), cross_op(rp, internal_forces, 1, 1, 1))
+            np.transpose(N, axes=(0, 2, 1)), cross_op(rp, internal_forces, 1, 1, 1))
         element_internal_forces[self.function_space.local_rotational_dofs] += \
             np.sum(internal_moments_integrand *
                    self.function_space.JxW, axis=0, keepdims=False)
@@ -1167,6 +1165,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         element_material_stiffness = np.zeros(
             [self.function_space.dof*self.function_space.npel, 
              self.function_space.dof*self.function_space.npel])
+        N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
         rp = np.matmul(
@@ -1202,13 +1201,13 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         rp_skew_matrix = skew_symmetric_matrices(rp[..., 0])
         df_dtheta_pre_multiplier = np.matmul(C_F_transformed, rp_skew_matrix)
         df_dtheta = np.matmul(np.transpose(Np, axes=(0, 2, 1)),
-                              np.matmul(df_dtheta_pre_multiplier, Np))
+                              np.matmul(df_dtheta_pre_multiplier, N))
         element_material_stiffness[np.ix_(self.function_space.local_translational_dofs,
                                           self.function_space.local_rotational_dofs)] += \
             np.sum(df_dtheta*self.function_space.JxW, axis=0, keepdims=False)
         # moment derivatives w.r.t the translational dofs
         dm_dd_pre_multiplier = np.matmul(rp_skew_matrix, C_F_transformed)
-        dm_dd = -1.0 * np.matmul(np.transpose(Np, axes=(0, 2, 1)),
+        dm_dd = -1.0 * np.matmul(np.transpose(N, axes=(0, 2, 1)),
                                  np.matmul(dm_dd_pre_multiplier, Np))
         element_material_stiffness[np.ix_(self.function_space.local_rotational_dofs,
                                           self.function_space.local_translational_dofs)] += \
@@ -1218,8 +1217,8 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         dm_dtheta_term1_pre_multiplier = -1.0 * \
             np.matmul(rp_skew_matrix, np.matmul(
                 C_F_transformed, rp_skew_matrix))
-        dm_dtheta_term1 = np.matmul(np.transpose(Np, axes=(0, 2, 1)),
-                                    np.matmul(dm_dtheta_term1_pre_multiplier, Np))
+        dm_dtheta_term1 = np.matmul(np.transpose(N, axes=(0, 2, 1)),
+                                    np.matmul(dm_dtheta_term1_pre_multiplier, N))
         element_material_stiffness[np.ix_(self.function_space.local_rotational_dofs,
                                           self.function_space.local_rotational_dofs)] += \
             np.sum(dm_dtheta_term1*self.function_space.JxW, axis=0, keepdims=False)
