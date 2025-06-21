@@ -2,7 +2,7 @@ import numpy as np
 import quaternion
 from beamit import FunctionSpace
 from beamit import Material
-from beamit import WeakForm
+from beamit.WeakForm.ShearFlexibleGeometricallyExactWeakForm import ShearFlexibleGeometricallyExactWeakFormCG
 
 # density of the material
 rho = 1.0
@@ -39,7 +39,7 @@ def test_bulk_internal_variable_updates():
     function_space.discretize()
 
     # generate the shear flexible weak form
-    weak_form = WeakForm.ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
+    weak_form = ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
     
     ###### Case 1: Rigid translation #######
     solution_increment = np.zeros([function_space.N * function_space.dof, 1])
@@ -129,7 +129,7 @@ def test_residual():
     function_space.discretize()
 
     # generate the shear flexible weak form
-    weak_form = WeakForm.ShearFlexibleGeometricallyExactWeakFormCG(
+    weak_form = ShearFlexibleGeometricallyExactWeakFormCG(
         function_space, material)
     
     # generate a solution increment
@@ -228,7 +228,7 @@ def test_stiffness():
     function_space.discretize()
 
     # generate the shear flexible weak form
-    weak_form = WeakForm.ShearFlexibleGeometricallyExactWeakFormCG(
+    weak_form = ShearFlexibleGeometricallyExactWeakFormCG(
         function_space, material)
 
     # generate a solution increment

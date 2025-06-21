@@ -1,19 +1,21 @@
 import sys
 import numpy as np
-from beamit import FunctionSpace
-from beamit import WeakForm
+from beamit.FunctionSpace import *
+from beamit.WeakForm.TFKLGeometricallyExactWeakForm import *
+from beamit.WeakForm.EulerBernoulliWeakForm import *
+from beamit.WeakForm.ShearFlexibleGeometricallyExactWeakForm import *
 
 class System:
 
     def __init__(self, function_space, material, betaP = 10.0, betaT = 10.0):
         # use TFKL geometrically exact weak form for TFKL geometrically exact function space
-        if (type(function_space) == FunctionSpace.TFKLGeometricallyExactFunctionSpace):
+        if (type(function_space) == TFKLGeometricallyExactFunctionSpace):
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
-                self.weak_form = WeakForm.TFKLGeometricallyExactWeakFormCG(function_space, material)
+                self.weak_form = TFKLGeometricallyExactWeakFormCG(function_space, material)
             elif (function_space.discretization_type == "DG"):
                 # the discontinuous Galerkin weak form
-                self.weak_form = WeakForm.TFKLGeometricallyExactWeakFormDG(
+                self.weak_form = TFKLGeometricallyExactWeakFormDG(
                     function_space, material, betaP, betaT)
             else:
                 sys.exit("\nBeam KLTF weak form of the discretization is not available.")
@@ -24,22 +26,22 @@ class System:
             # assuming initially straight beams are along the x-axis!!!
             self.state[:, 3:4] = 1.0
         # use Euler-Bernoulli (EB) weak form for EB function space
-        elif (type(function_space) == FunctionSpace.EulerBernoulliFunctionSpace):
+        elif (type(function_space) == EulerBernoulliFunctionSpace):
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
-                self.weak_form = WeakForm.EulerBernoulliWeakFormCG(function_space, material)
+                self.weak_form = EulerBernoulliWeakFormCG(function_space, material)
             elif (function_space.discretization_type == "DG"):
-                self.weak_form = WeakForm.EulerBernoulliWeakFormDG(function_space, material, betaP)
+                self.weak_form = EulerBernoulliWeakFormDG(function_space, material, betaP)
             else:
                 sys.exit("\nEuler-Bernoulli weak form of the discretization is not available.")
             # the initial state of the system
             self.state = np.zeros(
                 [self.weak_form.function_space.N, self.weak_form.function_space.dof])
         # use shear flexible geometrically exact weak form for shear flexible geometrically exact function space
-        elif (type(function_space) == FunctionSpace.ShearFlexibleGeometricallyExactFunctionSpace):
+        elif (type(function_space) == ShearFlexibleGeometricallyExactFunctionSpace):
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
-                self.weak_form = WeakForm.ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
+                self.weak_form = ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
             else:
                 sys.exit("\nShear flexible geometrically exact weak form of the discretization is not available.")
             # the initial state of the system

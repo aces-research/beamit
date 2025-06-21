@@ -6,7 +6,7 @@ from scipy.sparse import csc_matrix
 import sys
 import copy
 import quaternion
-from beamit.WeakForm import SolutionUpdateType
+from beamit.WeakForm.Utils import SolutionUpdateType
 
 class Solver(ABC):
 
