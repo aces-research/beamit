@@ -1,7 +1,9 @@
 import numpy as np
 from pyevtk.hl import linesToVTK
 from beamit import Material
-from beamit import WeakForm
+from beamit.WeakForm.TFKLGeometricallyExactWeakForm import *
+from beamit.WeakForm.EulerBernoulliWeakForm import *
+from beamit.WeakForm.ShearFlexibleGeometricallyExactWeakForm import *
 
 def write_positions_vtk(output_file, system):
     # co-ordinates, state of the nodes and the discretization type
@@ -112,7 +114,7 @@ def write_output_vtk(output_file, system):
     internal_forces = system.internal_forces
     discretization_type = system.weak_form.function_space.discretization_type
     # convert the fields to 3D state for post-processing
-    if (isinstance(system.weak_form, (WeakForm.EulerBernoulliWeakFormCG))):
+    if (isinstance(system.weak_form, (EulerBernoulliWeakFormCG))):
         # add zeros to the Y and Z coordinates
         nodes = np.append(nodes, np.zeros([nodes.shape[0], 2]), axis=1)
         # add displacements at the appropriate location
@@ -151,8 +153,9 @@ def write_output_vtk(output_file, system):
             x_plot[2*i], x_plot[(2*i)+1] = x[i], x[i+1]
             y_plot[2*i], y_plot[(2*i)+1] = y[i], y[i+1]
             z_plot[2*i], z_plot[(2*i)+1] = z[i], z[i+1]
-            if ((type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
-                    (type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
+            if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormCG) or
+                (type(system.weak_form) == TFKLGeometricallyExactWeakFormDG) or
+                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG)):
                 disp_x_plot[2*i], disp_x_plot[(2*i)+1] = pos_x[i] - x[i], pos_x[i+1] - x[i+1]
                 disp_y_plot[2*i], disp_y_plot[(2*i)+1] = pos_y[i] - y[i], pos_y[i+1] - y[i+1]
                 disp_z_plot[2*i], disp_z_plot[(2*i)+1] = pos_z[i] - z[i], pos_z[i+1] - z[i+1]
@@ -168,8 +171,8 @@ def write_output_vtk(output_file, system):
                 internal_loads_z[i], internal_loads_z[i+1], internal_moments_z[i], internal_moments_z[i+1]
     elif (discretization_type == "DG"):
         x_plot, y_plot, z_plot = x, y, z
-        if ((type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormCG) or
-                (type(system.weak_form) == WeakForm.TFKLGeometricallyExactWeakFormDG)):
+        if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormCG) or
+            (type(system.weak_form) == TFKLGeometricallyExactWeakFormDG)):
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x - x, pos_y - y, pos_z - z
         else:
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x, pos_y, pos_z
