@@ -134,11 +134,26 @@ class WeakForm(ABC):
 class TFKLGeometricallyExactWeakFormCG(WeakForm):
     
     def __init__(self, function_space, material):
+        """
+        Initialize the TFKLGeometricallyExactWeakFormCG class.
+
+        Parameters:
+            function_space: The function space containing the geometrical information.
+            material: The material properties containing the physical information.
+        """
         # initialize the parent (WeakForm) class
         WeakForm.__init__(self, function_space, material)
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
+        """
+        Compute the internal forces for an element based on its unknowns.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+        Returns:
+            r_el_int: The computed internal forces for the element.
+        """
         Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
         Npp = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         rp = np.matmul(Np, element_unknowns)
@@ -157,6 +172,14 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
+        """
+        Compute the internal stiffness for an element based on its unknowns.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+        Returns:
+            K_el_int: The computed internal stiffness matrix for the element.
+        """
         Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
         Npp = self.function_space.shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         rp = np.matmul(Np, element_unknowns)
@@ -190,6 +213,16 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to compute element external distributed forces (for distributed forces and moments)
     def compute_element_external_distributed_forces(self, element_unknowns, el_dist_forces, el_dist_moments):
+        """
+        Compute the external distributed forces and moments for an element based on its unknowns.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            el_dist_forces: The distributed forces on the element.
+            el_dist_moments: The distributed moments on the element.
+        Returns:
+            r_el_dist: The computed residual for the distributed forces and moments.
+        """
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         Np = self.function_space.shape_first_gradients*(1.0/self.function_space.jacobian)
         Npt = np.transpose(Np, axes=(0, 2, 1))
@@ -205,6 +238,14 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to add nodal loads to the residual
     def add_nodal_loads_to_residual(self, f, system_unknowns, nodal_loads):
+        """
+        Add the nodal loads to the residual vector.
+
+        Parameters:
+            f: The residual vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+        """
         # update the contribution of external nodal moments to the residual
         dofs = self.function_space.dof
         updated_nodal_loads = np.zeros(nodal_loads.shape)
@@ -221,6 +262,15 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to compute the system stiffness matrix
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
+        """
+        Compute the system stiffness matrix based on the provided unknowns and element loads information.
+
+        Parameters:
+            A: The stiffness matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+            element_loads: The distributed loads on the elements.
+        """
         super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
         # add the contribution of external nodal moments to the system stiffness
         dofs = self.function_space.dof
@@ -261,6 +311,14 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads information.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, Nxi_left_node, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_shapes(-1.0)
@@ -307,6 +365,14 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 
     # Function to compute the system mass
     def compute_system_mass(self, M, system_unknowns, lump=True):
+        """
+        Compute the system mass matrix.
+
+        Parameters:
+            M: The mass matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            lump: If True, apply lumping to the mass matrix.
+        """
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         translational_mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)
         # the element translational mass matrix
@@ -325,6 +391,15 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
 class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
     def __init__(self, function_space, material, betaP, betaT):
+        """
+        Initialize the TFKLGeometricallyExactWeakFormDG class.
+
+        Parameters:
+            function_space: The function space containing the geometrical information.
+            material: The material properties containing the physical information.
+            betaP: The penalty parameter for the position jump.
+            betaT: The penalty parameter for the tangent jump.
+        """
         # invoke the parent (TFKLGeometricallyExactWeakFormCG) class
         TFKLGeometricallyExactWeakFormCG.__init__(
             self, function_space, material)
@@ -347,6 +422,21 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
     # Function to compute interface forces
     def __compute_interface_forces(self, element_unknowns_left, element_unknowns_right, 
                                    element_internal_variables, element_loads, update_internal):
+        """
+        Compute the interface forces and moments between two elements based on their unknowns.
+
+        Parameters:
+            element_unknowns_left: The unknowns of the left element.
+            element_unknowns_right: The unknowns of the right element.
+            element_internal_variables: The internal variables at the interface.
+            element_loads: The distributed loads on the elements.
+            update_internal: If True, update the internal variables in the weak form.
+        Returns:
+            average_forces_interface: The average forces at the interface.
+            average_mxt4_interface: The average bending moments at the interface.
+            cohesive_forces: The cohesive forces at the interface (if applicable).
+            cohesive_bending_moments: The cohesive bending moments at the interface (if applicable).
+        """
         # shape functions derivatives at the interfaces (left (-) & right (+))
         N_left_interface, Nxi_left_interface, Nxixi_left_interface, Nxixixi_left_interface = \
             self.function_space.compute_shapes(1.0)
@@ -396,6 +486,24 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
                                        forces_right_interface, moments_left_interface, 
                                        moments_right_interface, element_internal_variables, 
                                        update_internal):
+        """
+        Compute the cohesive zone model (CZM) interface forces and moments.
+
+        Parameters:
+            r_left_interface: The position vector at the left interface.
+            r_right_interface: The position vector at the right interface.
+            rp_left_interface: The first derivative of the position vector at the left interface.
+            rp_right_interface: The first derivative of the position vector at the right interface.
+            forces_left_interface: The forces at the left interface.
+            forces_right_interface: The forces at the right interface.
+            moments_left_interface: The moments at the left interface.
+            moments_right_interface: The moments at the right interface.
+            element_internal_variables: The internal variables at the interface.
+            update_internal: If True, update the internal variables in the weak form.
+        Returns:
+            cohesive_forces: The cohesive forces at the interface (if applicable).
+            cohesive_bending_moments: The cohesive bending moments at the interface (if applicable).
+        """
         # initialize cohesive forces and bending moments
         cohesive_forces = np.zeros([self.function_space.dim, 1])
         cohesive_bending_moments = np.zeros([self.function_space.dim, 1])
@@ -534,6 +642,15 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
+        """
+        Compute the system residual based on the provided unknowns and element loads information.
+
+        Parameters:
+            f: The residual vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+            update_internal: If True, update the internal variables in the weak form.
+        """
         # compute system residual using the function in the parent class
         super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # add the contributions of jump terms at the interfaces to the residual
@@ -611,6 +728,15 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 
     # Function to compute the system stiffness
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
+        """
+        Compute the system stiffness matrix based on the provided unknowns and loads.
+
+        Parameters:
+            A: The stiffness matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+            element_loads: The distributed loads on the elements.
+        """
         # compute system stiffness using the function in the parent class
         super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
         # add the contributions of jump terms at the interfaces to the residual
@@ -667,6 +793,14 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, Nxi_left_node, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_shapes(-1.0)
@@ -707,11 +841,26 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
 class EulerBernoulliWeakFormCG(WeakForm):
     
     def __init__(self, function_space, material):
+        """
+        Initialize the EulerBernoulliWeakFormCG class.
+
+        Parameters:
+            function_space: The function space containing the geometrical information.
+            material: The material properties containing the physical information.
+        """
         # initialize the parent (WeakForm) class
         WeakForm.__init__(self, function_space, material)
 
     # Function to compute element internal forces
     def compute_element_internal_forces(self, element_unknowns):
+        """
+        Compute the internal forces for an element based on the provided unknowns.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+        Returns:
+            f_int: The computed internal forces for the element.
+        """
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         ux = np.matmul(phix, element_unknowns)
@@ -722,6 +871,14 @@ class EulerBernoulliWeakFormCG(WeakForm):
 
     # Function to compute element internal stiffness
     def compute_element_internal_stiffness(self, element_unknowns):
+        """
+        Compute the internal stiffness for an element based on the provided unknowns.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+        Returns:
+            K_int: The computed internal stiffness for the element.
+        """
         phix = self.function_space.lagrange_shape_first_gradients*(1.0/self.function_space.jacobian)
         Nxx = self.function_space.hermite_shape_second_gradients*((1.0/self.function_space.jacobian)**2.0)
         integrand = self.material.E*self.material.A*np.matmul(np.transpose(phix, axes=(0, 2, 1)), phix) + \
@@ -730,6 +887,14 @@ class EulerBernoulliWeakFormCG(WeakForm):
 
     # Function to compute the system mass
     def compute_system_mass(self, M, system_unknowns, lump=True):
+        """
+        Compute the system mass matrix.
+
+        Parameters:
+            M: The mass matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            lump: If True, apply lumping to the mass matrix.
+        """
         phit = np.transpose(self.function_space.lagrange_shape_functions, axes=(0, 2, 1))
         Nt = np.transpose(self.function_space.hermite_shape_functions, axes=(0, 2, 1))
         axial_integrand = self.material.rho*self.material.A * \
@@ -759,6 +924,14 @@ class EulerBernoulliWeakFormCG(WeakForm):
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, phixi_left_node = self.function_space.compute_lagrange_shapes(-1.0)
@@ -800,6 +973,14 @@ class EulerBernoulliWeakFormCG(WeakForm):
 class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
     
     def __init__(self, function_space, material, beta):
+        """
+        Initialize the EulerBernoulliWeakFormDG class.
+
+        Parameters:
+            function_space: The function space containing the geometrical information.
+            material: The material properties containing the physical information.
+            beta: The penalty parameter for the DG method.
+        """
         # invoke the parent (EulerBernoulliWeakFormCG) class
         EulerBernoulliWeakFormCG.__init__(self, function_space, material)
         # DG penalty parameter
@@ -826,6 +1007,17 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
 
     # Function to compute interface forces
     def __compute_interface_forces(self, element_unknowns_left, element_unknowns_right):
+        """
+        Compute the interface forces based on the unknowns of the left and right elements.
+
+        Parameters:
+            element_unknowns_left: The unknowns of the left element.
+            element_unknowns_right: The unknowns of the right element.
+        Returns:
+            axial_forces_interface: The computed axial forces at the interface.
+            shear_forces_interface: The computed shear forces at the interface.
+            bending_moments_interface: The computed bending moments at the interface.
+        """
         # dofs and their derivaitives at the interface
         # left side
         u_left = np.matmul(self.phi_left_interface, element_unknowns_left)
@@ -865,6 +1057,15 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
 
     # Function to compute the system residual
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
+        """
+        Compute the system residual based on the provided unknowns, element loads, and update flag.
+
+        Parameters:
+            f: The residual vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+            update_internal: Flag to indicate whether to update internal variables.
+        """
         # compute system residual using the function in EulerBernoulliWeakFormCG
         super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # loop over the interfaces
@@ -890,6 +1091,15 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
 
     # Function to compute the system stiffness
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
+        """
+        Compute the system stiffness matrix based on the provided unknowns and loads.
+
+        Parameters:
+            A: The stiffness matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+            element_loads: The distributed loads on the elements.
+        """
         # compute system stiffness using the function in EulerBernoulliWeakFormCG
         super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
         # loop over the interfaces
@@ -960,6 +1170,14 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, phixi_left_node = self.function_space.compute_lagrange_shapes(-1.0)
@@ -1001,6 +1219,13 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
 class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
     def __init__(self, function_space, material):
+        """
+        Initialize the ShearFlexibleGeometricallyExactWeakFormCG class.
+
+        Parameters:
+            function_space: The function space containing the geometrical information.
+            material: The material properties containing the physical information.
+        """
         # initialize the parent (WeakForm) class
         WeakForm.__init__(self, function_space, material)
         # the type of update to be applied for the solution
@@ -1089,6 +1314,18 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
     def __compute_internal_forces_and_moments(self, element_unknowns, element_orientations, 
                                               element_curvatures):
+        """
+        Compute the internal forces and moments for an element based on the provided unknowns,
+        orientations, and curvatures.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+            element_curvatures: The curvatures of the element at each quadrature point.
+        Returns:
+            internal_forces: The computed internal forces for the element.
+            internal_moments: The computed internal moments for the element.
+        """
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
         ################# internal forces #################
@@ -1132,6 +1369,17 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
     def compute_element_internal_forces(self, element_unknowns, element_orientations, 
                                         element_curvatures):
+        """
+        Compute the internal forces for an element based on the provided unknowns, orientations,
+        and curvatures.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+            element_curvatures: The curvatures of the element at each quadrature point.
+        Returns:
+            element_internal_forces: The computed internal forces for the element.
+        """
         element_internal_forces = np.zeros(
             [self.function_space.dof*self.function_space.npel, 1])
         N = self.function_space.shape_functions
@@ -1159,6 +1407,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         return element_internal_forces
 
     def __compute_element_material_stiffness(self, element_unknowns, element_orientations):
+        """
+        Compute the material stiffness matrix for an element based on the provided unknowns and orientations.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+        Returns:
+            element_material_stiffness: The computed material stiffness matrix for the element.
+        """
         element_material_stiffness = np.zeros(
             [self.function_space.dof*self.function_space.npel, 
              self.function_space.dof*self.function_space.npel])
@@ -1229,6 +1486,17 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
     def __compute_element_geometric_stiffness(self, element_unknowns, element_orientations,
                                               element_curvatures):
+        """
+        Compute the geometric stiffness matrix for an element based on the provided unknowns,
+        orientations, and curvatures.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+            element_curvatures: The curvatures of the element at each quadrature point.
+        Returns:
+            element_geometric_stiffness: The computed geometric stiffness matrix for the element.
+        """
         element_geometric_stiffness = np.zeros(
             [self.function_space.dof*self.function_space.npel,
              self.function_space.dof*self.function_space.npel])
@@ -1285,6 +1553,17 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
     def compute_element_internal_stiffness(self, element_unknowns, element_orientations, 
                                            element_curvatures):
+        """
+        Compute the internal stiffness matrix for an element based on the provided unknowns,
+        orientations, and curvatures.
+
+        Parameters:
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+            element_curvatures: The curvatures of the element at each quadrature point.
+        Returns:
+            element_internal_stiffness: The computed internal stiffness matrix for the element.
+        """
         element_internal_stiffness = np.zeros(
             [self.function_space.dof*self.function_space.npel, 
              self.function_space.dof*self.function_space.npel])
@@ -1297,6 +1576,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         return element_internal_stiffness
 
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
+        """
+        Compute the system residual based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+            update_internal: A boolean indicating whether to update the internal variables.
+        """
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
             )
@@ -1306,6 +1594,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                     element_unknowns, self.orientation[i, :, :], self.curvature[i, :, :])
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
+        """
+        Compute the system stiffness matrix based on the provided unknowns and loads.
+
+        Parameters:
+            A: The stiffness matrix to be assembled.
+            system_unknowns: The unknowns of the system.
+            nodal_loads: The nodal loads applied to the system.
+            element_loads: The distributed loads on the elements.
+        """
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
             )
@@ -1319,6 +1616,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
+        # get the local shape functions and their derivatives at the left and right nodes
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
         _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
