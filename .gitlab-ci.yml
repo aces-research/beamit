@@ -5,7 +5,7 @@ test:
   script:
     - export PYTHONPATH="${PYTHONPATH}:$PWD/lib"
     - apt install -y python3-pip
-    - python3 -m pip install "numpy<2" --force-reinstall
+    - python3 -m pip install "numpy==1.26.1" "numba==0.58.1" --force-reinstall
     - python3 -m pip install numpy-quaternion
     - cd tests
     - python3 -m pytest -vv .
