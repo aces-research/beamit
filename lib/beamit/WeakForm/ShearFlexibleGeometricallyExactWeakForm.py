@@ -46,12 +46,20 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         psi_norm = np.linalg.norm(orientation, axis=1)
         I = np.eye(3)[None, :, :]
         # avoid division by zero
-        psi_norm_safe = np.where(psi_norm < 1.0e-10, 1.0e-10, psi_norm)
+        small_norm_idxs = psi_norm < 1.0e-10
         sin_psi = np.sin(psi_norm)
         cos_psi = np.cos(psi_norm)
-        sin_term = (sin_psi / psi_norm_safe)[:, None, None]
-        cos_term = ((1.0 - cos_psi) / psi_norm_safe**2)[:, None, None]
-        extra_term = ((psi_norm - sin_psi) / psi_norm_safe**3)[:, None, None]
+        psi_norm_safe = np.where(small_norm_idxs, 1.0, psi_norm)
+        sin_term = sin_psi / psi_norm_safe
+        cos_term = (1.0 - cos_psi) / psi_norm_safe**2
+        extra_term = (psi_norm - sin_psi) / psi_norm_safe**3
+        # apply limit values for small angles
+        sin_term[small_norm_idxs] = 1.0
+        cos_term[small_norm_idxs] = 0.50
+        extra_term[small_norm_idxs] = 1.0 / 6.0
+        sin_term = sin_term[:, None, None]
+        cos_term = cos_term[:, None, None]
+        extra_term = extra_term[:, None, None]
         # skew symmetric matrices
         S = skew_symmetric_matrices(orientation)
         # outer product
