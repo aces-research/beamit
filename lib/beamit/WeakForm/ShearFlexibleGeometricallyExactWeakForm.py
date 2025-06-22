@@ -491,16 +491,29 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             system_unknowns: The unknowns of the system.
             element_loads: The distributed loads on the elements.
         """
-        # get the local shape functions and their derivatives at the left and right nodes
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
-        _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
-        Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
-        _, Nxi_right_node = self.function_space.compute_shapes(1.0)
-        Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
+            # NOTE: Here we assume that there are only two nodes per element!!!
             global_element_dofs_left_node = global_element_dofs[0:dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
-            # IMPLEMENT THIS FUNCTION FOR GETTING FORCE AND MOMENT OUTPUTS LATER!!!
+            element_unknowns = system_unknowns[global_element_dofs]
+            nodal_orientations = element_unknowns[self.function_space.local_rotational_dofs].reshape(
+                -1, self.function_space.dim)
+            nodal_curvatures = np.stack(
+                [self.curvature_nodes[i, :], self.curvature_nodes[i+1, :]], axis=0)
+            # compute the internal forces and moments at the nodes
+            internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
+                element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
+            if (i == 0):  # only for the first element
+                # assemble the internal forces at the left node
+                f[global_element_dofs_left_node[0:int(
+                    dofs/2)]] += internal_forces[0, ...]
+                f[global_element_dofs_left_node[int(
+                    dofs/2):dofs]] += internal_moments[0, ...]
+            # assemble the internal forces at the right node
+            f[global_element_dofs_right_node[0:int(
+                dofs/2)]] += internal_forces[1, ...]
+            f[global_element_dofs_right_node[int(
+                dofs/2):dofs]] += internal_moments[1, ...]
