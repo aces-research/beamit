@@ -109,36 +109,55 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                           current_curvature[..., None])[..., 0]
 
     def __compute_internal_forces_and_moments(self, element_unknowns, element_orientations, 
-                                              element_curvatures):
+                                              element_curvatures, location="Quads"):
         """
         Compute the internal forces and moments for an element based on the provided unknowns,
         orientations, and curvatures.
 
         Parameters:
             element_unknowns: The unknowns of the element.
-            element_orientations: The orientations of the element at each quadrature point.
-            element_curvatures: The curvatures of the element at each quadrature point.
+            element_orientations: The orientations of the element.
+            element_curvatures: The curvatures of the element.
+            location: The location where the internal forces and moments should computed.
+                If "Quads", the internal forces and moments are computed at the quadrature points of the element.
+                If "Nodes", the internal forces and moments are computed at the nodes of the element.
         Returns:
             internal_forces: The computed internal forces for the element.
             internal_moments: The computed internal moments for the element.
         """
-        Np = self.function_space.shape_first_gradients * \
-            (1.0/self.function_space.jacobian)
+        if (location != "Quads" and location != "Nodes"):
+            raise ValueError("Location must be either 'Quads' or 'Nodes'.")
+        if (location == "Quads"):
+            Np = self.function_space.shape_first_gradients * \
+                (1.0/self.function_space.jacobian)
+        elif (location == "Nodes"):
+            # NOTE: Here we are assuming that there are only two nodes per element!!!
+            _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
+            Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
+            _, Nxi_right_node = self.function_space.compute_shapes(1.0)
+            Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
+            Np = np.stack([Np_left_node, Np_right_node], axis=0)
         ################# internal forces #################
         rp = np.matmul(
             Np, element_unknowns[self.function_space.local_translational_dofs])
-        # check if the element orientations are of size (Q, dim)
-        if (element_orientations.shape != (self.function_space.Q, self.function_space.dim)):
-            raise ValueError("Element orientations must be of shape (Q, dim)")
+        if (location == "Quads"):
+            # check if the element orientations are of size (Q, dim)
+            if (element_orientations.shape != (self.function_space.Q, self.function_space.dim)):
+                raise ValueError("Element orientations must be of shape (Q, dim)")
+        elif (location == "Nodes"):
+            # check if the element orientations are of size (npel, dim)
+            if (element_orientations.shape != (self.function_space.npel, self.function_space.dim)):
+                raise ValueError("Element orientations must be of shape (npel, dim)")
         element_orientations_tensor = quaternion.as_rotation_matrix(
             quaternion.from_rotation_vector(element_orientations))
-        E1 = np.zeros([self.function_space.Q, self.function_space.dim])
+        E1 = np.zeros([self.function_space.Q if location == "Quads" else self.function_space.npel, 
+                       self.function_space.dim])
         E1[:, 0] = 1.0
         element_strains = rp - \
             np.matmul(element_orientations_tensor, E1[..., None])
         # translation constitutive matrix
-        C_F = np.zeros(
-            [self.function_space.Q, self.function_space.dim, self.function_space.dim])
+        C_F = np.zeros([self.function_space.Q if location == "Quads" else self.function_space.npel,
+                       self.function_space.dim, self.function_space.dim])
         C_F[:, 0, 0] = self.material.E * self.material.A
         C_F[:, 1, 1] = self.material.G * self.material.A_red
         C_F[:, 2, 2] = self.material.G * self.material.A_red
@@ -147,12 +166,17 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             C_F, np.transpose(element_orientations_tensor, axes=(0, 2, 1))))
         internal_forces = np.matmul(C_F_transformed, element_strains)
         ################# internal moments #################
-        # check if the element curvatures are of size (Q, dim)
-        if (element_curvatures.shape != (self.function_space.Q, self.function_space.dim)):
-            raise ValueError("Element curvatures must be of shape (Q, dim)")
+        if (location == "Quads"):
+            # check if the element curvatures are of size (Q, dim)
+            if (element_curvatures.shape != (self.function_space.Q, self.function_space.dim)):
+                raise ValueError("Element curvatures must be of shape (Q, dim)")
+        elif (location == "Nodes"):
+            # check if the element curvatures are of size (npel, dim)
+            if (element_curvatures.shape != (self.function_space.npel, self.function_space.dim)):
+                raise ValueError("Element curvatures must be of shape (npel, dim)")
         # rotational constitutive matrix
-        C_M = np.zeros(
-            [self.function_space.Q, self.function_space.dim, self.function_space.dim])
+        C_M = np.zeros([self.function_space.Q if location == "Quads" else self.function_space.npel,
+                       self.function_space.dim, self.function_space.dim])
         C_M[:, 0, 0] = self.material.G * self.material.I_T
         C_M[:, 1, 1] = self.material.E * self.material.I
         C_M[:, 2, 2] = self.material.E * self.material.I_minor
