@@ -94,10 +94,9 @@ def test_bulk_internal_variable_updates():
                 # check that the curvature is zero
                 assert weak_form.curvature[i, j, k] == 0.0, \
                     f"Curvature at element {i}, quadrature point {j}, dimension {k} is not zero."
-                
+
     ###### Case 3: Constant small curvature #######
     solution_increment.fill(0.0)
-    # weak_form.orientation.fill(0.0)
     solution_increment[3, 0] += np.pi / 4.0
     solution_increment[4, 0] += np.pi / 8.0
     solution_increment[5, 0] += np.pi / 4.0
@@ -157,8 +156,8 @@ def test_residual():
 
     # calculate the expected residual
     residual_expected = np.zeros([function_space.N * function_space.dof, 1])
-    quad_points = np.array([-0.57735027,  0.57735027])
-    quad_weights = np.array([1.0, 1.0])
+    quad_points, quad_weights = np.polynomial.legendre.leggauss(
+        function_space.Q)
     for i in range(0, quad_points.shape[0]):
         N1 = 0.50*(1.0 - quad_points[i])
         N2 = 0.50*(1.0 + quad_points[i])
@@ -215,7 +214,7 @@ def test_residual():
     # check the residual
     assert np.allclose(residual_computed, residual_expected, atol=NUMERICAL_TOLERANCE), \
         "Residual computed does not match the expected residual."
-    
+
 def test_stiffness():
 
     # physical information (material parameters)
@@ -263,8 +262,8 @@ def test_stiffness():
     # calculate the expected stiffness matrix
     stiffness_expected = np.zeros(
         [function_space.N * function_space.dof, function_space.N * function_space.dof])
-    quad_points = np.array([-0.57735027,  0.57735027])
-    quad_weights = np.array([1.0, 1.0])
+    quad_points, quad_weights = np.polynomial.legendre.leggauss(
+        function_space.Q)
     translation_dofs = np.array([0, 1, 2, 6, 7, 8])
     rotation_dofs = np.array([3, 4, 5, 9, 10, 11])
     for i in range(0, quad_points.shape[0]):

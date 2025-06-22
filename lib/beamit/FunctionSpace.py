@@ -446,7 +446,10 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
         # the discretization nodes of the beam
         self.nodes = np.zeros([self.N, self.dim])
         # the number of quadrature points (Gauss quadrature, degree of exactness = 2)
-        self.Q = 2
+        # We are using reduced integration to prevent shear locking.
+        # This works for integrating the residual and stiffness. But for the mass matrix, we should
+        # use the two point Gauss quadrature!!!
+        self.Q = 1
         # the shape functions evaluated at quadrature points (size = (integration points, dimensions, translational/rotational dofs))
         self.shape_functions = np.zeros([self.Q, self.dim, self.npel*self.dim])
         # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, translational/rotational dofs))
