@@ -455,6 +455,10 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
         # the shape function first gradients evaluated at quadrature points (size = (integration points, dimensions, translational/rotational dofs))
         self.shape_first_gradients = np.zeros(
             [self.Q, self.dim, self.npel*self.dim])
+        # the lifting shape functions evaluated at quadrature points for DG discretization (size = (integration points, dimensions, number of boundary translational/rotational dofs))
+        if (self.discretization_type == "DG"):
+            self.lifting_shape_functions = np.zeros(
+                [self.Q, self.dim, 2*self.dim])
         # the jacobian of the transformation from parent to reference configuration (xi -> s)
         self.jacobian = self.elL / 2.0
         # the integration jacobian x weight for quadrature points (size = (integration points, translational/rotational dofs, 1))
@@ -481,6 +485,24 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
                                           [0.0, N1_xi, 0.0, 0.0, N2_xi, 0.0],
                                           [0.0, 0.0, N1_xi, 0.0, 0.0, N2_xi]])
         return shape_functions, shape_first_gradients
+
+    def compute_lifting_shapes(self, xi):
+        """
+        Compute the lifting shape functions and their gradients at a given point xi.
+        Parameters:
+            xi: The point in the reference element (xi in [-1.0, 1.0])
+        Returns:
+            shape_functions: The lifting shape functions evaluated at the point xi
+        """
+        # linear lifting shapes
+        k01 = (1.0-(3.0*xi))/4.0
+        k12 = (1.0+(3.0*xi))/4.0
+
+        # elemental lifting shape function matrix
+        lifting_shape_functions = np.array([[k01, 0.0, 0.0, k12, 0.0, 0.0],
+                                            [0.0, k01, 0.0, 0.0, k12, 0.0],
+                                            [0.0, 0.0, k01, 0.0, 0.0, k12]])
+        return lifting_shape_functions 
 
     def discretize(self):
         """
@@ -510,4 +532,8 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
             self.shape_functions[i:i+1, :, :] = el_shape_functions
             self.shape_first_gradients[i:i+1, :, :] = el_shape_first_gradients
             self.JxW[i:i+1, :, :] *= self.jacobian*integration_weights[i]
+            if (self.discretization_type == "DG"):
+                el_lifting_shape_functions = self.compute_lifting_shapes(
+                    integration_points[i])
+                self.lifting_shape_functions[i:i+1, :, :] = el_lifting_shape_functions
         print("\nGenerated the function space.")
