@@ -183,8 +183,8 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 np.matmul(incremental_rotation_tensor_right_node,
                           self.curvature_nodes[i+1, :][..., None])[..., 0]
 
-    def __compute_internal_forces_and_moments(self, e, element_unknowns, element_orientations, 
-                                              element_curvatures, location="Quads"):
+    def _compute_internal_forces_and_moments(self, e, element_unknowns, element_orientations, 
+                                             element_curvatures, location="Quads"):
         """
         Compute the internal forces and moments for an element based on the provided unknowns,
         orientations, and curvatures.
@@ -275,7 +275,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         rp = self._compute_element_dof_derivatives(
             e, element_unknowns, self.function_space.local_translational_dofs)
         # compute the internal forces and moments
-        internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
+        internal_forces, internal_moments = self._compute_internal_forces_and_moments(
             e, element_unknowns, element_orientations, element_curvatures)
         # assemble the internal forces
         internal_forces_integrand = np.matmul(
@@ -293,7 +293,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                    self.function_space.JxW, axis=0, keepdims=False)
         return element_internal_forces
 
-    def __compute_element_material_stiffness(self, e, element_unknowns, element_orientations):
+    def _compute_element_material_stiffness(self, e, element_unknowns, element_orientations):
         """
         Compute the material stiffness matrix for an element based on the provided unknowns and orientations.
 
@@ -371,7 +371,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
         return element_material_stiffness
 
-    def __compute_element_geometric_stiffness(self, e, element_unknowns, element_orientations,
+    def _compute_element_geometric_stiffness(self, e, element_unknowns, element_orientations,
                                               element_curvatures):
         """
         Compute the geometric stiffness matrix for an element based on the provided unknowns,
@@ -399,7 +399,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         if (element_curvatures.shape != (self.function_space.Q, self.function_space.dim)):
             raise ValueError("Element curvatures must be of shape (Q, dim)")
         # compute the internal forces and moments
-        internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
+        internal_forces, internal_moments = self._compute_internal_forces_and_moments(
             e, element_unknowns, element_orientations, element_curvatures)
         internal_forces_skew_matrix = skew_symmetric_matrices(
             internal_forces[..., 0])
@@ -457,10 +457,10 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             [self.function_space.dof*self.function_space.npel, 
              self.function_space.dof*self.function_space.npel])
         # compute the element material stiffness
-        element_internal_stiffness += self.__compute_element_material_stiffness(
+        element_internal_stiffness += self._compute_element_material_stiffness(
             e, element_unknowns, element_orientations)
         # compute the element geometric stiffness
-        element_internal_stiffness += self.__compute_element_geometric_stiffness(
+        element_internal_stiffness += self._compute_element_geometric_stiffness(
             e, element_unknowns, element_orientations, element_curvatures)
         return element_internal_stiffness
 
@@ -526,7 +526,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             nodal_curvatures = np.stack(
                 [self.curvature_nodes[i, :], self.curvature_nodes[i+1, :]], axis=0)
             # compute the internal forces and moments at the nodes
-            internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
+            internal_forces, internal_moments = self._compute_internal_forces_and_moments(
                 i, element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
             if (i == 0):  # only for the first element
                 # assemble the internal forces at the left node
@@ -794,15 +794,15 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             nodal_curvatures_right = np.stack(
                 [self.curvature_nodes[2*i+2, :], self.curvature_nodes[2*i+3, :]], axis=0)
             internal_forces_left_element, internal_moments_left_element = \
-                self.__compute_internal_forces_and_moments(i, element_unknowns_left,
-                                                           nodal_orientations_left,
-                                                           nodal_curvatures_left,
-                                                           location="Nodes")
+                self._compute_internal_forces_and_moments(i, element_unknowns_left, 
+                                                          nodal_orientations_left, 
+                                                          nodal_curvatures_left, 
+                                                          location="Nodes")
             internal_forces_right_element, internal_moments_right_element = \
-                self.__compute_internal_forces_and_moments(i+1, element_unknowns_right,
-                                                           nodal_orientations_right,
-                                                           nodal_curvatures_right,
-                                                           location="Nodes")
+                self._compute_internal_forces_and_moments(i+1, element_unknowns_right, 
+                                                          nodal_orientations_right, 
+                                                          nodal_curvatures_right, 
+                                                          location="Nodes")
             average_internal_forces_interface = 0.5 * \
                 (internal_forces_left_element[1, ...] +
                  internal_forces_right_element[0, ...])
