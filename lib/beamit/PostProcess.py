@@ -155,7 +155,8 @@ def write_output_vtk(output_file, system):
             z_plot[2*i], z_plot[(2*i)+1] = z[i], z[i+1]
             if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormCG) or
                 (type(system.weak_form) == TFKLGeometricallyExactWeakFormDG) or
-                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG)):
+                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG) or
+                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormDG)):
                 disp_x_plot[2*i], disp_x_plot[(2*i)+1] = pos_x[i] - x[i], pos_x[i+1] - x[i+1]
                 disp_y_plot[2*i], disp_y_plot[(2*i)+1] = pos_y[i] - y[i], pos_y[i+1] - y[i+1]
                 disp_z_plot[2*i], disp_z_plot[(2*i)+1] = pos_z[i] - z[i], pos_z[i+1] - z[i+1]

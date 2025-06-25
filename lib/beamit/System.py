@@ -18,7 +18,8 @@ class System:
                 self.weak_form = TFKLGeometricallyExactWeakFormDG(
                     function_space, material, betaP, betaT)
             else:
-                sys.exit("\nBeam KLTF weak form of the discretization is not available.")
+                sys.exit(
+                    "\nTFKL geometrically exact weak form of the discretization is not available.")
             # the initial state of the system
             self.state = np.zeros(
                 [self.weak_form.function_space.N, self.weak_form.function_space.dof])
@@ -42,8 +43,13 @@ class System:
             if (function_space.discretization_type == "CG"):
                 # the continuous Galerkin weak form
                 self.weak_form = ShearFlexibleGeometricallyExactWeakFormCG(function_space, material)
+            elif (function_space.discretization_type == "DG"):
+                # the discontinuous Galerkin weak form
+                self.weak_form = ShearFlexibleGeometricallyExactWeakFormDG(
+                    function_space, material, betaP, betaT)
             else:
-                sys.exit("\nShear flexible geometrically exact weak form of the discretization is not available.")
+                sys.exit(
+                    "\nShear flexible geometrically exact weak form of the discretization is not available.")
             # the initial state of the system
             self.state = np.zeros(
                 [self.weak_form.function_space.N, self.weak_form.function_space.dof])
