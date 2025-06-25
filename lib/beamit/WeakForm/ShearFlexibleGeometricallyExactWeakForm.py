@@ -71,6 +71,35 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         outer = orientation[:, :, None] * orientation[:, None, :]
         return sin_term * I + cos_term * S + extra_term * outer
 
+    def _compute_element_dof_derivatives(self, e, element_dof_values, local_dof_indices, 
+                                         location="Quads"):
+        """
+        Compute the derivatives of the element dofs with respect to the arclength parameter.
+
+        Parameters:
+            e: The element index.
+            element_dof_values: The values of the dofs of the element.
+            local_dof_indices: The local (translational or rotational) dof indices of the element.
+            location: The location where the derivatives should be computed.
+                If "Quads", the derivatives are computed at the quadrature points of the element.
+                If "Nodes", the derivatives are computed at the nodes of the element.
+        Returns:
+            element_dof_derivatives: The derivatives of the element dofs with respect to the arclength parameter.
+        """
+        if (location != "Quads" and location != "Nodes"):
+            raise ValueError("Location must be either 'Quads' or 'Nodes'.")
+        if (location == "Quads"):
+            Np = self.function_space.shape_first_gradients * \
+                (1.0/self.function_space.jacobian)
+        elif (location == "Nodes"):
+            # NOTE: Here we are assuming that there are only two nodes per element!!!
+            _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
+            Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
+            _, Nxi_right_node = self.function_space.compute_shapes(1.0)
+            Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
+            Np = np.stack([Np_left_node, Np_right_node], axis=0)
+        return np.matmul(Np, element_dof_values[local_dof_indices])
+
     def update_bulk_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.
@@ -82,8 +111,6 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             system_unknowns_increment: The increment in the system unknowns.
         """
         N = self.function_space.shape_functions
-        Np = self.function_space.shape_first_gradients * \
-            (1.0/self.function_space.jacobian)
         # update the orientation and curvature at quadrature points
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
@@ -91,7 +118,9 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 global_element_dofs][self.function_space.local_rotational_dofs]
             # compute the rotation increment and its derivative
             dtheta = np.matmul(N, element_rotation_increment)[..., 0]
-            dtheta_prime = np.matmul(Np, element_rotation_increment)[..., 0]
+            dtheta_prime = self._compute_element_dof_derivatives(
+                i, system_unknowns_increment[global_element_dofs], 
+                self.function_space.local_rotational_dofs)[..., 0]
             ############# update of the orientation #############
             current_orientation = self.orientation[i, :, :]
             # NOTE: Careful with the order of multiplication here since quaternion multiplication 
@@ -115,10 +144,8 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                           current_curvature[..., None])[..., 0]
         # update the curvature at the nodes
         # NOTE: Here we assume that there are only two nodes per element!!!
-        N_left_node, Nxi_left_node = self.function_space.compute_shapes(-1.0)
-        Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
-        N_right_node, Nxi_right_node = self.function_space.compute_shapes(1.0)
-        Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
+        N_left_node, _ = self.function_space.compute_shapes(-1.0)
+        N_right_node, _ = self.function_space.compute_shapes(1.0)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_rotation_increment = system_unknowns_increment[
@@ -128,10 +155,11 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 N_left_node, element_rotation_increment)[..., 0]
             dtheta_right_node = np.matmul(
                 N_right_node, element_rotation_increment)[..., 0]
-            dtheta_prime_left_node = np.matmul(
-                Np_left_node, element_rotation_increment)[..., 0]
-            dtheta_prime_right_node = np.matmul(
-                Np_right_node, element_rotation_increment)[..., 0]
+            dtheta_prime_node = self._compute_element_dof_derivatives(
+                i, system_unknowns_increment[global_element_dofs],
+                self.function_space.local_rotational_dofs, location="Nodes")[..., 0]
+            dtheta_prime_left_node = dtheta_prime_node[0, :]
+            dtheta_prime_right_node = dtheta_prime_node[1, :]
             # transformation matrices
             transformation_matrix_left_node = self._compute_transformation_matrix(
                 dtheta_left_node[None, ...])[0, ...]
@@ -155,13 +183,14 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 np.matmul(incremental_rotation_tensor_right_node,
                           self.curvature_nodes[i+1, :][..., None])[..., 0]
 
-    def __compute_internal_forces_and_moments(self, element_unknowns, element_orientations, 
+    def __compute_internal_forces_and_moments(self, e, element_unknowns, element_orientations, 
                                               element_curvatures, location="Quads"):
         """
         Compute the internal forces and moments for an element based on the provided unknowns,
         orientations, and curvatures.
 
         Parameters:
+            e: The element index.
             element_unknowns: The unknowns of the element.
             element_orientations: The orientations of the element.
             element_curvatures: The curvatures of the element.
@@ -174,19 +203,9 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         """
         if (location != "Quads" and location != "Nodes"):
             raise ValueError("Location must be either 'Quads' or 'Nodes'.")
-        if (location == "Quads"):
-            Np = self.function_space.shape_first_gradients * \
-                (1.0/self.function_space.jacobian)
-        elif (location == "Nodes"):
-            # NOTE: Here we are assuming that there are only two nodes per element!!!
-            _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
-            Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
-            _, Nxi_right_node = self.function_space.compute_shapes(1.0)
-            Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
-            Np = np.stack([Np_left_node, Np_right_node], axis=0)
         ################# internal forces #################
-        rp = np.matmul(
-            Np, element_unknowns[self.function_space.local_translational_dofs])
+        rp = self._compute_element_dof_derivatives(
+            e, element_unknowns, self.function_space.local_translational_dofs, location=location)
         if (location == "Quads"):
             # check if the element orientations are of size (Q, dim)
             if (element_orientations.shape != (self.function_space.Q, self.function_space.dim)):
@@ -234,13 +253,14 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             C_M_transformed, element_curvatures[..., None])
         return internal_forces, internal_moments
 
-    def compute_element_internal_forces(self, element_unknowns, element_orientations, 
+    def compute_element_internal_forces(self, e, element_unknowns, element_orientations, 
                                         element_curvatures):
         """
         Compute the internal forces for an element based on the provided unknowns, orientations,
         and curvatures.
 
         Parameters:
+            e: The element index.
             element_unknowns: The unknowns of the element.
             element_orientations: The orientations of the element at each quadrature point.
             element_curvatures: The curvatures of the element at each quadrature point.
@@ -252,11 +272,11 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
-        rp = np.matmul(
-            Np, element_unknowns[self.function_space.local_translational_dofs])
+        rp = self._compute_element_dof_derivatives(
+            e, element_unknowns, self.function_space.local_translational_dofs)
         # compute the internal forces and moments
         internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
-            element_unknowns, element_orientations, element_curvatures)
+            e, element_unknowns, element_orientations, element_curvatures)
         # assemble the internal forces
         internal_forces_integrand = np.matmul(
             np.transpose(Np, axes=(0, 2, 1)), internal_forces)
@@ -273,7 +293,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                    self.function_space.JxW, axis=0, keepdims=False)
         return element_internal_forces
 
-    def __compute_element_material_stiffness(self, element_unknowns, element_orientations):
+    def __compute_element_material_stiffness(self, e, element_unknowns, element_orientations):
         """
         Compute the material stiffness matrix for an element based on the provided unknowns and orientations.
 
@@ -289,8 +309,8 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
-        rp = np.matmul(
-            Np, element_unknowns[self.function_space.local_translational_dofs])
+        rp = self._compute_element_dof_derivatives(
+            e, element_unknowns, self.function_space.local_translational_dofs)
         # translational and rotational constitutive matrices
         C_F = np.zeros(
             [self.function_space.Q, self.function_space.dim, self.function_space.dim])
@@ -351,13 +371,14 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
         return element_material_stiffness
 
-    def __compute_element_geometric_stiffness(self, element_unknowns, element_orientations,
+    def __compute_element_geometric_stiffness(self, e, element_unknowns, element_orientations,
                                               element_curvatures):
         """
         Compute the geometric stiffness matrix for an element based on the provided unknowns,
         orientations, and curvatures.
 
         Parameters:
+            e: The element index.
             element_unknowns: The unknowns of the element.
             element_orientations: The orientations of the element at each quadrature point.
             element_curvatures: The curvatures of the element at each quadrature point.
@@ -370,8 +391,8 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         N = self.function_space.shape_functions
         Np = self.function_space.shape_first_gradients * \
             (1.0/self.function_space.jacobian)
-        rp = np.matmul(
-            Np, element_unknowns[self.function_space.local_translational_dofs])
+        rp = self._compute_element_dof_derivatives(
+            e, element_unknowns, self.function_space.local_translational_dofs)
         # check if the element orientations and curvatures are of size (Q, dim)
         if (element_orientations.shape != (self.function_space.Q, self.function_space.dim)):
             raise ValueError("Element orientations must be of shape (Q, dim)")
@@ -379,7 +400,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             raise ValueError("Element curvatures must be of shape (Q, dim)")
         # compute the internal forces and moments
         internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
-            element_unknowns, element_orientations, element_curvatures)
+            e, element_unknowns, element_orientations, element_curvatures)
         internal_forces_skew_matrix = skew_symmetric_matrices(
             internal_forces[..., 0])
         internal_moments_skew_matrix = skew_symmetric_matrices(
@@ -418,13 +439,14 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
         return element_geometric_stiffness
 
-    def compute_element_internal_stiffness(self, element_unknowns, element_orientations, 
+    def compute_element_internal_stiffness(self, e, element_unknowns, element_orientations, 
                                            element_curvatures):
         """
         Compute the internal stiffness matrix for an element based on the provided unknowns,
         orientations, and curvatures.
 
         Parameters:
+            e: The element index.
             element_unknowns: The unknowns of the element.
             element_orientations: The orientations of the element at each quadrature point.
             element_curvatures: The curvatures of the element at each quadrature point.
@@ -436,10 +458,10 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
              self.function_space.dof*self.function_space.npel])
         # compute the element material stiffness
         element_internal_stiffness += self.__compute_element_material_stiffness(
-            element_unknowns, element_orientations)
+            e, element_unknowns, element_orientations)
         # compute the element geometric stiffness
         element_internal_stiffness += self.__compute_element_geometric_stiffness(
-            element_unknowns, element_orientations, element_curvatures)
+            e, element_unknowns, element_orientations, element_curvatures)
         return element_internal_stiffness
 
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
@@ -458,7 +480,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             element_unknowns = system_unknowns[global_element_dofs]
             if (element_loads == None):  # No element loads
                 f[global_element_dofs] -= self.compute_element_internal_forces(
-                    element_unknowns, self.orientation[i, :, :], self.curvature[i, :, :])
+                    i, element_unknowns, self.orientation[i, :, :], self.curvature[i, :, :])
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
@@ -476,7 +498,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             element_unknowns = system_unknowns[global_element_dofs]
             if (element_loads == None):  # No element loads
                 A[np.ix_(global_element_dofs, global_element_dofs)
-                  ] += self.compute_element_internal_stiffness(element_unknowns, 
+                  ] += self.compute_element_internal_stiffness(i, element_unknowns, 
                                                                self.orientation[i, :, :], 
                                                                self.curvature[i, :, :])
 
@@ -505,7 +527,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 [self.curvature_nodes[i, :], self.curvature_nodes[i+1, :]], axis=0)
             # compute the internal forces and moments at the nodes
             internal_forces, internal_moments = self.__compute_internal_forces_and_moments(
-                element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
+                i, element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
             if (i == 0):  # only for the first element
                 # assemble the internal forces at the left node
                 f[global_element_dofs_left_node[0:int(
