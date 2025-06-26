@@ -768,7 +768,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         self.__update_system_position_jumps(system_unknowns)
         # assemble the bulk terms using the method in the parent class
         super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
-        # update the internal variables if required
         # assemble the interface terms
         N_left_interface, _ = self.function_space.compute_shapes(1.0)
         N_right_interface, _ = self.function_space.compute_shapes(-1.0)
@@ -809,21 +808,21 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             average_internal_moments_interface = 0.5 * \
                 (internal_moments_left_element[1, ...] +
                  internal_moments_right_element[0, ...])
-            # assemble the internal forces and moments at the interface
-            # add the flux terms
-            f[global_element_dofs_left][self.function_space.local_translational_dofs] += \
+            # assemble the interface residual terms
+            # flux terms
+            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface),
                           average_internal_forces_interface)*(1.0/self.function_space.jacobian)
-            f[global_element_dofs_left][self.function_space.local_rotational_dofs] += \
+            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface),
                           average_internal_moments_interface)*(1.0/self.function_space.jacobian)
-            f[global_element_dofs_right][self.function_space.local_translational_dofs] -= \
+            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface),
                           average_internal_forces_interface)*(1.0/self.function_space.jacobian)
-            f[global_element_dofs_right][self.function_space.local_rotational_dofs] -= \
+            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface),
                           average_internal_moments_interface)*(1.0/self.function_space.jacobian)
-            # add the penalty terms
+            # penalty terms
             penalty_forces = self.betaP * \
                 ((self.material.E*self.material.A) / self.function_space.elL) * \
                 (self.dof_jumps_boundaries[i:i+1, self.function_space.local_translational_dofs].T)[
@@ -832,11 +831,11 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 ((self.material.E*self.material.I) / self.function_space.elL) * \
                 (self.dof_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
                     self.function_space.dim:]
-            f[global_element_dofs_left][self.function_space.local_translational_dofs] += \
+            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface), penalty_forces)
-            f[global_element_dofs_left][self.function_space.local_rotational_dofs] += \
+            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface), penalty_moments)
-            f[global_element_dofs_right][self.function_space.local_translational_dofs] -= \
+            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface), penalty_forces)
-            f[global_element_dofs_right][self.function_space.local_rotational_dofs] -= \
+            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface), penalty_moments)
