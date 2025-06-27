@@ -643,8 +643,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         if (location == "Quads"):
             Np = self.function_space.shape_first_gradients * \
                 (1.0/self.function_space.jacobian)
-            lifting_shapes = (self.function_space.lifting_shape_functions) * \
-                (1.0/self.function_space.jacobian)
+            lifting_shapes = self.function_space.lifting_shape_functions
         elif (location == "Nodes"):
             # NOTE: Here we are assuming that there are only two nodes per element!!!
             _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
@@ -652,10 +651,8 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             _, Nxi_right_node = self.function_space.compute_shapes(1.0)
             Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
             Np = np.stack([Np_left_node, Np_right_node], axis=0)
-            lifting_shapes_left_node = self.function_space.compute_lifting_shapes(
-                -1.0)*(1.0/self.function_space.jacobian)
-            lifting_shapes_right_node = self.function_space.compute_lifting_shapes(
-                1.0)*(1.0/self.function_space.jacobian)
+            lifting_shapes_left_node = self.function_space.compute_lifting_shapes(-1.0)
+            lifting_shapes_right_node = self.function_space.compute_lifting_shapes(1.0)
             lifting_shapes = np.stack(
                 [lifting_shapes_left_node, lifting_shapes_right_node], axis=0)
         return np.matmul(Np, element_dof_values[local_dof_indices]) + \
@@ -812,16 +809,16 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # flux terms
             f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface),
-                          average_internal_forces_interface)*(1.0/self.function_space.jacobian)
+                          average_internal_forces_interface)
             f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
                 np.matmul(np.transpose(N_left_interface),
-                          average_internal_moments_interface)*(1.0/self.function_space.jacobian)
+                          average_internal_moments_interface)
             f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface),
-                          average_internal_forces_interface)*(1.0/self.function_space.jacobian)
+                          average_internal_forces_interface)
             f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
                 np.matmul(np.transpose(N_right_interface),
-                          average_internal_moments_interface)*(1.0/self.function_space.jacobian)
+                          average_internal_moments_interface)
             # penalty terms
             penalty_forces = self.betaP * \
                 ((self.material.E*self.material.A) / self.function_space.elL) * \
@@ -862,15 +859,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             Np_interface = N_xi_interface * \
                 (1.0/self.function_space.jacobian)
             lifting_shapes_interface = \
-                self.function_space.compute_lifting_shapes(1.0) * \
-                (1.0/self.function_space.jacobian)
+                self.function_space.compute_lifting_shapes(1.0)
         elif (element_side == "right"):
             N_interface, N_xi_interface = self.function_space.compute_shapes(-1.0)
             Np_interface = N_xi_interface * \
                 (1.0/self.function_space.jacobian)
             lifting_shapes_interface = \
-                self.function_space.compute_lifting_shapes(-1.0) * \
-                (1.0/self.function_space.jacobian)
+                self.function_space.compute_lifting_shapes(-1.0)
         # sign of the lifting shapes at the interface due to the element side
         sign_tensor = np.zeros(lifting_shapes_interface.shape)
         sign_tensor[0, 0] = 1.0
@@ -962,55 +957,43 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # left-left terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_left)
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_left)
             A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_left)
             # left-right terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_translational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_right)
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_right)
             A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_right)
             # right-left terms
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_left)
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_left)
             A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_left) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_left)
             # right-right terms
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_right)
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_right)
             A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_right) * \
-                (1.0/self.function_space.jacobian)
+                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_right)
             ############## penalty term tangents ##############
             # left-left terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
