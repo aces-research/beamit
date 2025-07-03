@@ -475,8 +475,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             update_internal: A boolean indicating whether to update the internal variables.
         """
         for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
-            )
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
             if (element_loads == None):  # No element loads
                 f[global_element_dofs] -= self.compute_element_internal_forces(
@@ -607,6 +606,70 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 element_dof_values[dofs:]
         return dof_jumps_boundaries
 
+    def __update_element_internal_variables(self, e, system_unknowns_increment):
+        """
+        Update the internal variables of an element based on the current system unknowns increment.
+
+        This method updates the orientation and curvature of the element at each quadrature point and
+        the rotational dof jumps at the element boundaries based on the current system unknowns increment.
+
+        Parameters:
+            e: The index of the element.
+            system_unknowns_increment: The increment in the system unknowns.
+        """
+        N = self.function_space.shape_functions
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        element_rotation_increment = system_unknowns_increment[
+            global_element_dofs][self.function_space.local_rotational_dofs]
+        # compute the rotation increment and its derivative
+        dtheta = np.matmul(N, element_rotation_increment)[..., 0]
+        dtheta_prime = self._compute_element_dof_derivatives(
+            e, system_unknowns_increment[global_element_dofs], 
+            self.function_space.local_rotational_dofs)[..., 0]
+        ############# update the orientation #############
+        current_orientation = self.orientation[e, :, :]
+        # NOTE: Careful with the order of multiplication here since quaternion multiplication 
+        # is not commutative!
+        updated_orientation_quats = \
+            quaternion.from_rotation_vector(dtheta) * quaternion.from_rotation_vector(
+                current_orientation)
+        # convert the updated orientation quaternions to rotation vectors
+        updated_orientation = quaternion.as_rotation_vector(updated_orientation_quats)
+        self.orientation[e, :, :] = updated_orientation
+        ############# update the curvature #############
+        # compute the transformation matrix
+        transformation_matrix = self._compute_transformation_matrix(dtheta)
+        incremental_rotation_tensor = \
+            quaternion.as_rotation_matrix(
+                quaternion.from_rotation_vector(dtheta))
+        self.curvature[e, :, :] = np.matmul(
+            transformation_matrix, dtheta_prime[..., None])[..., 0] + \
+            np.matmul(incremental_rotation_tensor, 
+                      (self.curvature[e, :, :])[..., None])[..., 0]
+        ############# update the boundary dof jumps #############
+        # NOTE: Here we only update the rotational dof jumps. The translational dof jumps are
+        # updated through a different method in stiffness and residual assembly methods.
+        element_dof_increment_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
+            e, system_unknowns_increment)
+        self.dof_jumps_boundaries[e, self.function_space.local_rotational_dofs] = \
+            element_dof_increment_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
+
+    def __update_element_position_jumps(self, e, system_unknowns):
+        """
+        Update the position jumps at the element boundaries based on the current system unknowns.
+
+        This method computes the position jumps at the element boundaries and updates the 
+        self.dof_jumps_boundaries container.
+        
+        Parameters:
+            e: The index of the element.
+            system_unknowns: The current system unknowns.
+        """
+        element_dof_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
+            e, system_unknowns)
+        self.dof_jumps_boundaries[e, self.function_space.local_translational_dofs] = \
+            element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+
     def __update_system_position_jumps(self, system_unknowns):
         """
         Update the system position jumps based on the current system unknowns.
@@ -618,10 +681,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             system_unknowns: The current system unknowns.
         """
         for i in range(0, self.function_space.E):
-            element_dof_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
-                i, system_unknowns)
-            self.dof_jumps_boundaries[i, self.function_space.local_translational_dofs] = \
-                element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+            self.__update_element_position_jumps(i, system_unknowns)
 
     def _compute_element_dof_derivatives(self, e, element_dof_values, local_dof_indices, 
                                          location="Quads"):
@@ -669,39 +729,12 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         Parameters:
             system_unknowns_increment: The increment in the system unknowns.
         """
-        N = self.function_space.shape_functions
         # update the orientation and curvature at quadrature points
         for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_rotation_increment = system_unknowns_increment[
-                global_element_dofs][self.function_space.local_rotational_dofs]
-            # compute the rotation increment and its derivative
-            dtheta = np.matmul(N, element_rotation_increment)[..., 0]
-            dtheta_prime = self._compute_element_dof_derivatives(
-                i, system_unknowns_increment[global_element_dofs], 
-                self.function_space.local_rotational_dofs)[..., 0]
-            ############# update the orientation #############
-            current_orientation = self.orientation[i, :, :]
-            # NOTE: Careful with the order of multiplication here since quaternion multiplication 
-            # is not commutative!
-            updated_orientation_quats = \
-                quaternion.from_rotation_vector(dtheta) * quaternion.from_rotation_vector(
-                    current_orientation)
-            # convert the updated orientation quaternions to rotation vectors
-            updated_orientation = quaternion.as_rotation_vector(updated_orientation_quats)
-            self.orientation[i, :, :] = updated_orientation
-            ############# update the curvature #############
-            # compute the transformation matrix
-            transformation_matrix = self._compute_transformation_matrix(dtheta)
-            incremental_rotation_tensor = \
-                quaternion.as_rotation_matrix(
-                    quaternion.from_rotation_vector(dtheta))
-            current_curvature = self.curvature[i, :, :]
-            self.curvature[i, :, :] = np.matmul(
-                transformation_matrix, dtheta_prime[..., None])[..., 0] + \
-                np.matmul(incremental_rotation_tensor,
-                          current_curvature[..., None])[..., 0]
-        # update the curvature at the nodes
+            # update the internal variables of the element
+            self.__update_element_internal_variables(
+                i, system_unknowns_increment)
+        ########## update the curvature at the nodes ##########
         # NOTE: Here we assume that there are only two nodes per element!!!
         N_left_node, _ = self.function_space.compute_shapes(-1.0)
         N_right_node, _ = self.function_space.compute_shapes(1.0)
@@ -740,14 +773,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
                 np.matmul(incremental_rotation_tensor_right_node,
                           self.curvature_nodes[2*i+1, :][..., None])[..., 0]
-        # update the dof jumps at the element boundaries
-        for i in range(0, self.function_space.E):
-            # NOTE: Here we only update the rotational dof jumps. The translational dof jumps are
-            # updated through a different method in stiffness and residual assembly methods.
-            element_dof_increment_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
-                i, system_unknowns_increment)
-            self.dof_jumps_boundaries[i, self.function_space.local_rotational_dofs] = \
-                element_dof_increment_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
 
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         """
