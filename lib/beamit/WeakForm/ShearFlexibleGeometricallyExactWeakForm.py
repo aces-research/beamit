@@ -646,42 +646,38 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             transformation_matrix, dtheta_prime[..., None])[..., 0] + \
             np.matmul(incremental_rotation_tensor, 
                       (self.curvature[e, :, :])[..., None])[..., 0]
-        ############# update the boundary dof jumps #############
-        # NOTE: Here we only update the rotational dof jumps. The translational dof jumps are
-        # updated through a different method in stiffness and residual assembly methods.
-        element_dof_increment_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
-            e, system_unknowns_increment)
-        self.dof_jumps_boundaries[e, self.function_space.local_rotational_dofs] = \
-            element_dof_increment_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
 
-    def __update_element_position_jumps(self, e, system_unknowns):
+    def __update_element_dof_jumps(self, e, system_unknowns):
         """
-        Update the position jumps at the element boundaries based on the current system unknowns.
+        Update the dof jumps at the element boundaries based on the current system unknowns.
 
-        This method computes the position jumps at the element boundaries and updates the 
+        This method computes the dof jumps at the element boundaries and updates the 
         self.dof_jumps_boundaries container.
         
         Parameters:
             e: The index of the element.
             system_unknowns: The current system unknowns.
         """
-        element_dof_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
-            e, system_unknowns)
-        self.dof_jumps_boundaries[e, self.function_space.local_translational_dofs] = \
-            element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+        if (self.function_space.E > 1):  # only when there are more than one element
+            element_dof_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
+                e, system_unknowns)
+            self.dof_jumps_boundaries[e, self.function_space.local_translational_dofs] = \
+                element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+            self.dof_jumps_boundaries[e, self.function_space.local_rotational_dofs] = \
+                element_dof_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
 
-    def __update_system_position_jumps(self, system_unknowns):
+    def __update_system_dof_jumps(self, system_unknowns):
         """
-        Update the system position jumps based on the current system unknowns.
+        Update the system dof jumps based on the current system unknowns.
 
-        This method computes the position jumps at the element boundaries and updates the 
+        This method computes the dof jumps at the element boundaries and updates the 
         self.dof_jumps_boundaries container.
         
         Parameters:
             system_unknowns: The current system unknowns.
         """
         for i in range(0, self.function_space.E):
-            self.__update_element_position_jumps(i, system_unknowns)
+            self.__update_element_dof_jumps(i, system_unknowns)
 
     def _compute_element_dof_derivatives(self, e, element_dof_values, local_dof_indices, 
                                          location="Quads"):
@@ -862,10 +858,10 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_loads: The distributed loads on the elements.
             update_internal: A boolean indicating whether to update the internal variables.
         """
-        # update the position jumps at the element boundaries before computing the residual
+        # update the dof jumps at the element boundaries before computing the residual
         # NOTE: This is necessary to ensure that the residual is computed with the correct 
-        # position jumps.
-        self.__update_system_position_jumps(system_unknowns)
+        # dof jumps.
+        self.__update_system_dof_jumps(system_unknowns)
         # assemble the bulk terms using the method in the parent class
         super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # assemble the interface terms
@@ -902,10 +898,10 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                                                           nodal_orientations_right, 
                                                           nodal_curvatures_right, 
                                                           location="Nodes")
-            average_internal_forces_interface = 0.5 * \
+            average_internal_forces_interface = 0.50 * \
                 (internal_forces_left_element[1, ...] +
                  internal_forces_right_element[0, ...])
-            average_internal_moments_interface = 0.5 * \
+            average_internal_moments_interface = 0.50 * \
                 (internal_moments_left_element[1, ...] +
                  internal_moments_right_element[0, ...])
             # compute the other interface residual terms
@@ -1116,10 +1112,10 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             nodal_loads: The nodal loads applied to the system.
             element_loads: The distributed loads on the elements.
         """
-        # update the position jumps at the element boundaries before computing the residual
+        # update the dof jumps at the element boundaries before computing the stiffness
         # NOTE: This is necessary to ensure that the stiffness is computed with the correct
-        # position jumps.
-        self.__update_system_position_jumps(system_unknowns)
+        # dof jumps.
+        self.__update_system_dof_jumps(system_unknowns)
         # assemble the bulk terms using the method in the parent class
         super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
         # assemble the interface stiffness terms
