@@ -55,7 +55,7 @@ def test_bulk_internal_variable_updates():
     solution_increment[8, 0] += 3.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution_increment)
+    weak_form.update_internal_variables(solution_increment)
 
     # check the internal variables
     for i in range(0, function_space.E):
@@ -78,7 +78,7 @@ def test_bulk_internal_variable_updates():
     solution_increment[11, 0] += np.pi / 4.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution_increment)
+    weak_form.update_internal_variables(solution_increment)
 
     # check the internal variables
     for i in range(0, function_space.E):
@@ -106,7 +106,7 @@ def test_bulk_internal_variable_updates():
     solution_increment[11, 0] -= np.pi / 4.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution_increment)
+    weak_form.update_internal_variables(solution_increment)
 
     # check the curvatures
     for i in range(0, function_space.Q):
@@ -148,7 +148,7 @@ def test_residual_CG():
     solution[11, 0] = np.pi / 32.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution)
+    weak_form.update_internal_variables(solution)
 
     # compute the residual
     residual_computed = np.zeros([function_space.N * function_space.dof, 1])
@@ -247,7 +247,7 @@ def test_stiffness_CG():
     solution[11, 0] = np.pi / 32.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution)
+    weak_form.update_internal_variables(solution)
 
     # compute the stiffness matrix
     stiffness_computed = np.zeros(
@@ -386,7 +386,7 @@ def test_residual_DG():
     solution[23, 0] = np.pi / 8.0
 
     # update the bulk internal variables
-    weak_form.update_bulk_internal_variables(solution)
+    weak_form.update_internal_variables(solution)
 
     # compute the residual
     residual_computed = np.zeros([function_space.N * function_space.dof, 1])

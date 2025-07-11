@@ -172,9 +172,8 @@ class NewtonRaphsonSolver(Solver):
             raise NotImplementedError(
                 "Solution update type %s is not implemented in the Newton-Raphson solver." % 
                 self.system.weak_form.solution_update_type.name)
-        # update the bulk internal variables in the weak form
-        self.system.weak_form.update_bulk_internal_variables(
-            solution_increment)
+        # update the internal variables in the weak form
+        self.system.weak_form.update_internal_variables(solution_increment)
 
     def solve(self, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):

@@ -100,7 +100,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             Np = np.stack([Np_left_node, Np_right_node], axis=0)
         return np.matmul(Np, element_dof_values[local_dof_indices])
 
-    def update_bulk_internal_variables(self, system_unknowns_increment):
+    def update_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.
         
@@ -715,7 +715,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             np.matmul(lifting_shapes,
                       (self.dof_jumps_boundaries[e:e+1, local_dof_indices].T))
 
-    def update_bulk_internal_variables(self, system_unknowns_increment):
+    def update_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.
         

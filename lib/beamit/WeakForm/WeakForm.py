@@ -87,7 +87,7 @@ class WeakForm(ABC):
         """
         pass
 
-    def update_bulk_internal_variables(self, system_unknowns_increment):
+    def update_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.
 
