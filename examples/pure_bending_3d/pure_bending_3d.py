@@ -8,21 +8,21 @@ import os
 import copy
 
 # density of the material
-rho = 1.0
+rho = 7850.0
 # elastic modulus of beam
-E = 1.0
+E = 2.0E11
 # Poisson's ratio of beam
-nu = 0.0
+nu = 0.30
 # length of beam
-L = 1000.0
+L = 1.0
 # beam slenderness ratio
-slenderness_ratio = 100.0
+slenderness_ratio = 10.0
 # side of the square cross-section
 a = L / slenderness_ratio
 # number of elements
 Nel = 100
 # applied loads and tolerances
-INITIAL_MOMENT = 10.0
+TIP_MOMENT = 1.0E07
 SPATIAL_TOLERANCE = 1.0E-10
 
 # the load / time steps and output
@@ -88,11 +88,11 @@ if __name__ == "__main__":
             z_coord = nodal_coordinates[n, 2]
             # apply a moment couple at the right end
             if ((abs(x_coord - L) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
-                bcvalues[n, 3] = load_level * INITIAL_MOMENT
-                bcvalues[n, 5] = load_level * INITIAL_MOMENT
+                bcvalues[n, 3] = load_level * TIP_MOMENT
+                bcvalues[n, 5] = load_level * TIP_MOMENT
         solver.modify_boundary_condition_values(bcvalues)
         # solve the problem and update the system
-        solver.solve(Nmax=100, tol=1.0E-08)
+        solver.solve(Nmax=100, tol=1.0E-07)
         if ((i+1) % vtk_dump == 0):
             output_file = "./VTK/output-" + str(i+1)
             PostProcess.write_output_vtk(output_file, system)
