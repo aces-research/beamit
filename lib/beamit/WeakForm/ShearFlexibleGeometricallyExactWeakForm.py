@@ -54,7 +54,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         small_norm_idxs = psi_norm < 1.0e-10
         sin_psi = np.sin(psi_norm)
         cos_psi = np.cos(psi_norm)
-        psi_norm_safe = np.where(small_norm_idxs, 1.0, psi_norm)
+        psi_norm_safe = np.where(small_norm_idxs, 1.0e-10, psi_norm)
         sin_term = sin_psi / psi_norm_safe
         cos_term = (1.0 - cos_psi) / psi_norm_safe**2
         extra_term = (psi_norm - sin_psi) / psi_norm_safe**3
@@ -70,6 +70,109 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # outer product
         outer = orientation[:, :, None] * orientation[:, None, :]
         return sin_term * I + cos_term * S + extra_term * outer
+
+    @staticmethod
+    def _compute_transformation_matrix_inverse(orientation):
+        """
+        Compute the inverse of the transformation matrix (T) which converts multiplicative updates to additive updates.
+
+        The inverse transformation matrix is computed based on the current orientation of the beam.
+
+        Parameters:
+            orientation: The orientation in terms of rotation vectors. **orienation** is assumed to be of shape (n, 3) where n is the number of rotation vectors.
+        Returns:
+            T_inv: The inverse transformation matrix of size (n, 3, 3).
+        """
+        # check if the orientation is of size (n, 3)
+        if (orientation.ndim != 2 or orientation.shape[1] != 3):
+            raise ValueError(
+                "Orientation must be of shape (n, 3), where n is the number of rotation vectors.")
+        psi_norm = np.linalg.norm(orientation, axis=1)
+        I = np.eye(3)[None, :, :]
+        # avoid division by zero
+        small_norm_idxs = psi_norm < 1.0e-10
+        psi_norm_safe = np.where(small_norm_idxs, 1.0e-10, psi_norm)
+        psi_norm_half = psi_norm_safe / 2.0
+        tan_psi_norm_half = np.tan(psi_norm_half)
+        # auxiliary terms with safe evaluation
+        t1 = np.where(small_norm_idxs, 1.0, psi_norm_half / tan_psi_norm_half)
+        t2 = -0.50
+        t3 = np.where(small_norm_idxs, 1.0/12.0,
+                      (1.0 - psi_norm_half / tan_psi_norm_half) / psi_norm_safe**2)
+        t1 = t1[:, None, None]
+        t3 = t3[:, None, None]
+        S = skew_symmetric_matrices(orientation)
+        outer = orientation[:, :, None] * orientation[:, None, :]
+        return t1 * I + t2 * S + t3 * outer
+
+    @staticmethod
+    def _compute_R_matrix(orientation, orientation_derivative):
+        """
+        Compute the R matrix which is an auxiliary matrix in the residual and stiffness computations.
+
+        Parameters:
+            orientation: The orientation in terms of rotation vectors. **orienation** is assumed to be of shape (n, 3) where n is the number of rotation vectors.
+            orientation_derivative: The derivative of the orientation which is also assumed to be of shape (n, 3).
+        Returns:
+            R: The R matrix of size (n, 3, 3).
+        """
+        # check if the orientation is of size (n, 3)
+        if (orientation.ndim != 2 or orientation.shape[1] != 3):
+            raise ValueError(
+                "Orientation must be of shape (n, 3), where n is the number of rotation vectors.")
+        # check if the orientation_derivative is of size (n, 3)
+        if (orientation_derivative.ndim != 2 or orientation_derivative.shape[1] != 3):
+            raise ValueError(
+                "Orientation derivative must be of shape (n, 3), where n is the number of rotation vectors.")
+        psi_norm = np.linalg.norm(orientation, axis=1)
+        I = np.eye(3)[None, :, :]
+        # avoid division by zero
+        small_norm_idxs = psi_norm < 1.0e-10
+        psi_norm_safe = np.where(small_norm_idxs, 1.0e-10, psi_norm)
+        psi_norm_safe2 = psi_norm_safe**2
+        psi_norm_safe3 = psi_norm_safe**3
+        psi_norm_safe4 = psi_norm_safe**4
+        psi_norm_safe5 = psi_norm_safe**5
+        # coefficients c1 to c5
+        c1 = (psi_norm_safe * np.cos(psi_norm_safe) -
+              np.sin(psi_norm_safe)) / psi_norm_safe3
+        c2 = (psi_norm_safe * np.sin(psi_norm_safe) + 2 *
+              np.cos(psi_norm_safe) - 2) / psi_norm_safe4
+        c3 = (3 * np.sin(psi_norm_safe) - 2 * psi_norm_safe -
+              psi_norm_safe * np.cos(psi_norm_safe)) / psi_norm_safe5
+        c4 = (1 - np.cos(psi_norm_safe)) / psi_norm_safe2
+        c5 = (psi_norm_safe - np.sin(psi_norm_safe)) / psi_norm_safe3
+        # apply limits for small angles
+        c1 = np.where(small_norm_idxs, -1.0 / 3.0, c1)
+        c2 = np.where(small_norm_idxs, -1.0 / 12.0, c2)
+        c3 = np.where(small_norm_idxs, 1.0 / 20.0, c3)
+        c4 = np.where(small_norm_idxs, 0.50, c4)
+        c5 = np.where(small_norm_idxs, 1.0 / 6.0, c5)
+        c1 = c1[:, None, None]
+        c2 = c2[:, None, None]
+        c3 = c3[:, None, None]
+        c4 = c4[:, None, None]
+        c5 = c5[:, None, None]
+        # compute auxiliary terms
+        dot = np.einsum('ni,ni->n', orientation, orientation_derivative)
+        cross = np.cross(orientation, orientation_derivative, axis=1)
+        outer_theta = orientation[:, :, None] * orientation[:, None, :]
+        outer_thetas = orientation_derivative[:, :, None] * orientation[:, None, :]
+        outer_theta_cross = cross[:, :, None] * orientation[:, None, :]
+        outer_theta_dot = dot[:, None, None] * outer_theta
+        skew_theta_s = skew_symmetric_matrices(orientation_derivative)
+        identity = I.repeat(orientation.shape[0], axis=0)
+        identity_scaled = dot[:, None, None] * identity
+        outer_theta_thetas = orientation[:, :, None] * orientation_derivative[:, None, :]
+        # compute the R matrix
+        R = (
+            c1 * outer_thetas +
+            c2 * outer_theta_cross +
+            c3 * outer_theta_dot -
+            c4 * skew_theta_s +
+            c5 * (identity_scaled + outer_theta_thetas)
+        )
+        return R
 
     def __update_element_internal_variables(self, e, system_unknowns_increment):
         """
@@ -291,6 +394,21 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # compute the internal forces and moments
         internal_forces, internal_moments = self._compute_internal_forces_and_moments(
             e, element_unknowns, element_orientations, element_curvatures)
+        # compute the transformation matrix
+        transformation_matrix = self._compute_transformation_matrix(
+            element_orientations)
+        # compute the derivative of the orientation
+        transformation_matrix_inv = self._compute_transformation_matrix_inverse(
+            element_orientations)
+        element_orientations_derivative = np.matmul(
+            transformation_matrix_inv, element_curvatures[..., None])[..., 0]
+        # compute the moment multiplier matrix
+        R_matrix = self._compute_R_matrix(
+            element_orientations, element_orientations_derivative)
+        curvature_skew_matrix = skew_symmetric_matrices(
+            element_curvatures)
+        moment_multiplier_matrix = R_matrix + \
+            np.matmul(curvature_skew_matrix, transformation_matrix)
         # assemble the internal forces
         internal_forces_integrand = np.matmul(
             np.transpose(Np, axes=(0, 2, 1)), internal_forces)
@@ -299,9 +417,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                    self.function_space.JxW, axis=0, keepdims=False)
         # assemble the internal moments
         internal_moments_integrand = np.matmul(
-            np.transpose(Np, axes=(0, 2, 1)), internal_moments)
+            np.transpose(Np, axes=(0, 2, 1)), np.matmul(
+                np.transpose(transformation_matrix, axes=(0, 2, 1)), internal_moments))
+        internal_moments_integrand += np.matmul(
+            np.transpose(N, axes=(0, 2, 1)), np.matmul(
+                np.transpose(moment_multiplier_matrix, axes=(0, 2, 1)), internal_moments))
         internal_moments_integrand -= np.matmul(
-            np.transpose(N, axes=(0, 2, 1)), np.cross(rp, internal_forces, axis=1))
+            np.transpose(N, axes=(0, 2, 1)), np.matmul(
+                np.transpose(transformation_matrix, axes=(0, 2, 1)), 
+                    np.cross(rp, internal_forces, axis=1)))
         element_internal_forces[self.function_space.local_rotational_dofs] += \
             np.sum(internal_moments_integrand *
                    self.function_space.JxW, axis=0, keepdims=False)
@@ -453,6 +577,66 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             np.sum(dm_dtheta_term2*self.function_space.JxW, axis=0, keepdims=False)
         return element_geometric_stiffness
 
+    def __compute_element_numerical_stiffness(self, e, system_unknowns):
+        """
+        Compute the numerical stiffness matrix for an element based on the provided unknowns.
+
+        Parameters:
+            e: The element index.
+            system_unknowns: The unknowns of the system.
+        Returns:
+            element_numerical_stiffness: The computed numerical stiffness matrix for the element.
+        """
+        perturbation_factor = 1.0e-05
+        np.random.seed(1234 + e)  # for reproducibility
+        std_dev_system_unknowns = 0.01 * \
+            np.maximum(np.abs(system_unknowns), 1.0e-03)
+        perturbation_magnitudes = perturbation_factor * np.abs(
+            np.random.normal(loc=system_unknowns, scale=std_dev_system_unknowns))
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        # perturb the element dofs individually to compute the numerical stiffness matrix
+        element_numerical_stiffness = np.zeros(
+            [global_element_dofs.shape[0], global_element_dofs.shape[0]])
+        perturbed_system_unknowns = system_unknowns.copy()
+        perturbed_solution_increments = np.zeros_like(system_unknowns)
+        for i in range(0, global_element_dofs.shape[0]):
+            # reset the perturbed increments
+            perturbed_solution_increments.fill(0.0)
+            # perturb the i-th dof
+            perturbed_solution_increments[global_element_dofs[i]] = \
+                perturbation_magnitudes[global_element_dofs[i]]
+            ####### positively perturb the unknowns #######
+            perturbed_system_unknowns += \
+                perturbed_solution_increments
+            # update the internal variables of the element
+            self.__update_element_internal_variables(
+                e, perturbed_solution_increments)
+            # compute the element internal forces for the positive perturbation
+            element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
+                e, perturbed_system_unknowns[global_element_dofs], 
+                self.orientation[e, :, :], self.curvature[e, :, :])
+            ####### negatively perturb the unknowns #######
+            perturbed_system_unknowns -= \
+                2.0 * perturbed_solution_increments
+            # update the internal variables of the element
+            self.__update_element_internal_variables(
+                e, -2.0 * perturbed_solution_increments)
+            # compute the element internal forces for the negative perturbation
+            element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
+                e, perturbed_system_unknowns[global_element_dofs],
+                self.orientation[e, :, :], self.curvature[e, :, :])
+            # compute the element numerical stiffness matrix
+            element_numerical_stiffness[:, i:i+1] += \
+                (element_internal_forces_positive_perturbation - \
+                 element_internal_forces_negative_perturbation) / \
+                (2.0 * perturbation_magnitudes[global_element_dofs[i]])
+            ####### reset the unknowns and internal variables #######
+            perturbed_system_unknowns += \
+                perturbed_solution_increments
+            self.__update_element_internal_variables(
+                e, perturbed_solution_increments)
+        return element_numerical_stiffness
+
     def compute_element_internal_stiffness(self, e, element_unknowns, element_orientations, 
                                            element_curvatures):
         """
@@ -508,12 +692,9 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten(
             )
-            element_unknowns = system_unknowns[global_element_dofs]
             if (element_loads == None):  # No element loads
-                A[np.ix_(global_element_dofs, global_element_dofs)
-                  ] += self.compute_element_internal_stiffness(i, element_unknowns, 
-                                                               self.orientation[i, :, :], 
-                                                               self.curvature[i, :, :])
+                A[np.ix_(global_element_dofs, global_element_dofs)] += \
+                    self.__compute_element_numerical_stiffness(i, system_unknowns)
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
