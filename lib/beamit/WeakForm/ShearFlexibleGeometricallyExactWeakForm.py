@@ -71,6 +71,48 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         outer = orientation[:, :, None] * orientation[:, None, :]
         return sin_term * I + cos_term * S + extra_term * outer
 
+    def __update_element_internal_variables(self, e, system_unknowns_increment):
+        """
+        Update the internal variables of an element based on the current system unknowns increment.
+
+        This method updates the orientation and curvature of the element at each quadrature point 
+        based on the current system unknowns increment.
+
+        Parameters:
+            e: The index of the element.
+            system_unknowns_increment: The increment in the system unknowns.
+        """
+        N = self.function_space.shape_functions
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        element_rotation_increment = system_unknowns_increment[
+            global_element_dofs][self.function_space.local_rotational_dofs]
+        # compute the rotation increment and its derivative
+        dtheta = np.matmul(N, element_rotation_increment)[..., 0]
+        dtheta_prime = self._compute_element_dof_derivatives(
+            e, system_unknowns_increment[global_element_dofs], 
+            self.function_space.local_rotational_dofs)[..., 0]
+        ############# update the orientation #############
+        current_orientation = self.orientation[e, :, :]
+        # NOTE: Careful with the order of multiplication here since quaternion multiplication 
+        # is not commutative!
+        updated_orientation_quats = \
+            quaternion.from_rotation_vector(dtheta) * quaternion.from_rotation_vector(
+                current_orientation)
+        # convert the updated orientation quaternions to rotation vectors
+        updated_orientation = quaternion.as_rotation_vector(updated_orientation_quats)
+        self.orientation[e, :, :] = updated_orientation
+        ############# update the curvature #############
+        # compute the transformation matrix
+        transformation_matrix = self._compute_transformation_matrix(dtheta)
+        incremental_rotation_tensor = \
+            quaternion.as_rotation_matrix(
+                quaternion.from_rotation_vector(dtheta))
+        current_curvature = self.curvature[e, :, :]
+        self.curvature[e, :, :] = np.matmul(
+            transformation_matrix, dtheta_prime[..., None])[..., 0] + \
+            np.matmul(incremental_rotation_tensor,
+                        current_curvature[..., None])[..., 0]
+
     def _compute_element_dof_derivatives(self, e, element_dof_values, local_dof_indices, 
                                          location="Quads"):
         """
@@ -110,39 +152,11 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         Parameters:
             system_unknowns_increment: The increment in the system unknowns.
         """
-        N = self.function_space.shape_functions
         # update the orientation and curvature at quadrature points
         for i in range(0, self.function_space.E):
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_rotation_increment = system_unknowns_increment[
-                global_element_dofs][self.function_space.local_rotational_dofs]
-            # compute the rotation increment and its derivative
-            dtheta = np.matmul(N, element_rotation_increment)[..., 0]
-            dtheta_prime = self._compute_element_dof_derivatives(
-                i, system_unknowns_increment[global_element_dofs], 
-                self.function_space.local_rotational_dofs)[..., 0]
-            ############# update the orientation #############
-            current_orientation = self.orientation[i, :, :]
-            # NOTE: Careful with the order of multiplication here since quaternion multiplication 
-            # is not commutative!
-            updated_orientation_quats = \
-                quaternion.from_rotation_vector(dtheta) * quaternion.from_rotation_vector(
-                    current_orientation)
-            # convert the updated orientation quaternions to rotation vectors
-            updated_orientation = quaternion.as_rotation_vector(updated_orientation_quats)
-            self.orientation[i, :, :] = updated_orientation
-            ############# update the curvature #############
-            # compute the transformation matrix
-            transformation_matrix = self._compute_transformation_matrix(dtheta)
-            incremental_rotation_tensor = \
-                quaternion.as_rotation_matrix(
-                    quaternion.from_rotation_vector(dtheta))
-            current_curvature = self.curvature[i, :, :]
-            self.curvature[i, :, :] = np.matmul(
-                transformation_matrix, dtheta_prime[..., None])[..., 0] + \
-                np.matmul(incremental_rotation_tensor,
-                          current_curvature[..., None])[..., 0]
-        # update the curvature at the nodes
+            self.__update_element_internal_variables(
+                i, system_unknowns_increment)
+        ########## update the curvature at the nodes ##########
         # NOTE: Here we assume that there are only two nodes per element!!!
         N_left_node, _ = self.function_space.compute_shapes(-1.0)
         N_right_node, _ = self.function_space.compute_shapes(1.0)
