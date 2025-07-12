@@ -176,7 +176,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         )
         return R
 
-    def __update_element_internal_variables(self, e, system_unknowns_increment):
+    def __update_element_internal_variables(self, e, element_unknowns_increment):
         """
         Update the internal variables of an element based on the current system unknowns increment.
 
@@ -185,17 +185,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
 
         Parameters:
             e: The index of the element.
-            system_unknowns_increment: The increment in the system unknowns.
+            element_unknowns_increment: The increment in the element unknowns.
         """
         N = self.function_space.shape_functions
-        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
-        element_rotation_increment = system_unknowns_increment[
-            global_element_dofs][self.function_space.local_rotational_dofs]
+        element_rotation_increment = element_unknowns_increment[
+            self.function_space.local_rotational_dofs]
         # compute the "additive" rotation increment and its derivative
         dtheta = np.matmul(N, element_rotation_increment)[..., 0]
         dtheta_prime = self._compute_element_dof_derivatives(
-            e, system_unknowns_increment[global_element_dofs], 
-            self.function_space.local_rotational_dofs)[..., 0]
+            e, element_unknowns_increment, self.function_space.local_rotational_dofs)[..., 0]
         # compute the transformation and R matrix
         transformation_matrix = self._compute_transformation_matrix(
             self.orientation[e, :, :])
@@ -315,8 +313,9 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         """
         # update the orientation and curvature at quadrature points
         for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             self.__update_element_internal_variables(
-                i, system_unknowns_increment)
+                i, system_unknowns_increment[global_element_dofs])
         ########## update the curvature at the nodes ##########
         # NOTE: Here we assume that there are only two nodes per element!!!
         N_left_node, _ = self.function_space.compute_shapes(-1.0)
@@ -540,6 +539,10 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         """
         Compute the material stiffness matrix for an element based on the provided unknowns and orientations.
 
+        NOTE: This method computes the material stiffness matrix for the element only when we consider
+        the multiplicative updates of the rotational degrees of freedom. But currently we are using 
+        the additive updates, so do not use this method!!!
+
         Parameters:
             element_unknowns: The unknowns of the element.
             element_orientations: The orientations of the element at each quadrature point.
@@ -620,6 +623,10 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         Compute the geometric stiffness matrix for an element based on the provided unknowns,
         orientations, and curvatures.
 
+        NOTE: This method computes the geometric stiffness matrix for the element only when we consider
+        the multiplicative updates of the rotational degrees of freedom. But currently we are using 
+        the additive updates, so do not use this method!!!
+
         Parameters:
             e: The element index.
             element_unknowns: The unknowns of the element.
@@ -694,49 +701,45 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         """
         perturbation_factor = 1.0e-05
         np.random.seed(1234 + e)  # for reproducibility
-        std_dev_system_unknowns = 0.01 * \
-            np.maximum(np.abs(system_unknowns), 1.0e-03)
-        perturbation_magnitudes = perturbation_factor * np.abs(
-            np.random.normal(loc=system_unknowns, scale=std_dev_system_unknowns))
         global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        std_dev_element_unknowns = 0.01 * \
+            np.maximum(np.abs(system_unknowns[global_element_dofs]), 1.0e-03)
+        perturbation_magnitudes = perturbation_factor * np.abs(
+            np.random.normal(loc=system_unknowns[global_element_dofs], 
+                             scale=std_dev_element_unknowns))
         # perturb the element dofs individually to compute the numerical stiffness matrix
         element_numerical_stiffness = np.zeros(
             [global_element_dofs.shape[0], global_element_dofs.shape[0]])
-        perturbed_system_unknowns = system_unknowns.copy()
-        perturbed_solution_increments = np.zeros_like(system_unknowns)
+        perturbed_element_unknowns = system_unknowns[global_element_dofs].copy()
+        perturbed_solution_increments = np.zeros_like(system_unknowns[global_element_dofs])
         for i in range(0, global_element_dofs.shape[0]):
             # reset the perturbed increments
             perturbed_solution_increments.fill(0.0)
             # perturb the i-th dof
-            perturbed_solution_increments[global_element_dofs[i]] = \
-                perturbation_magnitudes[global_element_dofs[i]]
+            perturbed_solution_increments[i] = perturbation_magnitudes[i]
             ####### positively perturb the unknowns #######
-            perturbed_system_unknowns += \
-                perturbed_solution_increments
+            perturbed_element_unknowns += perturbed_solution_increments
             # update the internal variables of the element
             self.__update_element_internal_variables(
                 e, perturbed_solution_increments)
             # compute the element internal forces for the positive perturbation
             element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
-                e, perturbed_system_unknowns[global_element_dofs], 
-                self.orientation[e, :, :], self.curvature[e, :, :])
+                e, perturbed_element_unknowns, self.orientation[e, :, :], self.curvature[e, :, :])
             ####### negatively perturb the unknowns #######
-            perturbed_system_unknowns -= \
-                2.0 * perturbed_solution_increments
+            perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
             # update the internal variables of the element
             self.__update_element_internal_variables(
                 e, -2.0 * perturbed_solution_increments)
             # compute the element internal forces for the negative perturbation
             element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
-                e, perturbed_system_unknowns[global_element_dofs],
-                self.orientation[e, :, :], self.curvature[e, :, :])
+                e, perturbed_element_unknowns, self.orientation[e, :, :], self.curvature[e, :, :])
             # compute the element numerical stiffness matrix
             element_numerical_stiffness[:, i:i+1] += \
                 (element_internal_forces_positive_perturbation - \
                  element_internal_forces_negative_perturbation) / \
-                (2.0 * perturbation_magnitudes[global_element_dofs[i]])
+                (2.0 * perturbation_magnitudes[i])
             ####### reset the unknowns and internal variables #######
-            perturbed_system_unknowns += \
+            perturbed_element_unknowns += \
                 perturbed_solution_increments
             self.__update_element_internal_variables(
                 e, perturbed_solution_increments)
