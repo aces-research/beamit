@@ -87,6 +87,18 @@ class WeakForm(ABC):
         """
         pass
 
+    def update_rotational_solution(self, system_unknowns, solution_increment):
+        """
+        Update the rotational degrees of freedom in the solution based on the solution increment.
+
+        Parameters:
+            system_unknowns: The unknowns of the system.
+            solution_increment: The increment in the solution.
+        """
+        raise NotImplementedError(
+            "The update_rotational_solution method is called from the base class. " \
+            " Implement it in the derived class.")
+
     def update_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.

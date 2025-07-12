@@ -245,6 +245,42 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             Np = np.stack([Np_left_node, Np_right_node], axis=0)
         return np.matmul(Np, element_dof_values[local_dof_indices])
 
+    def update_rotational_solution(self, system_unknowns, solution_increment):
+        """
+        Update the rotational degrees of freedom in the solution based on the solution increment.
+
+        Parameters:
+            system_unknowns: The unknowns of the system.
+            solution_increment: The increment in the solution.
+        """
+        # get the rotational dof indices
+        dof = self.function_space.dof
+        num_rot_dofs = (int)(self.function_space.local_rotational_dofs.size /
+                             self.function_space.npel)
+        rotational_dof_indices = np.concatenate(
+            [self.function_space.local_rotational_dofs[0:num_rot_dofs] +
+             dof*i for i in range(self.function_space.N)])
+        rotation_solution_vectors = \
+            system_unknowns[rotational_dof_indices].reshape([-1, 3])
+        rotation_increment_vectors = \
+            solution_increment[rotational_dof_indices].reshape([-1, 3])
+        # transform the additive updates of rotation increments to multiplicative updates
+        transformation_matrices = \
+            self._compute_transformation_matrix(rotation_solution_vectors)
+        rotation_increment_vectors = \
+            np.matmul(transformation_matrices, rotation_increment_vectors[..., None])[..., 0]
+        # convert the rotation vectors to quaternions
+        rotation_solution_quats = quaternion.from_rotation_vector(rotation_solution_vectors)
+        rotation_increment_quats = quaternion.from_rotation_vector(rotation_increment_vectors)
+        # update the rotations using quaternion multiplication
+        # NOTE: Here, we need to be careful with the order of multiplication since quaternion
+        # multiplication is not commutative!!!
+        updated_rotation_quats = rotation_increment_quats * rotation_solution_quats
+        # convert the updated quaternions back to rotation vectors
+        updated_rotation_vectors = quaternion.as_rotation_vector(updated_rotation_quats)
+        # update the solution vector with the updated rotation vectors
+        system_unknowns[rotational_dof_indices] = updated_rotation_vectors.reshape([-1, 1])
+
     def update_internal_variables(self, system_unknowns_increment):
         """
         Update the internal variables in the weak form based on the increment in the system unknowns.
