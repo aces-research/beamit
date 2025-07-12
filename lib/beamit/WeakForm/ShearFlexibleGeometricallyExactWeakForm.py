@@ -26,9 +26,11 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
              self.function_space.dim])  # saved as rotation vectors
         self.curvature = np.zeros(
             [self.function_space.E, self.function_space.Q, self.function_space.dim])
-        # container to store the curvature at the nodes
+        # containers to store the orientation and curvature at the nodes
         # NOTE: The curvature at the nodes is not used in the weak form, but it is needed for
         # post-processing (to compute the internal moments).
+        self.orientation_nodes = np.zeros(
+            [self.function_space.N, self.function_space.dim])
         self.curvature_nodes = np.zeros(
             [self.function_space.N, self.function_space.dim])
 
@@ -189,11 +191,31 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
         element_rotation_increment = system_unknowns_increment[
             global_element_dofs][self.function_space.local_rotational_dofs]
-        # compute the rotation increment and its derivative
+        # compute the "additive" rotation increment and its derivative
         dtheta = np.matmul(N, element_rotation_increment)[..., 0]
         dtheta_prime = self._compute_element_dof_derivatives(
             e, system_unknowns_increment[global_element_dofs], 
             self.function_space.local_rotational_dofs)[..., 0]
+        # compute the transformation and R matrix
+        transformation_matrix = self._compute_transformation_matrix(
+            self.orientation[e, :, :])
+        transformation_matrix_inv = self._compute_transformation_matrix_inverse(
+            self.orientation[e, :, :])
+        element_orientation_derivative = np.matmul(
+            transformation_matrix_inv, self.curvature[e, :, :][..., None])[..., 0]
+        R_matrix = self._compute_R_matrix(
+            self.orientation[e, :, :], element_orientation_derivative)
+        # compute the rotation increment multiplier matrix
+        curvature_skew_matrix = skew_symmetric_matrices(
+            self.curvature[e, :, :])
+        rotation_increment_multiplier_matrix = \
+            R_matrix + np.matmul(curvature_skew_matrix, transformation_matrix)
+        # transform the additive rotation increments to multiplicative increments
+        dtheta_prime = np.matmul(
+            transformation_matrix, dtheta_prime[..., None])[..., 0] + \
+            np.matmul(rotation_increment_multiplier_matrix, dtheta[..., None])[..., 0]
+        dtheta = np.matmul(
+            transformation_matrix, dtheta[..., None])[..., 0]
         ############# update the orientation #############
         current_orientation = self.orientation[e, :, :]
         # NOTE: Careful with the order of multiplication here since quaternion multiplication 
@@ -303,7 +325,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_rotation_increment = system_unknowns_increment[
                 global_element_dofs][self.function_space.local_rotational_dofs]
-            # compute the rotation increment and its derivative
+            # compute the "additive" rotation increment and its derivative
             dtheta_left_node = np.matmul(
                 N_left_node, element_rotation_increment)[..., 0]
             dtheta_right_node = np.matmul(
@@ -313,11 +335,48 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 self.function_space.local_rotational_dofs, location="Nodes")[..., 0]
             dtheta_prime_left_node = dtheta_prime_node[0, :]
             dtheta_prime_right_node = dtheta_prime_node[1, :]
-            # transformation matrices
+            # compute the transformation and R matrices
             transformation_matrix_left_node = self._compute_transformation_matrix(
-                dtheta_left_node[None, ...])[0, ...]
+                self.orientation_nodes[i:i+1, :])
             transformation_matrix_right_node = self._compute_transformation_matrix(
-                dtheta_right_node[None, ...])[0, ...]
+                self.orientation_nodes[i+1:i+2, :])
+            transformation_matrix_left_node_inv = self._compute_transformation_matrix_inverse(
+                self.orientation_nodes[i:i+1, :])
+            transformation_matrix_right_node_inv = self._compute_transformation_matrix_inverse(
+                self.orientation_nodes[i+1:i+2, :])
+            element_orientation_derivative_left_node = np.matmul(
+                transformation_matrix_left_node_inv, self.curvature_nodes[i:i+1, :][..., None])[..., 0]
+            element_orientation_derivative_right_node = np.matmul(
+                transformation_matrix_right_node_inv, self.curvature_nodes[i+1:i+2, :][..., None])[..., 0]
+            R_matrix_left_node = self._compute_R_matrix(
+                self.orientation_nodes[i:i+1, :], element_orientation_derivative_left_node)
+            R_matrix_right_node = self._compute_R_matrix(
+                self.orientation_nodes[i+1:i+2, :], element_orientation_derivative_right_node)
+            # compute the rotation increment multiplier matrix
+            curvature_skew_matrix_left_node = skew_symmetric_matrices(
+                self.curvature_nodes[i:i+1, :])
+            curvature_skew_matrix_right_node = skew_symmetric_matrices(
+                self.curvature_nodes[i+1:i+2, :])
+            rotation_increment_multiplier_matrix_left_node = \
+                R_matrix_left_node + np.matmul(curvature_skew_matrix_left_node, transformation_matrix_left_node)
+            rotation_increment_multiplier_matrix_right_node = \
+                R_matrix_right_node + np.matmul(curvature_skew_matrix_right_node, transformation_matrix_right_node)
+            # transform the additive rotation increments to multiplicative increments
+            dtheta_prime_left_node = np.matmul(
+                transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
+                np.matmul(rotation_increment_multiplier_matrix_left_node, dtheta_left_node[..., None])[..., 0]
+            dtheta_prime_right_node = np.matmul(
+                transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
+                np.matmul(rotation_increment_multiplier_matrix_right_node, dtheta_right_node[..., None])[..., 0]
+            dtheta_left_node = np.matmul(
+                transformation_matrix_left_node, dtheta_left_node[..., None])[..., 0]
+            dtheta_right_node = np.matmul(
+                transformation_matrix_right_node, dtheta_right_node[..., None])[..., 0]            
+            # incremental transformation matrices
+            incremental_transformation_matrix_left_node = self._compute_transformation_matrix(
+                dtheta_left_node)[0, ...]
+            incremental_transformation_matrix_right_node = self._compute_transformation_matrix(
+                dtheta_right_node)[0, ...]
             incremental_rotation_tensor_left_node = \
                 quaternion.as_rotation_matrix(
                     quaternion.from_rotation_vector(dtheta_left_node))
@@ -325,14 +384,24 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 quaternion.as_rotation_matrix(
                     quaternion.from_rotation_vector(dtheta_right_node))
             if (i == 0):  # only for the first element
+                # update the orientation at the left node
+                self.orientation_nodes[0, :] = \
+                    quaternion.as_rotation_vector(
+                        quaternion.from_rotation_vector(dtheta_left_node) * \
+                            quaternion.from_rotation_vector(self.orientation_nodes[0, :]))
                 # update the curvature at the left node
                 self.curvature_nodes[0, :] = np.matmul(
-                    transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
+                    incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
                     np.matmul(incremental_rotation_tensor_left_node,
                               self.curvature_nodes[0, :][..., None])[..., 0]
+            # update the orientation at the right node
+            self.orientation_nodes[i+1, :] = \
+                quaternion.as_rotation_vector(
+                    quaternion.from_rotation_vector(dtheta_right_node) * \
+                        quaternion.from_rotation_vector(self.orientation_nodes[i+1, :]))
             # update the curvature at the right node
             self.curvature_nodes[i+1, :] = np.matmul(
-                transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
+                incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
                 np.matmul(incremental_rotation_tensor_right_node,
                           self.curvature_nodes[i+1, :][..., None])[..., 0]
 
