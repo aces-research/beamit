@@ -108,46 +108,6 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         return t1 * I + t2 * S + t3 * outer
 
     @staticmethod
-    def _compute_transformation_matrix_derivative_wrt_psi_norm(orientation):
-        """
-        Compute the derivative of the transformation matrix (T) with respect to the norm of orientation vector.
-
-        Parameters:
-            orientation: The orientation in terms of rotation vectors. **orienation** is assumed to be of shape (n, 3) where n is the number of rotation vectors.
-        Returns:
-            T_derivative: The derivative of the transformation matrix of size (n, 3, 3).
-        """
-        # check if the orientation is of size (n, 3)
-        if (orientation.ndim != 2 or orientation.shape[1] != 3):
-            raise ValueError(
-                "Orientation must be of shape (n, 3), where n is the number of rotation vectors.")
-        psi_norm = np.linalg.norm(orientation, axis=1)
-        I = np.eye(3)[None, :, :]
-        # avoid division by zero
-        small_norm_idxs = psi_norm < 1.0e-10
-        psi_norm_safe = np.where(small_norm_idxs, 1.0e-10, psi_norm)
-        psi_norm_safe3 = psi_norm_safe**3
-        psi_norm_safe4 = psi_norm_safe**4
-        psi_norm_safe5 = psi_norm_safe**5
-        # coefficients c1 to c3
-        c1 = (psi_norm_safe * np.cos(psi_norm_safe) -
-              np.sin(psi_norm_safe)) / psi_norm_safe3
-        c2 = (psi_norm_safe * np.sin(psi_norm_safe) + 
-              np.cos(psi_norm_safe) - 1) / psi_norm_safe4
-        c3 = (np.sin(psi_norm_safe) - psi_norm_safe *
-              np.cos(psi_norm_safe)) / psi_norm_safe5
-        # apply limits for small angles
-        c1 = np.where(small_norm_idxs, -1.0 / 3.0, c1)
-        c2 = np.where(small_norm_idxs, -1.0 / 8.0, c2)
-        c3 = np.where(small_norm_idxs, -1.0 / 30.0, c3)
-        c1 = c1[:, None, None]
-        c2 = c2[:, None, None]
-        c3 = c3[:, None, None]
-        S = skew_symmetric_matrices(orientation)
-        outer = orientation[:, :, None] * orientation[:, None, :]
-        return c1 * I + c2 * S + c3 * outer
-
-    @staticmethod
     def _compute_R_matrix(orientation, orientation_derivative):
         """
         Compute the R matrix which is an auxiliary matrix in the residual and stiffness computations.
@@ -844,20 +804,44 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 A[np.ix_(global_element_dofs, global_element_dofs)] += \
                     self.__compute_element_numerical_stiffness(i, system_unknowns)
         # add the contribution of the nodal moments to the stiffness matrix
-        nodes = self.function_space.N
         dofs = self.function_space.dof
-        system_unknowns_reshaped = system_unknowns.reshape(nodes, dofs)
-        nodal_loads_reshaped = nodal_loads.reshape(nodes, dofs)
-        nodal_orientations = system_unknowns_reshaped[:, 3:6]
-        nodal_moments = nodal_loads_reshaped[:, 3:6]
-        T_derivatives = self._compute_transformation_matrix_derivative_wrt_psi_norm(
-            nodal_orientations)
-        moment_orientation_outer = np.einsum(
-            "ni,nj->nij", nodal_moments, nodal_orientations)
-        nodal_moment_contributions = np.matmul(np.transpose(
-            T_derivatives, axes=(0, 2, 1)), moment_orientation_outer)
-        for i in range(nodes):
-            A[dofs*i+3:dofs*i+6, dofs*i+3:dofs*i+6] -= nodal_moment_contributions[i]
+        for i in range(0, self.function_space.N):
+            nodal_orientations = system_unknowns[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_moments = nodal_loads[(dofs*i)+3:(dofs*i)+6, :]
+            # perturb the nodal orientations to compute the numerical stiffness matrix
+            perturbation_factor = 1.0e-05
+            np.random.seed(1234 + i)  # for reproducibility
+            std_dev_nodal_orientations = 0.01 * \
+                np.maximum(np.abs(nodal_orientations), 1.0e-03)
+            perturbation_magnitudes = perturbation_factor * np.abs(
+                np.random.normal(loc=nodal_orientations, 
+                                 scale=std_dev_nodal_orientations))
+            # perturb the nodal orientations individually
+            nodal_moments_stiffness_contribution = np.zeros([3, 3])
+            perturbed_nodal_orientations = nodal_orientations.copy()
+            for j in range(0, 3):
+                # perturb the j-th orientation positively
+                perturbed_nodal_orientations[j] += perturbation_magnitudes[j]
+                perturbed_transformation_matrix = self._compute_transformation_matrix(
+                    perturbed_nodal_orientations.T)[0, ...]
+                nodal_moments_residual_positive_perturbation = \
+                    np.matmul(np.transpose(perturbed_transformation_matrix), nodal_moments)
+                # perturb the j-th orientation negatively
+                perturbed_nodal_orientations[j] -= 2.0 * perturbation_magnitudes[j]
+                perturbed_transformation_matrix = self._compute_transformation_matrix(
+                    perturbed_nodal_orientations.T)[0, ...]
+                nodal_moments_residual_negative_perturbation = \
+                    np.matmul(np.transpose(perturbed_transformation_matrix), nodal_moments)
+                # compute the nodal moments contribution
+                nodal_moments_stiffness_contribution[:, j:j+1] += \
+                    (nodal_moments_residual_positive_perturbation -
+                     nodal_moments_residual_negative_perturbation) / \
+                    (2.0 * perturbation_magnitudes[j])
+                # reset the perturbed nodal orientations
+                perturbed_nodal_orientations[j] += perturbation_magnitudes[j]
+            # add the nodal moments stiffness contribution to the stiffness matrix
+            A[(dofs*i)+3:(dofs*i)+6, (dofs*i)+3:(dofs*i)+6] -= \
+                nodal_moments_stiffness_contribution
 
     def add_nodal_loads_to_residual(self, f, system_unknowns, nodal_loads):
         """
@@ -868,18 +852,20 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             system_unknowns: The unknowns of the system.
             nodal_loads: The nodal loads applied to the system.
         """
-        # add the contribution of external nodal moments to the residual
-        nodes = self.function_space.N
         dofs = self.function_space.dof
-        nodal_loads_reshaped = nodal_loads.reshape(nodes, dofs).copy()
-        # compute transformation matrices
-        T_matrices = self._compute_transformation_matrix(
-            system_unknowns.reshape(nodes, dofs)[:, 3:6])
-        # compute the transformed nodal moments
-        nodal_loads_reshaped[:, 3:6] = np.matmul(
-            np.transpose(T_matrices, axes=(0, 2, 1)), 
-                nodal_loads_reshaped[:, 3:6][..., None])[..., 0]
-        f += nodal_loads_reshaped.reshape(nodal_loads.shape)
+        updated_nodal_loads = np.zeros_like(nodal_loads)
+        for i in range(0, self.function_space.N):
+            # add the nodal forces
+            updated_nodal_loads[dofs*i:(dofs*i)+3,
+                                :] += nodal_loads[dofs*i:(dofs*i)+3, :]
+            # transform the nodal moments and add them to the residual
+            nodal_orientations = system_unknowns[(dofs*i)+3:(dofs*i)+6, :]
+            nodal_transformation_matrix = self._compute_transformation_matrix(
+                nodal_orientations.T)[0, ...]
+            updated_nodal_loads[(dofs*i)+3:(dofs*i)+6, :] += \
+                np.matmul(np.transpose(nodal_transformation_matrix),
+                          nodal_loads[(dofs*i)+3:(dofs*i)+6, :])
+        f += updated_nodal_loads
 
     # Function to compute the system nodal forces
     # Computed by approaching every node from the left side!!!
