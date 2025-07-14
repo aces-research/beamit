@@ -382,27 +382,49 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             incremental_rotation_tensor_right_node = \
                 quaternion.as_rotation_matrix(
                     quaternion.from_rotation_vector(dtheta_right_node))
-            if (i == 0):  # only for the first element
+            if (self.function_space.discretization_type == "CG"):  # for CG discretization
+                if (i == 0):  # only for the first element
+                    # update the orientation at the left node
+                    self.orientation_nodes[0, :] = \
+                        quaternion.as_rotation_vector(
+                            quaternion.from_rotation_vector(dtheta_left_node) * \
+                                quaternion.from_rotation_vector(self.orientation_nodes[0, :]))
+                    # update the curvature at the left node
+                    self.curvature_nodes[0, :] = np.matmul(
+                        incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
+                        np.matmul(incremental_rotation_tensor_left_node, 
+                                  self.curvature_nodes[0, :][..., None])[..., 0]
+                # update the orientation at the right node
+                self.orientation_nodes[i+1, :] = \
+                    quaternion.as_rotation_vector(
+                        quaternion.from_rotation_vector(dtheta_right_node) * \
+                            quaternion.from_rotation_vector(self.orientation_nodes[i+1, :]))
+                # update the curvature at the right node
+                self.curvature_nodes[i+1, :] = np.matmul(
+                    incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
+                    np.matmul(incremental_rotation_tensor_right_node, 
+                              self.curvature_nodes[i+1, :][..., None])[..., 0]
+            elif (self.function_space.discretization_type == "DG"):  # for DG discretization
                 # update the orientation at the left node
-                self.orientation_nodes[0, :] = \
+                self.orientation_nodes[2*i, :] = \
                     quaternion.as_rotation_vector(
                         quaternion.from_rotation_vector(dtheta_left_node) * \
-                            quaternion.from_rotation_vector(self.orientation_nodes[0, :]))
+                            quaternion.from_rotation_vector(self.orientation_nodes[2*i, :]))
                 # update the curvature at the left node
-                self.curvature_nodes[0, :] = np.matmul(
+                self.curvature_nodes[2*i, :] = np.matmul(
                     incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
                     np.matmul(incremental_rotation_tensor_left_node,
-                              self.curvature_nodes[0, :][..., None])[..., 0]
-            # update the orientation at the right node
-            self.orientation_nodes[i+1, :] = \
-                quaternion.as_rotation_vector(
-                    quaternion.from_rotation_vector(dtheta_right_node) * \
-                        quaternion.from_rotation_vector(self.orientation_nodes[i+1, :]))
-            # update the curvature at the right node
-            self.curvature_nodes[i+1, :] = np.matmul(
-                incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
-                np.matmul(incremental_rotation_tensor_right_node,
-                          self.curvature_nodes[i+1, :][..., None])[..., 0]
+                              self.curvature_nodes[2*i, :][..., None])[..., 0]
+                # update the orientation at the right node
+                self.orientation_nodes[2*i+1, :] = \
+                    quaternion.as_rotation_vector(
+                        quaternion.from_rotation_vector(dtheta_right_node) * \
+                            quaternion.from_rotation_vector(self.orientation_nodes[2*i+1, :]))
+                # update the curvature at the right node
+                self.curvature_nodes[2*i+1, :] = np.matmul(
+                    incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
+                    np.matmul(incremental_rotation_tensor_right_node,
+                              self.curvature_nodes[2*i+1, :][..., None])[..., 0]
 
     def _compute_internal_forces_and_moments(self, e, element_unknowns, element_orientations, 
                                              element_curvatures, location="Quads"):
