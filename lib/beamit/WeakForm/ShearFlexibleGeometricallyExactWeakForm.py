@@ -1112,6 +1112,101 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 [global_element_dofs_left, global_element_dofs_right])
             f[global_element_dofs_interface] -= interface_residual
 
+    def __compute_numerical_interface_stiffness(self, e, element_unknowns_left,
+                                                element_unknowns_right):
+        """
+        Compute the numerical stiffness matrix at an interface based on the provided unknowns.
+
+        Parameters:
+            e: The (interface) element index.
+            element_unknowns_left: The unknowns of the left element.
+            element_unknowns_right: The unknowns of the right element.
+        Returns:
+            interface_numerical_stiffness: The computed numerical stiffness matrix at the interface.
+        """
+        dofspel = self.function_space.dof*self.function_space.npel
+        interface_numerical_stiffness = np.zeros([2*dofspel, 2*dofspel])
+        perturbation_factor = 1.0e-05
+        np.random.seed(1234 + e)  # for reproducibility
+        std_dev_element_unknowns_left = 0.01 * \
+            np.maximum(np.abs(element_unknowns_left), 1.0e-03)
+        std_dev_element_unknowns_right = 0.01 * \
+            np.maximum(np.abs(element_unknowns_right), 1.0e-03)
+        perturbation_magnitudes_left = perturbation_factor * np.abs(
+            np.random.normal(loc=element_unknowns_left, 
+                             scale=std_dev_element_unknowns_left))
+        perturbation_magnitudes_right = perturbation_factor * np.abs(
+            np.random.normal(loc=element_unknowns_right, 
+                             scale=std_dev_element_unknowns_right))
+        # perturb the left element dofs individually to compute the numerical stiffness matrix
+        perturbed_element_unknowns = element_unknowns_left.copy()
+        perturbed_solution_increments = np.zeros_like(element_unknowns_left)
+        for i in range(0, dofspel):
+            # reset the perturbed increments
+            perturbed_solution_increments.fill(0.0)
+            # perturb the i-th dof of the left element
+            perturbed_solution_increments[i] = perturbation_magnitudes_left[i]
+            ####### positively perturb the unknowns #######
+            perturbed_element_unknowns += perturbed_solution_increments
+            # update the internal variables of the left element
+            self._update_element_internal_variables(
+                e, perturbed_solution_increments)
+            # compute the interface residual for the positive perturbation
+            interface_residual_positive_perturbation_left = self.compute_interface_residual(
+                e, perturbed_element_unknowns, element_unknowns_right)
+            ####### negatively perturb the unknowns #######
+            perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
+            # update the internal variables of the left element
+            self._update_element_internal_variables(
+                e, -2.0 * perturbed_solution_increments)
+            # compute the interface residual for the negative perturbation
+            interface_residual_negative_perturbation_left = self.compute_interface_residual(
+                e, perturbed_element_unknowns, element_unknowns_right)
+            # compute the interface numerical stiffness matrix for the left element
+            interface_numerical_stiffness[:, i:i+1] += \
+                (interface_residual_positive_perturbation_left -
+                 interface_residual_negative_perturbation_left) / \
+                (2.0 * perturbation_magnitudes_left[i])
+            ####### reset the unknowns and internal variables #######
+            perturbed_element_unknowns += \
+                perturbed_solution_increments
+            self._update_element_internal_variables(
+                e, perturbed_solution_increments)
+        # perturb the right element dofs individually to compute the numerical stiffness matrix
+        perturbed_element_unknowns = element_unknowns_right.copy()
+        for i in range(dofspel, 2*dofspel):
+            # reset the perturbed increments
+            perturbed_solution_increments.fill(0.0)
+            # perturb the i-th dof of the right element
+            perturbed_solution_increments[i - dofspel] = perturbation_magnitudes_right[i - dofspel]
+            ####### positively perturb the unknowns #######
+            perturbed_element_unknowns += perturbed_solution_increments
+            # update the internal variables of the right element
+            self._update_element_internal_variables(
+                e+1, perturbed_solution_increments)
+            # compute the interface residual for the positive perturbation
+            interface_residual_positive_perturbation_right = self.compute_interface_residual(
+                e, element_unknowns_left, perturbed_element_unknowns)
+            ####### negatively perturb the unknowns #######
+            perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
+            # update the internal variables of the right element
+            self._update_element_internal_variables(
+                e+1, -2.0 * perturbed_solution_increments)
+            # compute the interface residual for the negative perturbation
+            interface_residual_negative_perturbation_right = self.compute_interface_residual(
+                e, element_unknowns_left, perturbed_element_unknowns)
+            # compute the interface numerical stiffness matrix for the right element
+            interface_numerical_stiffness[:, i:i+1] += \
+                (interface_residual_positive_perturbation_right -
+                 interface_residual_negative_perturbation_right) / \
+                (2.0 * perturbation_magnitudes_right[i - dofspel])
+            ####### reset the unknowns and internal variables #######
+            perturbed_element_unknowns += \
+                perturbed_solution_increments
+            self._update_element_internal_variables(
+                e+1, perturbed_solution_increments)
+        return interface_numerical_stiffness
+
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
         Compute the system stiffness matrix based on the provided unknowns and loads.
@@ -1125,14 +1220,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # assemble the bulk terms using the method in the parent class
         super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
         # assemble the interface stiffness terms
-        N_left_interface, N_xi_left_interface = self.function_space.compute_shapes(1.0)
-        N_right_interface, N_xi_right_interface = self.function_space.compute_shapes(-1.0)
-        Np_left_interface = N_xi_left_interface * \
-            (1.0/self.function_space.jacobian)
-        Np_right_interface = N_xi_right_interface * \
-            (1.0/self.function_space.jacobian)
-        # loop over the interface elements
-        for i in range(0, self.function_space.E-1):
+        for i in range(0, self.function_space.E-1):  # loop over the interface elements
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
@@ -1140,87 +1228,10 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # unknowns of the left and right elements
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
-            ############## flux term tangents ##############
-            df_dd_left, df_dtheta_left, dm_dtheta_left = \
-                self.__compute_interface_force_and_moment_derivatives(
-                    i, element_unknowns_left, element_side="left")
-            df_dd_right, df_dtheta_right, dm_dtheta_right = \
-                self.__compute_interface_force_and_moment_derivatives(
-                    i+1, element_unknowns_right, element_side="right")
-            # left-left terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_left)
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_left)
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_left)
-            # left-right terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dd_right)
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), df_dtheta_right)
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                0.50 * np.matmul(np.transpose(N_left_interface), dm_dtheta_right)
-            # right-left terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_left)
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_left)
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_left)
-            # right-right terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dd_right)
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), df_dtheta_right)
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_right)
-            ############## penalty term tangents ##############
-            # left-left terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_left_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_left_interface))
-            # left-right terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] -= \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_right_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_right_interface))
-            # right-left terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_left_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_left_interface))
-            # right-right terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_right_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_right_interface))
+            # compute the interface numerical stiffness matrix and assemble it to the global stiffness matrix
+            interface_numerical_stiffness = self.__compute_numerical_interface_stiffness(
+                i, element_unknowns_left, element_unknowns_right)
+            global_element_dofs_interface = np.concatenate(
+                [global_element_dofs_left, global_element_dofs_right])
+            A[np.ix_(global_element_dofs_interface, global_element_dofs_interface)] += \
+                interface_numerical_stiffness
