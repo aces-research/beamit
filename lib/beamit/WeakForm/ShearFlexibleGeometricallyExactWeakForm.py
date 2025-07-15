@@ -953,6 +953,137 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # form to compute the moments at the element interfaces. This will not work if we have more
         # than two nodes per element i.e. for higher order elements.
 
+    def __compute_interface_residual(self, e, element_unknowns_left, element_unknowns_right):
+        """
+        Compute the residual at an interface based on the provided unknowns.
+
+        Parameters:
+            e: The (interface) element index.
+            element_unknowns_left: The unknowns of the left element.
+            element_unknowns_right: The unknowns of the right element.
+        Returns:
+            interface_residual: The computed interface residual.
+        """
+        dofspel = self.function_space.dof*self.function_space.npel
+        interface_residual = np.zeros([2*dofspel, 1])
+        # shape functions at the interface
+        N_left_interface, _ = self.function_space.compute_shapes(1.0)
+        N_right_interface, _ = self.function_space.compute_shapes(-1.0)
+        # nodal orientations for left and right elements
+        nodal_orientations_left = \
+            element_unknowns_left[self.function_space.local_rotational_dofs].reshape(
+                -1, self.function_space.dim)
+        nodal_orientations_right = \
+            element_unknowns_right[self.function_space.local_rotational_dofs].reshape(
+                -1, self.function_space.dim)
+        # nodal curvatures for left and right elements
+        nodal_curvatures_left = np.stack(
+            [self.curvature_nodes[2*e, :], self.curvature_nodes[2*e+1, :]], axis=0)
+        nodal_curvatures_right = np.stack(
+            [self.curvature_nodes[2*e+2, :], self.curvature_nodes[2*e+3, :]], axis=0)
+        # compute the internal forces and moments at the nodes for the left and right elements
+        internal_forces_left_element, internal_moments_left_element = \
+            self._compute_internal_forces_and_moments(e, element_unknowns_left,
+                                                      nodal_orientations_left,
+                                                      nodal_curvatures_left,
+                                                      location="Nodes")
+        internal_forces_right_element, internal_moments_right_element = \
+            self._compute_internal_forces_and_moments(e+1, element_unknowns_right,
+                                                      nodal_orientations_right,
+                                                      nodal_curvatures_right,
+                                                      location="Nodes")
+        # compute the transformation matrices at the interface
+        transformation_matrix_left_interface = self._compute_transformation_matrix(
+            nodal_orientations_left[1:2, :])[0, ...]
+        transformation_matrix_right_interface = self._compute_transformation_matrix(
+            nodal_orientations_right[0:1, :])[0, ...]
+        average_internal_forces_interface = 0.50 * \
+            (internal_forces_left_element[1, ...] +
+             internal_forces_right_element[0, ...])
+        average_internal_moments_interface = 0.50 * \
+            (np.matmul(np.transpose(transformation_matrix_left_interface),
+                       internal_moments_left_element[1, ...]) +
+             np.matmul(np.transpose(transformation_matrix_right_interface),
+                       internal_moments_right_element[0, ...]))
+        # compute the dof jumps at the interface
+        r_jump_interface = \
+            np.matmul(N_right_interface, 
+                      element_unknowns_right[self.function_space.local_translational_dofs]) - \
+            np.matmul(N_left_interface, 
+                      element_unknowns_left[self.function_space.local_translational_dofs])
+        # NOTE: Although we attempt to interpolate the rotational dofs at the interface here, in reality
+        # only their incremental vectors are interpolated. We do not interpolate the total rotational
+        # vectors directly as that would result in a loss of objectivity. We can still consider this 
+        # to be a good approximation since the difference in the rotational dofs at the interface will 
+        # be small at end of each load/time step i.e. for a converged configuration.
+        psi_jump_interface = \
+            np.matmul(N_right_interface, 
+                      element_unknowns_right[self.function_space.local_rotational_dofs]) - \
+            np.matmul(N_left_interface, 
+                      element_unknowns_left[self.function_space.local_rotational_dofs])
+        # assemble the interface residual terms
+        ############# flux terms #############
+        interface_residual[self.function_space.local_translational_dofs] += \
+            np.matmul(np.transpose(N_left_interface), 
+                      average_internal_forces_interface)
+        interface_residual[self.function_space.local_rotational_dofs] += \
+            np.matmul(np.transpose(N_left_interface), 
+                      average_internal_moments_interface)
+        interface_residual[dofspel + self.function_space.local_translational_dofs] -= \
+            np.matmul(np.transpose(N_right_interface), average_internal_forces_interface)
+        interface_residual[dofspel + self.function_space.local_rotational_dofs] -= \
+            np.matmul(np.transpose(N_right_interface), average_internal_moments_interface)
+        ############# penalty terms #############
+        C_F = np.zeros([self.function_space.dim, self.function_space.dim])
+        C_F[0, 0] = self.material.E * self.material.A
+        C_F[1, 1] = self.material.G * self.material.A_red
+        C_F[2, 2] = self.material.G * self.material.A_red
+        C_M = np.zeros([self.function_space.dim, self.function_space.dim])
+        C_M[0, 0] = self.material.G * self.material.I_T
+        C_M[1, 1] = self.material.E * self.material.I
+        C_M[2, 2] = self.material.E * self.material.I_minor
+        # compute the transformed constitutive matrices
+        orientations_tensor_left_interface = quaternion.as_rotation_matrix(
+            quaternion.from_rotation_vector(nodal_orientations_left[1, :]))
+        orientations_tensor_right_interface = quaternion.as_rotation_matrix(
+            quaternion.from_rotation_vector(nodal_orientations_right[0, :]))
+        C_F_transformed_left_interface = np.matmul(
+            orientations_tensor_left_interface, np.matmul(
+                C_F, np.transpose(orientations_tensor_left_interface)))
+        C_F_transformed_right_interface = np.matmul(
+            orientations_tensor_right_interface, np.matmul(
+                C_F, np.transpose(orientations_tensor_right_interface)))
+        C_F_transformed_average_interface = 0.50 * \
+            (C_F_transformed_left_interface + C_F_transformed_right_interface)
+        C_M_transformed_left_interface = np.matmul(
+            orientations_tensor_left_interface, np.matmul(
+                C_M, np.transpose(orientations_tensor_left_interface)))
+        C_M_transformed_right_interface = np.matmul(
+            orientations_tensor_right_interface, np.matmul(
+                C_M, np.transpose(orientations_tensor_right_interface)))
+        C_M_transformed_left_interface = np.matmul(np.transpose(
+            transformation_matrix_left_interface), np.matmul(
+                C_M_transformed_left_interface, transformation_matrix_left_interface))
+        C_M_transformed_right_interface = np.matmul(np.transpose(
+            transformation_matrix_right_interface), np.matmul(
+                C_M_transformed_right_interface, transformation_matrix_right_interface))
+        C_M_transformed_average_interface = 0.50 * \
+            (C_M_transformed_left_interface + C_M_transformed_right_interface)
+        # compute the penalty forces and moments
+        penalty_forces = (self.betaP / self.function_space.elL) * \
+            np.matmul(C_F_transformed_average_interface, r_jump_interface)
+        penalty_moments = (self.betaT / self.function_space.elL) * \
+            np.matmul(C_M_transformed_average_interface, psi_jump_interface)
+        interface_residual[self.function_space.local_translational_dofs] += \
+            np.matmul(np.transpose(N_left_interface), penalty_forces)
+        interface_residual[self.function_space.local_rotational_dofs] += \
+            np.matmul(np.transpose(N_left_interface), penalty_moments)
+        interface_residual[dofspel + self.function_space.local_translational_dofs] -= \
+            np.matmul(np.transpose(N_right_interface), penalty_forces)
+        interface_residual[dofspel + self.function_space.local_rotational_dofs] -= \
+            np.matmul(np.transpose(N_right_interface), penalty_moments)
+        return interface_residual
+
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         """
         Compute the system residual based on the provided unknowns and element loads.
@@ -966,10 +1097,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # assemble the bulk terms using the method in the parent class
         super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
         # assemble the interface terms
-        N_left_interface, _ = self.function_space.compute_shapes(1.0)
-        N_right_interface, _ = self.function_space.compute_shapes(-1.0)
-        # loop over the interface elements
-        for i in range(0, self.function_space.E-1):
+        for i in range(0, self.function_space.E-1):  # loop over the interface elements
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
@@ -977,65 +1105,12 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # unknowns of the left and right elements
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
-            # nodal orientations for left and right elements
-            nodal_orientations_left = \
-                element_unknowns_left[self.function_space.local_rotational_dofs].reshape(
-                    -1, self.function_space.dim)
-            nodal_orientations_right = \
-                element_unknowns_right[self.function_space.local_rotational_dofs].reshape(
-                    -1, self.function_space.dim)
-            # nodal curvatures for left and right elements
-            nodal_curvatures_left = np.stack(
-                [self.curvature_nodes[2*i, :], self.curvature_nodes[2*i+1, :]], axis=0)
-            nodal_curvatures_right = np.stack(
-                [self.curvature_nodes[2*i+2, :], self.curvature_nodes[2*i+3, :]], axis=0)
-            internal_forces_left_element, internal_moments_left_element = \
-                self._compute_internal_forces_and_moments(i, element_unknowns_left, 
-                                                          nodal_orientations_left, 
-                                                          nodal_curvatures_left, 
-                                                          location="Nodes")
-            internal_forces_right_element, internal_moments_right_element = \
-                self._compute_internal_forces_and_moments(i+1, element_unknowns_right, 
-                                                          nodal_orientations_right, 
-                                                          nodal_curvatures_right, 
-                                                          location="Nodes")
-            average_internal_forces_interface = 0.50 * \
-                (internal_forces_left_element[1, ...] +
-                 internal_forces_right_element[0, ...])
-            average_internal_moments_interface = 0.50 * \
-                (internal_moments_left_element[1, ...] +
-                 internal_moments_right_element[0, ...])
-            # assemble the interface residual terms
-            # flux terms
-            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface),
-                          average_internal_forces_interface)
-            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface),
-                          average_internal_moments_interface)
-            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface),
-                          average_internal_forces_interface)
-            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface),
-                          average_internal_moments_interface)
-            # penalty terms
-            penalty_forces = self.betaP * \
-                ((self.material.E*self.material.A) / self.function_space.elL) * \
-                (self.dof_jumps_boundaries[i:i+1, self.function_space.local_translational_dofs].T)[
-                    self.function_space.dim:]
-            penalty_moments = self.betaT * \
-                ((self.material.E*self.material.I) / self.function_space.elL) * \
-                (self.dof_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
-                    self.function_space.dim:]
-            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface), penalty_forces)
-            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface), penalty_moments)
-            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface), penalty_forces)
-            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface), penalty_moments)
+            # compute the interface residual and assemble it to the global residual
+            interface_residual = self.__compute_interface_residual(
+                i, element_unknowns_left, element_unknowns_right)
+            global_element_dofs_interface = np.concatenate(
+                [global_element_dofs_left, global_element_dofs_right])
+            f[global_element_dofs_interface] += interface_residual
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
@@ -1112,106 +1187,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
                 0.50 * np.matmul(np.transpose(N_right_interface), dm_dtheta_right)
-            ############## extra interface stiffness terms ##############
-            # compute the multipliers for the interface stiffness terms
-            force_multiplier1_left, force_multiplier2_left, moment_multiplier1_left, \
-                moment_multiplier2_left, moment_multiplier3_left, moment_multiplier4_left, \
-                moment_multiplier5_left, moment_multiplier6_left = \
-                self.__compute_interface_stiffness_term_multipliers(
-                    i, element_unknowns_left, element_side="left")
-            force_multiplier1_right, force_multiplier2_right, moment_multiplier1_right, \
-                moment_multiplier2_right, moment_multiplier3_right, moment_multiplier4_right, \
-                moment_multiplier5_right, moment_multiplier6_right = \
-                self.__compute_interface_stiffness_term_multipliers(
-                    i+1, element_unknowns_right, element_side="right")
-            # left-left terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                -0.50 * np.matmul(np.transpose(Np_left_interface),
-                                  np.matmul(force_multiplier1_left, N_left_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                -0.50 * np.matmul(np.transpose(Np_left_interface),
-                                  np.matmul(force_multiplier2_left, N_left_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs], 
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                -(0.50 * np.matmul(np.transpose(N_left_interface),
-                                   np.matmul(moment_multiplier3_left, df_dd_left)) +
-                  0.50 * np.matmul(np.transpose(N_left_interface),
-                                   np.matmul(moment_multiplier4_left, N_left_interface)) -
-                  0.50 * np.matmul(np.transpose(N_left_interface),
-                                   np.matmul(moment_multiplier5_left, N_left_interface)) -
-                  0.50 * np.matmul(np.transpose(N_left_interface),
-                                   np.matmul(force_multiplier2_left, Np_left_interface)))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                (-0.50 * np.matmul(np.transpose(Np_left_interface),
-                                   np.matmul(moment_multiplier1_left, N_left_interface)) -
-                 0.50 * np.matmul(np.transpose(Np_left_interface),
-                                  np.matmul(moment_multiplier2_left, N_left_interface)) -
-                 0.50 * np.matmul(np.transpose(N_left_interface),
-                                  np.matmul(moment_multiplier3_left, df_dtheta_left)) +
-                 0.50 * np.matmul(np.transpose(N_left_interface),
-                                  np.matmul(moment_multiplier6_left, N_left_interface)))
-            # left-right terms
-            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(Np_left_interface),
-                                 np.matmul(force_multiplier1_left, N_right_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                (0.50 * np.matmul(np.transpose(N_left_interface),
-                                  np.matmul(moment_multiplier4_left, N_right_interface)) -
-                 0.50 * np.matmul(np.transpose(N_left_interface),
-                                  np.matmul(moment_multiplier5_left, N_right_interface)))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                0.50 * np.matmul(np.transpose(Np_left_interface),
-                                 np.matmul(moment_multiplier1_left, N_right_interface))
-            # right-left terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                -0.50 * np.matmul(np.transpose(Np_right_interface),
-                                  np.matmul(force_multiplier1_right, N_left_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                (-0.50 * np.matmul(np.transpose(N_right_interface),
-                                   np.matmul(moment_multiplier4_right, N_left_interface)) +
-                 0.50 * np.matmul(np.transpose(N_right_interface),
-                                  np.matmul(moment_multiplier5_right, N_left_interface)))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                -0.50 * np.matmul(np.transpose(Np_right_interface),
-                                  np.matmul(moment_multiplier1_right, N_left_interface))
-            # right-right terms
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                0.50 * np.matmul(np.transpose(Np_right_interface),
-                                 np.matmul(force_multiplier1_right, N_right_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                -0.50 * np.matmul(np.transpose(Np_right_interface),
-                                  np.matmul(force_multiplier2_right, N_right_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                -(0.50 * np.matmul(np.transpose(N_right_interface),
-                                   np.matmul(moment_multiplier3_right, df_dd_right)) -
-                  0.50 * np.matmul(np.transpose(N_right_interface),
-                                   np.matmul(moment_multiplier4_right, N_right_interface)) +
-                  0.50 * np.matmul(np.transpose(N_right_interface),
-                                   np.matmul(moment_multiplier5_right, N_right_interface)) -
-                  0.50 * np.matmul(np.transpose(N_right_interface),
-                                   np.matmul(force_multiplier2_right, Np_right_interface)))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                (0.50 * np.matmul(np.transpose(Np_right_interface),
-                                  np.matmul(moment_multiplier1_right, N_right_interface)) -
-                 0.50 * np.matmul(np.transpose(Np_right_interface),
-                                  np.matmul(moment_multiplier2_right, N_right_interface)) -
-                 0.50 * np.matmul(np.transpose(N_right_interface), 
-                                  np.matmul(moment_multiplier3_right, df_dtheta_right)) +
-                 0.50 * np.matmul(np.transpose(N_right_interface),
-                                  np.matmul(moment_multiplier6_right, N_right_interface)))
             ############## penalty term tangents ##############
             # left-left terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
