@@ -176,7 +176,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         )
         return R
 
-    def __update_element_internal_variables(self, e, element_unknowns_increment):
+    def _update_element_internal_variables(self, e, element_unknowns_increment):
         """
         Update the internal variables of an element based on the current system unknowns increment.
 
@@ -314,7 +314,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # update the orientation and curvature at quadrature points
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            self.__update_element_internal_variables(
+            self._update_element_internal_variables(
                 i, system_unknowns_increment[global_element_dofs])
         ########## update the curvature at the nodes ##########
         # NOTE: Here we assume that there are only two nodes per element!!!
@@ -742,7 +742,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             ####### positively perturb the unknowns #######
             perturbed_element_unknowns += perturbed_solution_increments
             # update the internal variables of the element
-            self.__update_element_internal_variables(
+            self._update_element_internal_variables(
                 e, perturbed_solution_increments)
             # compute the element internal forces for the positive perturbation
             element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
@@ -750,7 +750,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             ####### negatively perturb the unknowns #######
             perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
             # update the internal variables of the element
-            self.__update_element_internal_variables(
+            self._update_element_internal_variables(
                 e, -2.0 * perturbed_solution_increments)
             # compute the element internal forces for the negative perturbation
             element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
@@ -763,7 +763,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             ####### reset the unknowns and internal variables #######
             perturbed_element_unknowns += \
                 perturbed_solution_increments
-            self.__update_element_internal_variables(
+            self._update_element_internal_variables(
                 e, perturbed_solution_increments)
         return element_numerical_stiffness
 
