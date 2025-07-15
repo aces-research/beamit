@@ -953,7 +953,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # form to compute the moments at the element interfaces. This will not work if we have more
         # than two nodes per element i.e. for higher order elements.
 
-    def __compute_interface_residual(self, e, element_unknowns_left, element_unknowns_right):
+    def compute_interface_residual(self, e, element_unknowns_left, element_unknowns_right):
         """
         Compute the residual at an interface based on the provided unknowns.
 
@@ -1023,15 +1023,15 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                       element_unknowns_left[self.function_space.local_rotational_dofs])
         # assemble the interface residual terms
         ############# flux terms #############
-        interface_residual[self.function_space.local_translational_dofs] += \
+        interface_residual[self.function_space.local_translational_dofs] -= \
             np.matmul(np.transpose(N_left_interface), 
                       average_internal_forces_interface)
-        interface_residual[self.function_space.local_rotational_dofs] += \
+        interface_residual[self.function_space.local_rotational_dofs] -= \
             np.matmul(np.transpose(N_left_interface), 
                       average_internal_moments_interface)
-        interface_residual[dofspel + self.function_space.local_translational_dofs] -= \
+        interface_residual[dofspel + self.function_space.local_translational_dofs] += \
             np.matmul(np.transpose(N_right_interface), average_internal_forces_interface)
-        interface_residual[dofspel + self.function_space.local_rotational_dofs] -= \
+        interface_residual[dofspel + self.function_space.local_rotational_dofs] += \
             np.matmul(np.transpose(N_right_interface), average_internal_moments_interface)
         ############# penalty terms #############
         C_F = np.zeros([self.function_space.dim, self.function_space.dim])
@@ -1074,13 +1074,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             np.matmul(C_F_transformed_average_interface, r_jump_interface)
         penalty_moments = (self.betaT / self.function_space.elL) * \
             np.matmul(C_M_transformed_average_interface, psi_jump_interface)
-        interface_residual[self.function_space.local_translational_dofs] += \
+        interface_residual[self.function_space.local_translational_dofs] -= \
             np.matmul(np.transpose(N_left_interface), penalty_forces)
-        interface_residual[self.function_space.local_rotational_dofs] += \
+        interface_residual[self.function_space.local_rotational_dofs] -= \
             np.matmul(np.transpose(N_left_interface), penalty_moments)
-        interface_residual[dofspel + self.function_space.local_translational_dofs] -= \
+        interface_residual[dofspel + self.function_space.local_translational_dofs] += \
             np.matmul(np.transpose(N_right_interface), penalty_forces)
-        interface_residual[dofspel + self.function_space.local_rotational_dofs] -= \
+        interface_residual[dofspel + self.function_space.local_rotational_dofs] += \
             np.matmul(np.transpose(N_right_interface), penalty_moments)
         return interface_residual
 
@@ -1106,11 +1106,11 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_unknowns_left = system_unknowns[global_element_dofs_left]
             element_unknowns_right = system_unknowns[global_element_dofs_right]
             # compute the interface residual and assemble it to the global residual
-            interface_residual = self.__compute_interface_residual(
+            interface_residual = self.compute_interface_residual(
                 i, element_unknowns_left, element_unknowns_right)
             global_element_dofs_interface = np.concatenate(
                 [global_element_dofs_left, global_element_dofs_right])
-            f[global_element_dofs_interface] += interface_residual
+            f[global_element_dofs_interface] -= interface_residual
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
