@@ -20,23 +20,26 @@ slenderness_ratio = 10.0
 # side of the square cross-section
 a = L / slenderness_ratio
 # number of elements
-Nel = 100
+NEls = [8, 16, 32, 64, 128]
 # applied loads and tolerances
 TIP_MOMENT = 1.0E07
 SPATIAL_TOLERANCE = 1.0E-10
 
 # the load / time steps and output
 load_steps = 1000
-vtk_dump = 10
+vtk_dump = 100
 
-if __name__ == "__main__":
+def run_pure_bending_simulation(discretization_type, Nel):
+    print("\nRunning the simulation with", discretization_type, 
+          "discretization and", Nel, "elements.")
 
     # physical information (material parameters)
-    material = Material.ShearFlexibleMaterial(rho, E, nu, A=a**2, I=(a**4)/12, I_minor=(a**4)/12)
+    material = Material.ShearFlexibleMaterial(
+        rho, E, nu, A=a**2, I=(a**4)/12, I_minor=(a**4)/12)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.ShearFlexibleGeometricallyExactFunctionSpace(
-        0, L, Nel, discretization_type="CG")
+        0, L, Nel, discretization_type=discretization_type)
     function_space.discretize()
     # to avoid creating reference to the object attributes
     # a better idea is to create private attributes and use accessors
@@ -67,15 +70,18 @@ if __name__ == "__main__":
 
     solver.set_boundary_conditions(bctypes, bcvalues)
 
-    # create a VTK directory or clear it
-    if not os.path.isdir("VTK"):
-        os.mkdir("VTK")
+    # output directory
+    output_dir = f"./VTK-{discretization_type}/{Nel}els"
+
+    # create the output directory or clear it
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
     else:
-        for item in os.listdir("VTK"):
-            os.remove(os.path.join("VTK", item))
+        for item in os.listdir(output_dir):
+            os.remove(os.path.join(output_dir, item))
 
     # write the initial results
-    PostProcess.write_output_vtk("./VTK/output-0", system)
+    PostProcess.write_output_vtk(f"{output_dir}/output-0", system)
 
     # solve the problem
     for i in range(0, load_steps):
@@ -94,5 +100,11 @@ if __name__ == "__main__":
         # solve the problem and update the system
         solver.solve(Nmax=100, tol=1.0E-06)
         if ((i+1) % vtk_dump == 0):
-            output_file = "./VTK/output-" + str(i+1)
+            output_file = f"{output_dir}/output-" + str(i+1)
             PostProcess.write_output_vtk(output_file, system)
+
+if __name__ == "__main__":
+
+    for i in range(len(NEls)):
+        # run the simulation for each number of elements
+        run_pure_bending_simulation("CG", NEls[i])
