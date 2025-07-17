@@ -113,25 +113,15 @@ def test_internal_variable_updates():
     # update the bulk internal variables
     weak_form.update_internal_variables(solution_increment)
 
-    # expected multiplicative increment of rotations
-    multiplicative_rotation_increment_vector = \
-        np.matmul(transformation_matrix, solution_increment[3:6])
-
     # check the curvatures
     for i in range(0, function_space.Q):
-        assert np.isclose(weak_form.curvature[0, i, 0],
-                          -2.0*multiplicative_rotation_increment_vector[0, 0],
-                          atol=NUMERICAL_TOLERANCE), \
+        assert np.isclose(weak_form.curvature[0, i, 0], -np.pi / 2.0, atol=NUMERICAL_TOLERANCE), \
             "Curvature at element 0, quadrature point 0, dimension 0 is not -pi/2."
-        assert np.isclose(weak_form.curvature[0, i, 1],
-                          -2.0*multiplicative_rotation_increment_vector[1, 0],
-                          atol=NUMERICAL_TOLERANCE), \
+        assert np.isclose(weak_form.curvature[0, i, 1], -np.pi / 4.0, atol=NUMERICAL_TOLERANCE), \
             "Curvature at element 0, quadrature point 0, dimension 1 is not -pi/4."
-        assert np.isclose(weak_form.curvature[0, i, 2],
-                          -2.0*multiplicative_rotation_increment_vector[2, 0],
-                          atol=NUMERICAL_TOLERANCE), \
+        assert np.isclose(weak_form.curvature[0, i, 2], -np.pi / 2.0, atol=NUMERICAL_TOLERANCE), \
             "Curvature at element 0, quadrature point 0, dimension 2 is not -pi/2."
-    
+
 def test_residual_CG():
 
     # physical information (material parameters)
@@ -220,12 +210,10 @@ def test_residual_CG():
         curvature = np.matmul(T_matrix, dtheta_prime)
         element_internal_moments = np.matmul(C_M_transformed, curvature)
         residual_moments = np.matmul(np.transpose(
-            shape_first_gradients), np.matmul(
-                np.transpose(T_matrix), element_internal_moments))*quad_weights[i]
-        rp_cross_internal_forces = np.cross(rp_element, element_internal_forces, axis=0)
+            shape_first_gradients), element_internal_moments)*quad_weights[i]
+        rp_cross_internal_fores = np.cross(rp_element, element_internal_forces, axis=0)
         residual_moments -= np.matmul(np.transpose(shapes),
-                                      np.matmul(np.transpose(T_matrix), 
-                                                rp_cross_internal_forces))*0.50*L*quad_weights[i]
+                                      rp_cross_internal_fores)*0.50*L*quad_weights[i]
         residual_expected[3:6, 0] -= residual_moments[0:3, 0]
         residual_expected[9:12, 0] -= residual_moments[3:6, 0]
 
