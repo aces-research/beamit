@@ -154,9 +154,7 @@ def write_output_vtk(output_file, system):
             y_plot[2*i], y_plot[(2*i)+1] = y[i], y[i+1]
             z_plot[2*i], z_plot[(2*i)+1] = z[i], z[i+1]
             if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormCG) or
-                (type(system.weak_form) == TFKLGeometricallyExactWeakFormDG) or
-                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG) or
-                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormDG)):
+                (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG)):
                 disp_x_plot[2*i], disp_x_plot[(2*i)+1] = pos_x[i] - x[i], pos_x[i+1] - x[i+1]
                 disp_y_plot[2*i], disp_y_plot[(2*i)+1] = pos_y[i] - y[i], pos_y[i+1] - y[i+1]
                 disp_z_plot[2*i], disp_z_plot[(2*i)+1] = pos_z[i] - z[i], pos_z[i+1] - z[i+1]
@@ -172,8 +170,8 @@ def write_output_vtk(output_file, system):
                 internal_loads_z[i], internal_loads_z[i+1], internal_moments_z[i], internal_moments_z[i+1]
     elif (discretization_type == "DG"):
         x_plot, y_plot, z_plot = x, y, z
-        if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormCG) or
-            (type(system.weak_form) == TFKLGeometricallyExactWeakFormDG)):
+        if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormDG) or
+            (type(system.weak_form) == ShearFlexibleGeometricallyExactWeakFormDG)):
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x - x, pos_y - y, pos_z - z
         else:
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x, pos_y, pos_z
