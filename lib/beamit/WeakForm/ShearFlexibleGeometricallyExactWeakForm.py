@@ -1000,6 +1000,9 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         self.betaP = betaP
         # DG rotation jump penalty parameter
         self.betaT = betaT
+        # container to store dof jumps at the element boundaries
+        self.dof_jumps_boundaries = np.zeros(
+            [self.function_space.E, 2*self.function_space.dof])
         # NOTE: We are using the self.curvature_nodes container to store the curvature at the 
         # boundaries of the elements since we have two nodes per element which are the left and right 
         # nodes. So instead of creating a new container, we are reusing the curvature_nodes container 
@@ -1007,136 +1010,220 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # form to compute the moments at the element interfaces. This will not work if we have more
         # than two nodes per element i.e. for higher order elements.
 
-    def compute_interface_residual(self, e, element_unknowns_left, element_unknowns_right):
+    def __get_dof_jumps_at_element_boundaries(self, e, system_dof_values):
         """
-        Compute the residual at an interface based on the provided unknowns.
+        Get the dof jumps at the boundaries of the element.
+
+        This method only works if the element are arranged in a linear fashion i.e. the first element is the left most element and the last element is the right most element and the other elements are sequentially arranged in between. In any other case, the method will not work as expected.
 
         Parameters:
-            e: The (interface) element index.
-            element_unknowns_left: The unknowns of the left element.
-            element_unknowns_right: The unknowns of the right element.
+            e: The index of the element.
+            system_dof_values: The dof values of the system.
         Returns:
-            interface_residual: The computed interface residual.
+            dof_jumps_boundaries: The dof jumps at the element boundaries.
         """
+        # compute the dof jumps at the element boundaries
+        dofs = self.function_space.dof
+        dof_jumps_boundaries = np.zeros([2*dofs, 1])
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        element_dof_values = system_dof_values[global_element_dofs]
+        if (e == 0):  # for left most element
+            right_element_dofs = self.function_space.global_connectivity[e+1:e+2].flatten()
+            right_element_dof_values = system_dof_values[right_element_dofs]
+            dof_jumps_boundaries[dofs:] = right_element_dof_values[0:dofs] - \
+                element_dof_values[dofs:]
+        elif (e == self.function_space.E-1):  # for right most element
+            left_element_dofs = self.function_space.global_connectivity[e-1:e].flatten()
+            left_element_dof_values = system_dof_values[left_element_dofs]
+            dof_jumps_boundaries[0:dofs] = element_dof_values[0:dofs] - \
+                left_element_dof_values[dofs:]
+        else:  # for intermediate elements
+            left_element_dofs = self.function_space.global_connectivity[e-1:e].flatten()
+            left_element_dof_values = system_dof_values[left_element_dofs]
+            right_element_dofs = self.function_space.global_connectivity[e+1:e+2].flatten()
+            right_element_dof_values = system_dof_values[right_element_dofs]
+            dof_jumps_boundaries[0:dofs] = element_dof_values[0:dofs] - \
+                left_element_dof_values[dofs:]
+            dof_jumps_boundaries[dofs:] = right_element_dof_values[0:dofs] - \
+                element_dof_values[dofs:]
+        return dof_jumps_boundaries
+
+    def _update_element_internal_variables(self, e, system_unknowns_increment):
+        """
+        Update the internal variables of an element based on the current system unknowns increment.
+
+        This method updates the orientation and curvature of the element at each quadrature point and
+        the rotational dof jumps at the element boundaries based on the current system unknowns increment.
+
+        Parameters:
+            e: The index of the element.
+            system_unknowns_increment: The increment in the system unknowns.
+        """
+        # update the orientation and curvature at quadrature points
+        super()._update_element_internal_variables(
+            e, system_unknowns_increment)
+        ############# update the boundary dof jumps #############
+        # NOTE: Here we only update the rotational dof jumps. The translational dof jumps are
+        # updated through a different method in stiffness and residual assembly methods.
+        element_dof_increment_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
+            e, system_unknowns_increment)
+        self.dof_jumps_boundaries[e, self.function_space.local_rotational_dofs] = \
+            element_dof_increment_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
+
+    def __update_element_position_jumps(self, e, system_unknowns):
+        """
+        Update the position jumps at the element boundaries based on the current system unknowns.
+
+        This method computes the position jumps at the element boundaries and updates the 
+        self.dof_jumps_boundaries container.
+        
+        Parameters:
+            e: The index of the element.
+            system_unknowns: The current system unknowns.
+        """
+        element_dof_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
+            e, system_unknowns)
+        self.dof_jumps_boundaries[e, self.function_space.local_translational_dofs] = \
+            element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+
+    def __update_system_position_jumps(self, system_unknowns):
+        """
+        Update the system position jumps based on the current system unknowns.
+
+        This method computes the position jumps at the element boundaries and updates the 
+        self.dof_jumps_boundaries container.
+        
+        Parameters:
+            system_unknowns: The current system unknowns.
+        """
+        for i in range(0, self.function_space.E):
+            self.__update_element_position_jumps(i, system_unknowns)
+
+    def _compute_element_dof_derivatives(self, e, element_dof_values, local_dof_indices, 
+                                         location="Quads"):
+        """
+        Compute the derivatives of the element dofs with respect to the arclength parameter.
+
+        Parameters:
+            e: The element index.
+            element_dof_values: The values of the dofs of the element.
+            local_dof_indices: The local (translational or rotational) dof indices of the element.
+            location: The location where the derivatives should be computed.
+                If "Quads", the derivatives are computed at the quadrature points of the element.
+                If "Nodes", the derivatives are computed at the nodes of the element.
+        Returns:
+            element_dof_derivatives: The derivatives of the element dofs with respect to the arclength parameter.
+        """
+        if (location != "Quads" and location != "Nodes"):
+            raise ValueError("Location must be either 'Quads' or 'Nodes'.")
+        if (location == "Quads"):
+            Np = self.function_space.shape_first_gradients * \
+                (1.0/self.function_space.jacobian)
+            lifting_shapes = self.function_space.lifting_shape_functions * \
+                (1.0/self.function_space.jacobian)
+        elif (location == "Nodes"):
+            # NOTE: Here we are assuming that there are only two nodes per element!!!
+            _, Nxi_left_node = self.function_space.compute_shapes(-1.0)
+            Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
+            _, Nxi_right_node = self.function_space.compute_shapes(1.0)
+            Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
+            Np = np.stack([Np_left_node, Np_right_node], axis=0)
+            lifting_shapes_left_node = self.function_space.compute_lifting_shapes(-1.0) * \
+                (1.0/self.function_space.jacobian)
+            lifting_shapes_right_node = self.function_space.compute_lifting_shapes(1.0) * \
+                (1.0/self.function_space.jacobian)
+            lifting_shapes = np.stack(
+                [lifting_shapes_left_node, lifting_shapes_right_node], axis=0)
+        return np.matmul(Np, element_dof_values[local_dof_indices]) + \
+            np.matmul(lifting_shapes, (self.dof_jumps_boundaries[e:e+1, local_dof_indices].T))
+
+    def compute_element_internal_forces(self, e, element_unknowns, element_orientations, 
+                                        element_curvatures):
+        """
+        Compute the internal forces for an element based on the provided unknowns, orientations,
+        and curvatures.
+
+        Parameters:
+            e: The element index.
+            element_unknowns: The unknowns of the element.
+            element_orientations: The orientations of the element at each quadrature point.
+            element_curvatures: The curvatures of the element at each quadrature point.
+        Returns:
+            element_internal_forces: The computed internal forces for the element.
+        """
+        # container to store the extended element internal forces
+        # NOTE: The container is extended to account for the coupling between the current element 
+        # and its neighbors due to the lifting terms.
+        dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
-        interface_residual = np.zeros([2*dofspel, 1])
-        # shape functions at the interface
-        N_left_interface, _ = self.function_space.compute_shapes(1.0)
-        N_right_interface, _ = self.function_space.compute_shapes(-1.0)
-        # nodal orientations for left and right elements
-        nodal_orientations_left = \
-            element_unknowns_left[self.function_space.local_rotational_dofs].reshape(
-                -1, self.function_space.dim)
-        nodal_orientations_right = \
-            element_unknowns_right[self.function_space.local_rotational_dofs].reshape(
-                -1, self.function_space.dim)
-        # nodal curvatures for left and right elements
-        nodal_curvatures_left = np.stack(
-            [self.curvature_nodes[2*e, :], self.curvature_nodes[2*e+1, :]], axis=0)
-        nodal_curvatures_right = np.stack(
-            [self.curvature_nodes[2*e+2, :], self.curvature_nodes[2*e+3, :]], axis=0)
-        # compute the internal forces and moments at the nodes for the left and right elements
-        internal_forces_left_element, internal_moments_left_element = \
-            self._compute_internal_forces_and_moments(e, element_unknowns_left,
-                                                      nodal_orientations_left,
-                                                      nodal_curvatures_left,
-                                                      location="Nodes")
-        internal_forces_right_element, internal_moments_right_element = \
-            self._compute_internal_forces_and_moments(e+1, element_unknowns_right,
-                                                      nodal_orientations_right,
-                                                      nodal_curvatures_right,
-                                                      location="Nodes")
-        # compute the transformation matrices at the interface
-        transformation_matrix_left_interface = self._compute_transformation_matrix(
-            nodal_orientations_left[1:2, :])[0, ...]
-        transformation_matrix_right_interface = self._compute_transformation_matrix(
-            nodal_orientations_right[0:1, :])[0, ...]
-        average_internal_forces_interface = 0.50 * \
-            (internal_forces_left_element[1, ...] +
-             internal_forces_right_element[0, ...])
-        average_internal_moments_interface = 0.50 * \
-            (np.matmul(np.transpose(transformation_matrix_left_interface),
-                       internal_moments_left_element[1, ...]) +
-             np.matmul(np.transpose(transformation_matrix_right_interface),
-                       internal_moments_right_element[0, ...]))
-        # compute the dof jumps at the interface
-        r_jump_interface = \
-            np.matmul(N_right_interface, 
-                      element_unknowns_right[self.function_space.local_translational_dofs]) - \
-            np.matmul(N_left_interface, 
-                      element_unknowns_left[self.function_space.local_translational_dofs])
-        # NOTE: Although we attempt to interpolate the rotational dofs at the interface here, in reality
-        # only their incremental vectors are interpolated. We do not interpolate the total rotational
-        # vectors directly as that would result in a loss of objectivity. We can still consider this 
-        # to be a good approximation since the difference in the rotational dofs at the interface will 
-        # be small at end of each load/time step i.e. for a converged configuration.
-        psi_jump_interface = \
-            np.matmul(N_right_interface, 
-                      element_unknowns_right[self.function_space.local_rotational_dofs]) - \
-            np.matmul(N_left_interface, 
-                      element_unknowns_left[self.function_space.local_rotational_dofs])
-        # assemble the interface residual terms
-        ############# flux terms #############
-        interface_residual[self.function_space.local_translational_dofs] -= \
-            np.matmul(np.transpose(N_left_interface), 
-                      average_internal_forces_interface)
-        interface_residual[self.function_space.local_rotational_dofs] -= \
-            np.matmul(np.transpose(N_left_interface), 
-                      average_internal_moments_interface)
-        interface_residual[dofspel + self.function_space.local_translational_dofs] += \
-            np.matmul(np.transpose(N_right_interface), average_internal_forces_interface)
-        interface_residual[dofspel + self.function_space.local_rotational_dofs] += \
-            np.matmul(np.transpose(N_right_interface), average_internal_moments_interface)
-        ############# penalty terms #############
-        C_F = np.zeros([self.function_space.dim, self.function_space.dim])
-        C_F[0, 0] = self.material.E * self.material.A
-        C_F[1, 1] = self.material.G * self.material.A_red
-        C_F[2, 2] = self.material.G * self.material.A_red
-        C_M = np.zeros([self.function_space.dim, self.function_space.dim])
-        C_M[0, 0] = self.material.G * self.material.I_T
-        C_M[1, 1] = self.material.E * self.material.I
-        C_M[2, 2] = self.material.E * self.material.I_minor
-        # compute the transformed constitutive matrices
-        orientations_tensor_left_interface = quaternion.as_rotation_matrix(
-            quaternion.from_rotation_vector(nodal_orientations_left[1, :]))
-        orientations_tensor_right_interface = quaternion.as_rotation_matrix(
-            quaternion.from_rotation_vector(nodal_orientations_right[0, :]))
-        C_F_transformed_left_interface = np.matmul(
-            orientations_tensor_left_interface, np.matmul(
-                C_F, np.transpose(orientations_tensor_left_interface)))
-        C_F_transformed_right_interface = np.matmul(
-            orientations_tensor_right_interface, np.matmul(
-                C_F, np.transpose(orientations_tensor_right_interface)))
-        C_F_transformed_average_interface = 0.50 * \
-            (C_F_transformed_left_interface + C_F_transformed_right_interface)
-        C_M_transformed_left_interface = np.matmul(
-            orientations_tensor_left_interface, np.matmul(
-                C_M, np.transpose(orientations_tensor_left_interface)))
-        C_M_transformed_right_interface = np.matmul(
-            orientations_tensor_right_interface, np.matmul(
-                C_M, np.transpose(orientations_tensor_right_interface)))
-        C_M_transformed_left_interface = np.matmul(np.transpose(
-            transformation_matrix_left_interface), np.matmul(
-                C_M_transformed_left_interface, transformation_matrix_left_interface))
-        C_M_transformed_right_interface = np.matmul(np.transpose(
-            transformation_matrix_right_interface), np.matmul(
-                C_M_transformed_right_interface, transformation_matrix_right_interface))
-        C_M_transformed_average_interface = 0.50 * \
-            (C_M_transformed_left_interface + C_M_transformed_right_interface)
-        # compute the penalty forces and moments
-        penalty_forces = (self.betaP / self.function_space.elL) * \
-            np.matmul(C_F_transformed_average_interface, r_jump_interface)
-        penalty_moments = (self.betaT / self.function_space.elL) * \
-            np.matmul(C_M_transformed_average_interface, psi_jump_interface)
-        interface_residual[self.function_space.local_translational_dofs] -= \
-            np.matmul(np.transpose(N_left_interface), penalty_forces)
-        interface_residual[self.function_space.local_rotational_dofs] -= \
-            np.matmul(np.transpose(N_left_interface), penalty_moments)
-        interface_residual[dofspel + self.function_space.local_translational_dofs] += \
-            np.matmul(np.transpose(N_right_interface), penalty_forces)
-        interface_residual[dofspel + self.function_space.local_rotational_dofs] += \
-            np.matmul(np.transpose(N_right_interface), penalty_moments)
-        return interface_residual
+        # get the lifting shape functions at the quadrature points
+        lifting_shapes = self.function_space.lifting_shape_functions * \
+                (1.0/self.function_space.jacobian)
+        element_internal_forces = np.zeros(
+            [dofspel+dofs, 1]) if (e == 0 or e == self.function_space.E-1) else \
+            np.zeros([2*dofspel, 1])
+        # compute the element internal forces from the parent class
+        element_bulk_internal_forces = super().compute_element_internal_forces(e, element_unknowns, 
+                                                                               element_orientations, 
+                                                                               element_curvatures)
+        # compute the internal forces and moments for this element
+        internal_forces, internal_moments = self._compute_internal_forces_and_moments(
+            e, element_unknowns, self.orientation[e, :, :], self.curvature[e, :, :])
+        # compute the element lifting forces and moments
+        lifting_forces_integrand = np.matmul(np.transpose(
+            lifting_shapes, axes=(0, 2, 1)), internal_forces)
+        lifting_moments_integrand = np.matmul(np.transpose(
+            lifting_shapes, axes=(0, 2, 1)), internal_moments)
+        element_lifting_forces = np.sum(
+            lifting_forces_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        element_lifting_moments = np.sum(
+            lifting_moments_integrand*self.function_space.JxW, axis=0, keepdims=False)
+        # assemble the internal forces
+        if (e == 0):  # for the left most element
+            element_internal_forces[0:dofspel] += element_bulk_internal_forces
+            # add lifting forces
+            element_internal_forces[dofs:dofs+int(dofs/2)] -= \
+                element_lifting_forces[int(dofs/2):dofs]
+            element_internal_forces[dofspel:dofspel+int(dofs/2)] += \
+                element_lifting_forces[int(dofs/2):dofs]
+            # add lifting moments
+            element_internal_forces[dofs+int(dofs/2):dofspel] -= \
+                element_lifting_moments[int(dofs/2):dofs]
+            element_internal_forces[dofspel+int(dofs/2):dofspel+dofs] += \
+                element_lifting_moments[int(dofs/2):dofs]
+        elif (e == self.function_space.E-1):  # for the right most element
+            element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
+            # add lifting forces
+            element_internal_forces[0:int(dofs/2)] -= \
+                element_lifting_forces[0:int(dofs/2)]
+            element_internal_forces[dofs:dofs+int(dofs/2)] += \
+                element_lifting_forces[0:int(dofs/2)]
+            # add lifting moments
+            element_internal_forces[int(dofs/2):dofs] -= \
+                element_lifting_moments[0:int(dofs/2)]
+            element_internal_forces[dofs+int(dofs/2):dofspel] += \
+                element_lifting_moments[0:int(dofs/2)]
+        else:  # for the intermediate elements
+            element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
+            # add lifting forces
+            element_internal_forces[0:int(dofs/2)] -= \
+                element_lifting_forces[0:int(dofs/2)]
+            element_internal_forces[dofs:dofs+int(dofs/2)] += \
+                element_lifting_forces[0:int(dofs/2)]
+            element_internal_forces[dofspel:dofspel+int(dofs/2)] -= \
+                element_lifting_forces[int(dofs/2):dofs]
+            element_internal_forces[dofspel+dofs:dofspel+dofs+int(dofs/2)] += \
+                element_lifting_forces[int(dofs/2):dofs]
+            # add lifting moments
+            element_internal_forces[int(dofs/2):dofs] -= \
+                element_lifting_moments[0:int(dofs/2)]
+            element_internal_forces[dofs+int(dofs/2):dofspel] += \
+                element_lifting_moments[0:int(dofs/2)]
+            element_internal_forces[dofspel+int(dofs/2):dofspel+dofs] -= \
+                element_lifting_moments[int(dofs/2):dofs]
+            element_internal_forces[dofspel+dofs+int(dofs/2):2*dofspel] += \
+                element_lifting_moments[int(dofs/2):dofs]
+        return element_internal_forces
 
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         """
@@ -1148,118 +1235,183 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_loads: The distributed loads on the elements.
             update_internal: A boolean indicating whether to update the internal variables.
         """
-        # assemble the bulk terms using the method in the parent class
-        super().compute_system_residual(f, system_unknowns, element_loads, update_internal)
+        # update the position jumps at the element boundaries before computing the residual
+        # NOTE: This is necessary to ensure that the residual is computed with the correct 
+        # position jumps.
+        self.__update_system_position_jumps(system_unknowns)
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
+        # loop over the elements
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            element_unknowns = system_unknowns[global_element_dofs]
+            if (element_loads == None):  # No element loads
+                ###### assemble the element internal forces ######
+                if (i == 0):  # for the left most element
+                    right_element_dofs_left_node = \
+                        self.function_space.global_connectivity[i+1:i+2].flatten()[0:dofs]
+                    extended_element_dofs = np.append(
+                        global_element_dofs, right_element_dofs_left_node)
+                elif (i == self.function_space.E-1):  # for the right most element
+                    left_element_dofs_right_node = \
+                        self.function_space.global_connectivity[i-1:i].flatten()[dofs:dofspel]
+                    extended_element_dofs = np.append(
+                        left_element_dofs_right_node, global_element_dofs)
+                else:  # for the intermediate elements
+                    left_element_dofs_right_node = \
+                        self.function_space.global_connectivity[i-1:i].flatten()[dofs:dofspel]
+                    right_element_dofs_left_node = \
+                        self.function_space.global_connectivity[i+1:i+2].flatten()[0:dofs]
+                    # assemble the extended element dofs
+                    extended_element_dofs = np.append(
+                        left_element_dofs_right_node, np.append(
+                            global_element_dofs, right_element_dofs_left_node))
+                f[extended_element_dofs] -= self.compute_element_internal_forces(
+                    i, element_unknowns, self.orientation[i, :, :], self.curvature[i, :, :])
         # assemble the interface terms
-        for i in range(0, self.function_space.E-1):  # loop over the interface elements
+        N_left_interface, _ = self.function_space.compute_shapes(1.0)
+        N_right_interface, _ = self.function_space.compute_shapes(-1.0)
+        # loop over the interface elements
+        for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
             global_element_dofs_right = self.function_space.global_connectivity[i+1:i+2].flatten()
-            # unknowns of the left and right elements
-            element_unknowns_left = system_unknowns[global_element_dofs_left]
-            element_unknowns_right = system_unknowns[global_element_dofs_right]
-            # compute the interface residual and assemble it to the global residual
-            interface_residual = self.compute_interface_residual(
-                i, element_unknowns_left, element_unknowns_right)
-            global_element_dofs_interface = np.concatenate(
-                [global_element_dofs_left, global_element_dofs_right])
-            f[global_element_dofs_interface] -= interface_residual
+            # penalty terms
+            penalty_forces = self.betaP * \
+                ((self.material.E*self.material.A) / self.function_space.elL) * \
+                (self.dof_jumps_boundaries[i:i+1, self.function_space.local_translational_dofs].T)[
+                    self.function_space.dim:]
+            penalty_moments = self.betaT * \
+                ((self.material.E*self.material.I) / self.function_space.elL) * \
+                (self.dof_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
+                    self.function_space.dim:]
+            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
+                np.matmul(np.transpose(N_left_interface), penalty_forces)
+            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
+                np.matmul(np.transpose(N_left_interface), penalty_moments)
+            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
+                np.matmul(np.transpose(N_right_interface), penalty_forces)
+            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
+                np.matmul(np.transpose(N_right_interface), penalty_moments)
 
-    def __compute_numerical_interface_stiffness(self, e, element_unknowns_left,
-                                                element_unknowns_right):
+    def __update_unknowns_for_perturbation(self, e, perturbed_system_unknowns, 
+                                           perturbed_solution_increments):
         """
-        Compute the numerical stiffness matrix at an interface based on the provided unknowns.
+        Update the relevant unknowns with perturbed values for numerical stiffness computation.
 
         Parameters:
-            e: The (interface) element index.
-            element_unknowns_left: The unknowns of the left element.
-            element_unknowns_right: The unknowns of the right element.
-        Returns:
-            interface_numerical_stiffness: The computed numerical stiffness matrix at the interface.
+            e: The element index.
+            perturbed_system_unknowns: The perturbed system unknowns.
+            perturbed_solution_increments: The perturbed solution increments.
         """
-        dofspel = self.function_space.dof*self.function_space.npel
-        interface_numerical_stiffness = np.zeros([2*dofspel, 2*dofspel])
+        # update the internal variables of the element
+        self._update_element_internal_variables(
+            e, perturbed_solution_increments)
+        self.__update_element_position_jumps(e, perturbed_system_unknowns)
+        # update the internal variables of the neighboring elements
+        if (e == 0):  # for the left most element
+            self._update_element_internal_variables(
+                e+1, perturbed_solution_increments)
+            self.__update_element_position_jumps(
+                e+1, perturbed_system_unknowns)
+        elif (e == self.function_space.E-1):  # for the right most element
+            self._update_element_internal_variables(
+                e-1, perturbed_solution_increments)
+            self.__update_element_position_jumps(
+                e-1, perturbed_system_unknowns)
+        else:  # for the intermediate elements
+            self._update_element_internal_variables(
+                e-1, perturbed_solution_increments)
+            self.__update_element_position_jumps(
+                e-1, perturbed_system_unknowns)
+            self._update_element_internal_variables(
+                e+1, perturbed_solution_increments)
+            self.__update_element_position_jumps(
+                e+1, perturbed_system_unknowns)
+
+    def __compute_element_numerical_stiffness(self, e, system_unknowns):
+        """
+        Compute the numerical stiffness matrix for an element based on the provided unknowns.
+
+        Parameters:
+            e: The element index.
+            system_unknowns: The unknowns of the system.
+        Returns:
+            extended_element_dofs: The extended element dofs including the neighboring elements.
+            element_numerical_stiffness: The computed numerical stiffness matrix for the element.
+        """
         perturbation_factor = 1.0e-05
         np.random.seed(1234 + e)  # for reproducibility
-        std_dev_element_unknowns_left = 0.01 * \
-            np.maximum(np.abs(element_unknowns_left), 1.0e-03)
-        std_dev_element_unknowns_right = 0.01 * \
-            np.maximum(np.abs(element_unknowns_right), 1.0e-03)
-        perturbation_magnitudes_left = perturbation_factor * np.abs(
-            np.random.normal(loc=element_unknowns_left, 
-                             scale=std_dev_element_unknowns_left))
-        perturbation_magnitudes_right = perturbation_factor * np.abs(
-            np.random.normal(loc=element_unknowns_right, 
-                             scale=std_dev_element_unknowns_right))
-        # perturb the left element dofs individually to compute the numerical stiffness matrix
-        perturbed_element_unknowns = element_unknowns_left.copy()
-        perturbed_solution_increments = np.zeros_like(element_unknowns_left)
-        for i in range(0, dofspel):
+        std_dev_system_unknowns = 0.01 * \
+            np.maximum(np.abs(system_unknowns), 1.0e-03)
+        perturbation_magnitudes = perturbation_factor * np.abs(
+            np.random.normal(loc=system_unknowns, scale=std_dev_system_unknowns))
+        # get the extended element dofs
+        dofs = self.function_space.dof
+        dofspel = self.function_space.dof*self.function_space.npel
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        if (e == 0):  # for the left most element
+            right_element_dofs_left_node = \
+                self.function_space.global_connectivity[e+1:e+2].flatten()[0:dofs]
+            extended_element_dofs = np.append(
+                global_element_dofs, right_element_dofs_left_node)
+        elif (e == self.function_space.E-1):  # for the right most element
+            left_element_dofs_right_node = \
+                self.function_space.global_connectivity[e-1:e].flatten()[dofs:dofspel]
+            extended_element_dofs = np.append(
+                left_element_dofs_right_node, global_element_dofs)
+        else:  # for the intermediate elements
+            left_element_dofs_right_node = \
+                self.function_space.global_connectivity[e-1:e].flatten()[dofs:dofspel]
+            right_element_dofs_left_node = \
+                self.function_space.global_connectivity[e+1:e+2].flatten()[0:dofs]
+            # assemble the extended element dofs
+            extended_element_dofs = np.append(
+                left_element_dofs_right_node, np.append(
+                    global_element_dofs, right_element_dofs_left_node))
+        # perturb the element dofs individually to compute the numerical stiffness matrix
+        element_numerical_stiffness = np.zeros(
+            [extended_element_dofs.shape[0], extended_element_dofs.shape[0]])
+        perturbed_system_unknowns = system_unknowns.copy()
+        perturbed_solution_increments = np.zeros_like(system_unknowns)
+        for i in range(0, extended_element_dofs.shape[0]):
             # reset the perturbed increments
             perturbed_solution_increments.fill(0.0)
-            # perturb the i-th dof of the left element
-            perturbed_solution_increments[i] = perturbation_magnitudes_left[i]
+            # perturb the i-th dof
+            perturbed_solution_increments[extended_element_dofs[i]] = \
+                perturbation_magnitudes[extended_element_dofs[i]]
             ####### positively perturb the unknowns #######
-            perturbed_element_unknowns += perturbed_solution_increments
-            # update the internal variables of the left element
-            self._update_element_internal_variables(
-                e, perturbed_solution_increments)
-            # compute the interface residual for the positive perturbation
-            interface_residual_positive_perturbation_left = self.compute_interface_residual(
-                e, perturbed_element_unknowns, element_unknowns_right)
-            ####### negatively perturb the unknowns #######
-            perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
-            # update the internal variables of the left element
-            self._update_element_internal_variables(
-                e, -2.0 * perturbed_solution_increments)
-            # compute the interface residual for the negative perturbation
-            interface_residual_negative_perturbation_left = self.compute_interface_residual(
-                e, perturbed_element_unknowns, element_unknowns_right)
-            # compute the interface numerical stiffness matrix for the left element
-            interface_numerical_stiffness[:, i:i+1] += \
-                (interface_residual_positive_perturbation_left -
-                 interface_residual_negative_perturbation_left) / \
-                (2.0 * perturbation_magnitudes_left[i])
-            ####### reset the unknowns and internal variables #######
-            perturbed_element_unknowns += \
+            perturbed_system_unknowns += \
                 perturbed_solution_increments
-            self._update_element_internal_variables(
-                e, perturbed_solution_increments)
-        # perturb the right element dofs individually to compute the numerical stiffness matrix
-        perturbed_element_unknowns = element_unknowns_right.copy()
-        for i in range(dofspel, 2*dofspel):
-            # reset the perturbed increments
-            perturbed_solution_increments.fill(0.0)
-            # perturb the i-th dof of the right element
-            perturbed_solution_increments[i - dofspel] = perturbation_magnitudes_right[i - dofspel]
-            ####### positively perturb the unknowns #######
-            perturbed_element_unknowns += perturbed_solution_increments
-            # update the internal variables of the right element
-            self._update_element_internal_variables(
-                e+1, perturbed_solution_increments)
-            # compute the interface residual for the positive perturbation
-            interface_residual_positive_perturbation_right = self.compute_interface_residual(
-                e, element_unknowns_left, perturbed_element_unknowns)
+            # update the internal variables for perturbation
+            self.__update_unknowns_for_perturbation(
+                e, perturbed_system_unknowns, perturbed_solution_increments)
+            # compute the element internal forces for the positive perturbation
+            element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
+                e, perturbed_system_unknowns[global_element_dofs], 
+                self.orientation[e, :, :], self.curvature[e, :, :])
             ####### negatively perturb the unknowns #######
-            perturbed_element_unknowns -= 2.0 * perturbed_solution_increments
-            # update the internal variables of the right element
-            self._update_element_internal_variables(
-                e+1, -2.0 * perturbed_solution_increments)
-            # compute the interface residual for the negative perturbation
-            interface_residual_negative_perturbation_right = self.compute_interface_residual(
-                e, element_unknowns_left, perturbed_element_unknowns)
-            # compute the interface numerical stiffness matrix for the right element
-            interface_numerical_stiffness[:, i:i+1] += \
-                (interface_residual_positive_perturbation_right -
-                 interface_residual_negative_perturbation_right) / \
-                (2.0 * perturbation_magnitudes_right[i - dofspel])
+            perturbed_system_unknowns -= \
+                2.0 * perturbed_solution_increments
+            # update the internal variables for perturbation
+            self.__update_unknowns_for_perturbation(
+                e, perturbed_system_unknowns, -2.0 * perturbed_solution_increments)
+            # compute the element internal forces for the negative perturbation
+            element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
+                e, perturbed_system_unknowns[global_element_dofs], 
+                self.orientation[e, :, :], self.curvature[e, :, :])
+            # compute the element numerical stiffness matrix
+            element_numerical_stiffness[:, i:i+1] += \
+                (element_internal_forces_positive_perturbation - \
+                 element_internal_forces_negative_perturbation) / \
+                (2.0 * perturbation_magnitudes[extended_element_dofs[i]])
             ####### reset the unknowns and internal variables #######
-            perturbed_element_unknowns += \
+            perturbed_system_unknowns += \
                 perturbed_solution_increments
-            self._update_element_internal_variables(
-                e+1, perturbed_solution_increments)
-        return interface_numerical_stiffness
+            self.__update_unknowns_for_perturbation(
+                e, perturbed_system_unknowns, perturbed_solution_increments)
+        return extended_element_dofs, element_numerical_stiffness
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
@@ -1271,21 +1423,58 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             nodal_loads: The nodal loads applied to the system.
             element_loads: The distributed loads on the elements.
         """
-        # assemble the bulk terms using the method in the parent class
-        super().compute_system_stiffness(A, system_unknowns, nodal_loads, element_loads)
+        # update the position jumps at the element boundaries before computing the residual
+        # NOTE: This is necessary to ensure that the stiffness is computed with the correct
+        # position jumps.
+        self.__update_system_position_jumps(system_unknowns)
+        for i in range(0, self.function_space.E):
+            extended_element_dofs, element_numerical_stiffness = \
+                self.__compute_element_numerical_stiffness(i, system_unknowns)
+            A[np.ix_(extended_element_dofs, extended_element_dofs)] += \
+                element_numerical_stiffness
         # assemble the interface stiffness terms
-        for i in range(0, self.function_space.E-1):  # loop over the interface elements
+        N_left_interface, _ = self.function_space.compute_shapes(1.0)
+        N_right_interface, _ = self.function_space.compute_shapes(-1.0)
+        # loop over the interface elements
+        for i in range(0, self.function_space.E-1):
             # since the elements are placed one after the other like a simple chain!!!
             # current element (= left (-)) and next element (= right (+))
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
             global_element_dofs_right = self.function_space.global_connectivity[i+1:i+2].flatten()
-            # unknowns of the left and right elements
-            element_unknowns_left = system_unknowns[global_element_dofs_left]
-            element_unknowns_right = system_unknowns[global_element_dofs_right]
-            # compute the interface numerical stiffness matrix and assemble it to the global stiffness matrix
-            interface_numerical_stiffness = self.__compute_numerical_interface_stiffness(
-                i, element_unknowns_left, element_unknowns_right)
-            global_element_dofs_interface = np.concatenate(
-                [global_element_dofs_left, global_element_dofs_right])
-            A[np.ix_(global_element_dofs_interface, global_element_dofs_interface)] += \
-                interface_numerical_stiffness
+            ############## penalty term tangents ##############
+            # left-left terms
+            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
+                     global_element_dofs_left[self.function_space.local_translational_dofs])] += \
+                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_left_interface), N_left_interface))
+            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
+                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
+                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_left_interface), N_left_interface))
+            # left-right terms
+            A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
+                     global_element_dofs_right[self.function_space.local_translational_dofs])] -= \
+                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_left_interface), N_right_interface))
+            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
+                     global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
+                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_left_interface), N_right_interface))
+            # right-left terms
+            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
+                     global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
+                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_right_interface), N_left_interface))
+            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
+                     global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
+                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_right_interface), N_left_interface))
+            # right-right terms
+            A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
+                     global_element_dofs_right[self.function_space.local_translational_dofs])] += \
+                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_right_interface), N_right_interface))
+            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
+                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
+                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                    np.matmul(np.transpose(N_right_interface), N_right_interface))

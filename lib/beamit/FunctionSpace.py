@@ -495,10 +495,8 @@ class ShearFlexibleGeometricallyExactFunctionSpace(FunctionSpace):
             shape_functions: The lifting shape functions evaluated at the point xi
         """
         # linear lifting shapes
-        # k01 = (1.0-(3.0*xi))/4.0
-        # k12 = (1.0+(3.0*xi))/4.0
-        k01 = 0.0
-        k12 = 0.0
+        k01 = (1.0-(3.0*xi))/4.0
+        k12 = (1.0+(3.0*xi))/4.0
 
         # elemental lifting shape function matrix
         lifting_shape_functions = np.array([[k01, 0.0, 0.0, k12, 0.0, 0.0],
