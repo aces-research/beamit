@@ -4,7 +4,7 @@ from beamit.WeakForm.WeakForm import WeakForm
 from beamit.WeakForm.Utils import SolutionUpdateType, skew_symmetric_matrices
 
 
-# Flag to indicate the use of multiplicative rotation updates. 
+# Flag to indicate the use of multiplicative rotation updates.
 # If False, then "incremental" additive rotation updates are used.
 USE_MULTIPLICATIVE_ROTATION_UPDATE = True
 
@@ -951,17 +951,29 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             # compute the internal forces and moments at the nodes
             internal_forces, internal_moments = self._compute_internal_forces_and_moments(
                 i, element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
-            if (i == 0):  # only for the first element
+            if (self.function_space.discretization_type == "CG"):  # for CG discretization
+                if (i == 0):  # only for the first element
+                    # assemble the internal forces at the left node
+                    f[global_element_dofs_left_node[0:int(
+                        dofs/2)]] += internal_forces[0, ...]
+                    f[global_element_dofs_left_node[int(
+                        dofs/2):dofs]] += internal_moments[0, ...]
+                # assemble the internal forces at the right node
+                f[global_element_dofs_right_node[0:int(
+                    dofs/2)]] += internal_forces[1, ...]
+                f[global_element_dofs_right_node[int(
+                    dofs/2):dofs]] += internal_moments[1, ...]
+            elif (self.function_space.discretization_type == "DG"):  # for DG discretization
                 # assemble the internal forces at the left node
                 f[global_element_dofs_left_node[0:int(
                     dofs/2)]] += internal_forces[0, ...]
                 f[global_element_dofs_left_node[int(
                     dofs/2):dofs]] += internal_moments[0, ...]
-            # assemble the internal forces at the right node
-            f[global_element_dofs_right_node[0:int(
-                dofs/2)]] += internal_forces[1, ...]
-            f[global_element_dofs_right_node[int(
-                dofs/2):dofs]] += internal_moments[1, ...]
+                # assemble the internal forces at the right node
+                f[global_element_dofs_right_node[0:int(
+                    dofs/2)]] += internal_forces[1, ...]
+                f[global_element_dofs_right_node[int(
+                    dofs/2):dofs]] += internal_moments[1, ...]
 
 class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactWeakFormCG):
 
