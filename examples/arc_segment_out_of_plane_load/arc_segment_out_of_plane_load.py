@@ -30,8 +30,6 @@ SPATIAL_TOLERANCE = 1.0E-10
 load_steps = 100
 vtk_dump = 10
 
-# the load / time steps and output
-
 def run_arc_segment_simulation(discretization_type):
     print("\nRunning the simulation with", discretization_type, "discretization")
 
@@ -48,7 +46,7 @@ def run_arc_segment_simulation(discretization_type):
     nodal_coordinates = copy.deepcopy(function_space.nodes)
 
     # a system binding the function_space (math) and the material (physics)
-    system = System.System(function_space, material)
+    system = System.System(function_space, material, betaP=0.1*E, betaT=0.1*E)
     # to avoid creating reference to the object attributes
     initial_state = copy.deepcopy(system.state)
 
@@ -73,7 +71,7 @@ def run_arc_segment_simulation(discretization_type):
     solver.set_boundary_conditions(bctypes, bcvalues)
 
     # output directory
-    output_dir = f"./VTK/{discretization_type}"
+    output_dir = f"./VTK"
 
     # create the output directory or clear it
     if not os.path.isdir(output_dir):
@@ -127,4 +125,3 @@ def run_arc_segment_simulation(discretization_type):
 if __name__ == "__main__":
     # run the simulations
     run_arc_segment_simulation("CG")
-    run_arc_segment_simulation("DG")
