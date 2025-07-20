@@ -20,15 +20,15 @@ a = 1.0
 # moment of inertia
 I = (a**4) / 12.0
 # number of elements
-Nel = 100
+Nel = 10
 # applied loads and tolerances
-INITIAL_TIP_MOMENT = (E * I * np.pi) / (4.0 * L)
+INITIAL_TIP_MOMENT = (-1.0 * E * I * np.pi) / (4.0 * L)
 TIP_LOAD = 2000.0
 SPATIAL_TOLERANCE = 1.0E-10
 
 # the load / time steps and output
 load_steps = 100
-vtk_dump = 10
+vtk_dump = 1
 
 def run_arc_segment_simulation(discretization_type):
     print("\nRunning the simulation with", discretization_type, "discretization")
@@ -46,7 +46,7 @@ def run_arc_segment_simulation(discretization_type):
     nodal_coordinates = copy.deepcopy(function_space.nodes)
 
     # a system binding the function_space (math) and the material (physics)
-    system = System.System(function_space, material, betaP=0.1*E, betaT=0.1*E)
+    system = System.System(function_space, material, betaP=10.0*E, betaT=10.0*E)
     # to avoid creating reference to the object attributes
     initial_state = copy.deepcopy(system.state)
 
