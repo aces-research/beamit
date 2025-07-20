@@ -1262,7 +1262,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                         self.function_space.global_connectivity[i-1:i].flatten()[dofs:dofspel]
                     right_element_dofs_left_node = \
                         self.function_space.global_connectivity[i+1:i+2].flatten()[0:dofs]
-                    # assemble the extended element dofs
                     extended_element_dofs = np.append(
                         left_element_dofs_right_node, np.append(
                             global_element_dofs, right_element_dofs_left_node))
@@ -1366,7 +1365,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 self.function_space.global_connectivity[e-1:e].flatten()[dofs:dofspel]
             right_element_dofs_left_node = \
                 self.function_space.global_connectivity[e+1:e+2].flatten()[0:dofs]
-            # assemble the extended element dofs
             extended_element_dofs = np.append(
                 left_element_dofs_right_node, np.append(
                     global_element_dofs, right_element_dofs_left_node))
