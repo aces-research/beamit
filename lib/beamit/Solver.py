@@ -10,6 +10,12 @@ from beamit.WeakForm.Utils import SolutionUpdateType
 class Solver(ABC):
 
     def __init__(self, system):
+        """
+        Initialize the solver.
+
+        Parameters:
+            system: The system containing the weak form, state, and internal forces.
+        """
         self.system = system
         # the left hand side matrix
         self.A = np.zeros([system.nequations, system.nequations])
@@ -18,11 +24,14 @@ class Solver(ABC):
         # the solution (unknowns)
         self.solution = np.zeros([system.nequations, 1])
         # initialize the unknowns in the system
-        self.initialize()
+        self.solution = np.reshape(
+            self.system.state, [self.system.nequations, 1])
         # boundary condition types (0 = Neumann, 1 = Dirichlet) matrix
-        self.bctypes = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof], dtype=np.int64)
+        self.bctypes = np.zeros([self.system.weak_form.function_space.N,
+                                self.system.weak_form.function_space.dof], dtype=np.int64)
         # boundary condition values matrix
-        self.bcvalues = np.zeros([self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
+        self.bcvalues = np.zeros(
+            [self.system.weak_form.function_space.N, self.system.weak_form.function_space.dof])
         # translational and rotational dof indices
         dof = self.system.weak_form.function_space.dof
         dofspel = self.system.weak_form.function_space.npel * dof
@@ -46,13 +55,14 @@ class Solver(ABC):
                 [self.system.weak_form.function_space.local_rotational_dofs + 
                 dofspel*i for i in range(self.system.weak_form.function_space.E)])
 
-    # Function to initialize unknowns to the undeformed state of the beam
-    def initialize(self):
-        self.solution = np.reshape(self.system.state, [self.system.nequations, 1])
-    
-    # Function to set the boundary conditions types (Dirichlet and Neumann) and values
-    # for each pair (node, dof) of the beam
     def set_boundary_conditions(self, bctypes, bcvalues):
+        """
+        Set the boundary conditions for the system.
+
+        Parameters:
+            bctypes: The boundary condition types (0 = Neumann, 1 = Dirichlet).
+            bcvalues: The boundary condition values.
+        """
         self.bctypes = copy.deepcopy(bctypes)
         self.bcvalues = copy.deepcopy(bcvalues)
         # loop on node
@@ -64,8 +74,13 @@ class Solver(ABC):
                     # shift the Dirichlet conditions to obtain the incremental boundary conditions
                     self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
 
-    # Function to modify the boundary condition values
     def modify_boundary_condition_values(self, bcvalues):
+        """
+        Modify the boundary condition values for the system.
+
+        Parameters:
+            bcvalues: The new boundary condition values.
+        """
         self.bcvalues = copy.deepcopy(bcvalues)
         # loop on node
         for n in range(0, self.bctypes.shape[0]):
@@ -76,26 +91,50 @@ class Solver(ABC):
                     # shift the Dirichlet conditions to obtain the incremental boundary conditions
                     self.bcvalues[n, d] = bcvalues[n, d] - self.system.state[n, d]
 
-    # Function to reset the linear system
     def reset_system(self):
+        """
+        Reset the linear system matrices and vectors.
+        """
         self.A = np.zeros([self.system.nequations, self.system.nequations])
         self.f = np.zeros([self.system.nequations, 1])
 
-    # Create arrays with entries being the global dof numbers of Dirichlet and Neumann dofs
     def create_dof_arrays(self):
+        """
+        Create the Dirichlet and Neumann global dof arrays.
+
+        Returns:
+            Dirichlet_dofs: The global dof indices for Dirichlet boundary conditions.
+            Neumann_dofs: The global dof indices for Neumann boundary conditions.
+        """
         bctypes_vec = np.reshape(self.bctypes, [self.system.nequations, 1])
         global_dofs = np.arange(0, self.system.nequations, 1)
         Neumann_dofs = global_dofs[(bctypes_vec == 0).flatten()]
         Dirichlet_dofs = global_dofs[(bctypes_vec == 1).flatten()]
         return Dirichlet_dofs, Neumann_dofs
-    
-    # Function to apply the Dirichlet boundary conditions by static condensation
+
     def apply_static_condensation(self, Neumann_dofs):
+        """
+        Apply the Dirichlet boundary conditions by static condensation.
+
+        Parameters:
+            Neumann_dofs: The global dof indices for Neumann boundary conditions.
+        """
         self.A = self.A[np.ix_(Neumann_dofs, Neumann_dofs)]
         self.f = self.f[Neumann_dofs]
 
-    # Function to solve the linear system Ax = f using different methods
-    def linear_system_solver(self, A, f, solver_type = None, precon_type = None, tol = 1.0E-06, maxiter = None):
+    def linear_system_solver(self, A, f, solver_type=None, precon_type=None, tol=1.0E-06, 
+                             maxiter=None):
+        """
+        Solve the linear system Ax = f using different methods.
+
+        Parameters:
+            A: The left hand side matrix.
+            f: The right hand side vector.
+            solver_type: The type of solver to use (e.g., 'spsolve', 'cg', 'bicg', 'bicgstab', 'gmres').
+            precon_type: The type of preconditioner to use (e.g., 'aINV', 'iLU', 'identity').
+            tol: The tolerance for linear solver convergence (default is 1.0E-06).
+            maxiter: The maximum number of iterations (default is None, which uses the default value for the solver).
+        """
         # the compressed sparse column version of A
         A_csc = csc_matrix(A, dtype=np.float64)
         # preconditioners
@@ -132,6 +171,12 @@ class Solver(ABC):
 class NewtonRaphsonSolver(Solver):
 
     def __init__(self, system):
+        """
+        Initialize the Newton-Raphson solver.
+
+        Parameters:
+            system: The system containing the weak form, state, and internal forces.
+        """
         # invoke the parent (Solver) class
         Solver.__init__(self, system)
         # residual norm at the start of the iterations
@@ -161,6 +206,17 @@ class NewtonRaphsonSolver(Solver):
 
     def solve(self, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
+        """
+        Solve the system of equations using the Newton-Raphson method.
+
+        Parameters:
+            Nmax: The maximum number of iterations (default is 10).
+            tol: The tolerance for solver convergence (default is 1.0E-05).
+            LSsolver: The linear system solver to use (default is None).
+            LSprecon: The preconditioner to use (default is None).
+            LStol: The tolerance for the linear system solver (default is 1.0E-06).
+            LSmaxiter: The maximum number of iterations for the linear system solver (default is None).
+        """
         # reset linear system before solving
         self.reset_system()
         # create the Dirichlet and Neumann global dof arrays
@@ -237,6 +293,12 @@ class NewtonRaphsonSolver(Solver):
 class DynamicSolver(Solver):
 
     def __init__(self, system):
+        """
+        Initialize the dynamic solver.
+
+        Parameters:
+            system: The system containing the weak form, state, and internal forces.
+        """
         # invoke the parent (Solver) class
         Solver.__init__(self, system)
         # initialize the mass matrix
@@ -248,12 +310,21 @@ class DynamicSolver(Solver):
 
     # Function to reset the dynamic linear system
     def reset_system(self):
+        """
+        Reset the dynamic linear system matrices and vectors.
+        """
         super().reset_system()
         self.M = np.zeros([self.system.nequations, self.system.nequations])
 
-    # Function to set the initial conditions (position and velocity) of the system
-    def set_initial_conditions(self, initial_position, initial_velocity):
-        self.solution = copy.deepcopy(np.reshape(initial_position, [self.system.nequations, 1]))
+    def set_initial_conditions(self, initial_solution, initial_velocity):
+        """
+        Set the initial conditions for the dynamic solver.
+
+        Parameters:
+            initial_solution: The initial solution vector.
+            initial_velocity: The initial velocity vector.
+        """
+        self.solution = copy.deepcopy(np.reshape(initial_solution, [self.system.nequations, 1]))
         self.velocity = copy.deepcopy(np.reshape(initial_velocity, [self.system.nequations, 1]))
         # compute initial accelerations
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
@@ -271,6 +342,12 @@ class DynamicSolver(Solver):
 class ImplicitNewmarkSolver(DynamicSolver):
 
     def __init__(self, system):
+        """
+        Initialize the Implicit Newmark solver.
+
+        Parameters:
+            system: The system containing the weak form, state, and internal forces.
+        """
         # invoke the parent (DynamicSolver) class
         DynamicSolver.__init__(self, system)
         # residual norm at the start of the iterations
@@ -284,7 +361,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         Initialize the solution, velocity and acceleration vectors in the current step.
 
         Parameters:
-            dt : The time step size.
+            dt: The time step size.
         """
         # constants in the time integration scheme
         c0 = 1.0/(self.beta*(dt**2.0))
@@ -337,6 +414,18 @@ class ImplicitNewmarkSolver(DynamicSolver):
 
     def solve(self, dt, Nmax=10, tol=1.0E-05, LSsolver=None, LSprecon=None, LStol=1.0E-06, 
               LSmaxiter=None):
+        """
+        Solve the system of equations using the Implicit Newmark time integration scheme.
+
+        Parameters:
+            dt: The time step size.
+            Nmax: The maximum number of iterations (default is 10).
+            tol: The tolerance for solver convergence (default is 1.0E-05).
+            LSsolver: The linear system solver to use (default is None).
+            LSprecon: The preconditioner to use (default is None).
+            LStol: The tolerance for the linear system solver (default is 1.0E-06).
+            LSmaxiter: The maximum number of iterations for the linear system solver (default is None).
+        """
         # constants in the time integration scheme
         c0 = 1.0/(self.beta*(dt**2.0))
         c1 = 1.0/(self.beta*dt)
@@ -417,6 +506,12 @@ class ImplicitNewmarkSolver(DynamicSolver):
 class ExplicitNewmarkSolver(DynamicSolver):
 
     def __init__(self, system):
+        """
+        Initialize the Explicit Newmark solver.
+
+        Parameters:
+            system: The system containing the weak form, state, and internal forces.
+        """
         # invoke the parent (Solver) class
         DynamicSolver.__init__(self, system)
         # initialize the stable time step size
@@ -424,9 +519,14 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # compute the lumped mass
         self.system.assemble_mass(self.M, self.solution)
         self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
-    
-    # Function to compute the natural frequencies of the system
+
     def compute_system_frequencies(self):
+        """
+        Compute the natural frequencies of the system.
+
+        Returns:
+            The natural frequencies of the system.
+        """
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         # if Dirichlet boundary conditions are not available
@@ -441,18 +541,28 @@ class ExplicitNewmarkSolver(DynamicSolver):
         if (not (((eig_freqs.real > 0.0).all()) and ((eig_freqs.imag >= 0.0).all()))):
             print("\nWARNING: Either the real and/or imaginary parts of the Eigen frequencies are negative.")
         return np.absolute(eig_freqs)
-    
-    # Function to compute and set the stable time step
-    # probably should consider degrading modulus in case of damage!!!
-    def set_stable_time_step(self, time_factor = 0.90):
+
+    def set_stable_time_step(self, time_factor=0.90):
+        """
+        Compute and set the stable time step based on the system frequencies.
+
+        Parameters:
+            time_factor: A factor to adjust the stable time step (default is 0.90).
+        """
         print("\nRunning stable time computations!!!")
         sys_freqs = self.compute_system_frequencies()
         # get the maximum frequency of the system
         max_sys_freq = sys_freqs[sys_freqs.argmax()]
         self.stable_time_step = time_factor*(2.0/(max_sys_freq.real))
-    
-    # Function to set the boundary conditions and the stable time step
+
     def set_boundary_conditions(self, bctypes, bcvalues):
+        """
+        Set the boundary conditions and the stable time step.
+
+        Parameters:
+            bctypes: The boundary condition types (0 = Neumann, 1 = Dirichlet).
+            bcvalues: The boundary condition values.
+        """
         super().set_boundary_conditions(bctypes, bcvalues)
         self.set_stable_time_step()
 
@@ -510,6 +620,12 @@ class ExplicitNewmarkSolver(DynamicSolver):
                 self.system.weak_form.solution_update_type.name)
 
     def solve(self, dt):
+        """
+        Solve the system of equations using the Explicit Newmark time integration scheme.
+
+        Parameters:
+            dt: The time step size.
+        """
         # if the time step size input is not provided
         if (dt == None):
             dt = self.stable_time_step
