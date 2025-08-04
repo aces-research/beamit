@@ -139,7 +139,7 @@ def static_main():
             os.remove(os.path.join("VTK", item))
     
     # write the initial displacements
-    PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
+    PostProcess.write_output_vtk("./VTK/output-0", system)
 
     # incremental computation of the load path
     if (load_case == 4):
@@ -153,14 +153,14 @@ def static_main():
             solver.solve(Nmax = 50, tol = 1.0E-03)
             if ((i+1) % save_step == 0):
                 output_file = "./VTK/output-" + str(i+1)
-                PostProcess.write_displacements_forces_vtk(output_file, system)
+                PostProcess.write_output_vtk(output_file, system)
     else:
         # apply the boundary conditions
         get_BCs(bctypes, bcvalues, load_case)
         solver.set_boundary_conditions(bctypes, bcvalues)
         # solve the nonlinear static problem and update the system
         solver.solve(Nmax = 10, tol = 1.0E-03)
-        PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
+        PostProcess.write_output_vtk("./VTK/output-1", system)
 
     simulation_time = time.time() - start_time
 
@@ -345,7 +345,7 @@ def CZM_static_main():
             os.remove(os.path.join("VTK", item))
     
     # write the initial displacements
-    PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
+    PostProcess.write_output_vtk("./VTK/output-0", system)
 
     # incremental computation of the load path
     if (load_case == 0):
@@ -359,7 +359,7 @@ def CZM_static_main():
             solver.solve(Nmax = 10, tol = 1.0E-03)
             if ((i+1) % save_step == 0):
                 output_file = "./VTK/output-" + str(i+1)
-                PostProcess.write_displacements_forces_vtk(output_file, system)
+                PostProcess.write_output_vtk(output_file, system)
     
     simulation_time = time.time() - start_time
 

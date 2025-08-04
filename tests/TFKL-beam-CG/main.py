@@ -142,7 +142,7 @@ def static_main():
             os.remove(os.path.join("VTK", item))
     
     # write the initial displacements
-    PostProcess.write_displacements_forces_vtk("./VTK/output-0", system)
+    PostProcess.write_output_vtk("./VTK/output-0", system)
 
     # incremental computation of the load path
     if (load_case == 4):
@@ -156,14 +156,14 @@ def static_main():
             solver.solve(Nmax = 20, tol = 1.0E-03)
             if ((i+1) % save_step == 0):
                 output_file = "./VTK/output-" + str(i+1)
-                PostProcess.write_displacements_forces_vtk(output_file, system)
+                PostProcess.write_output_vtk(output_file, system)
     else:
         # apply the boundary conditions
         get_BCs(bctypes, bcvalues, load_case)
         solver.set_boundary_conditions(bctypes, bcvalues)
         # solve the nonlinear static problem and update the system 
         solver.solve(Nmax = 20, tol = 1.0E-03)
-        PostProcess.write_displacements_forces_vtk("./VTK/output-1", system)
+        PostProcess.write_output_vtk("./VTK/output-1", system)
 
 def dynamic_main():
 
@@ -326,7 +326,7 @@ def dynamic_main():
     
     # write the initial displacements
     output_file = "./VTK/output-0"
-    PostProcess.write_displacements_forces_vtk(output_file, system)
+    PostProcess.write_output_vtk(output_file, system)
     
     # solve the nonlinear dynamic problem and update the nodal position in system
     simulation_time = 0.0
@@ -340,7 +340,7 @@ def dynamic_main():
         solver.solve(dt, Nmax = 20, tol = 1.0E-03)
         if ((i+1) % save_time == 0):
             output_file = "./VTK/output-" + str(i+1)
-            PostProcess.write_displacements_forces_vtk(output_file, system)
+            PostProcess.write_output_vtk(output_file, system)
 
 # run main functions
 static_main()
