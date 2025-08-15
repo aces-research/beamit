@@ -236,14 +236,14 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
                 f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
 
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns, lump=True):
+    def compute_system_mass(self, M, lump=True, **kwargs):
         """
         Compute the system mass matrix.
 
         Parameters:
             M: The mass matrix to be assembled.
-            system_unknowns: The unknowns of the system.
             lump: If True, apply lumping to the mass matrix.
+            **kwargs: Optional keyword arguments.
         """
         Nt = np.transpose(self.function_space.shape_functions, axes=(0, 2, 1))
         translational_mass_integrand = self.material.rho*self.material.A*np.matmul(Nt, self.function_space.shape_functions)

@@ -50,14 +50,14 @@ class EulerBernoulliWeakFormCG(WeakForm):
         return np.sum(integrand*self.function_space.JxW, axis=0, keepdims=False)
 
     # Function to compute the system mass
-    def compute_system_mass(self, M, system_unknowns, lump=True):
+    def compute_system_mass(self, M, lump=True, **kwargs):
         """
         Compute the system mass matrix.
 
         Parameters:
             M: The mass matrix to be assembled.
-            system_unknowns: The unknowns of the system.
             lump: If True, apply lumping to the mass matrix.
+            **kwargs: Optional keyword arguments.
         """
         phit = np.transpose(self.function_space.lagrange_shape_functions, axes=(0, 2, 1))
         Nt = np.transpose(self.function_space.hermite_shape_functions, axes=(0, 2, 1))

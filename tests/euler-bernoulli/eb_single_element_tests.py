@@ -70,9 +70,7 @@ def test_consistent_mass():
     system = System.System(function_space, material)
 
     computed_mass_matrix = np.zeros([system.nequations, system.nequations])
-    system.weak_form.compute_system_mass(computed_mass_matrix,
-                                         np.zeros([function_space.npel*function_space.dof, 1]), 
-                                         lump=False)
+    system.weak_form.compute_system_mass(computed_mass_matrix, lump=False)
 
     # test the element mass matrix
     bending_mass_matrix = ((rho*material.A*L)/420.0) * \
@@ -92,9 +90,7 @@ def test_consistent_mass():
             f"Euler-Bernoulli beam mass matrix test failed."
     
     computed_mass_matrix = np.zeros([system.nequations, system.nequations])
-    system.weak_form.compute_system_mass(computed_mass_matrix,
-                                         np.zeros([function_space.npel*function_space.dof, 1]),
-                                         lump=True)
+    system.weak_form.compute_system_mass(computed_mass_matrix, lump=True)
 
 if __name__ == "__main__":
 

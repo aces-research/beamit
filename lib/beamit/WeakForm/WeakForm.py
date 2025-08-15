@@ -56,6 +56,18 @@ class WeakForm(ABC):
                 A[np.ix_(global_element_dofs, global_element_dofs)
                   ] += self.compute_element_internal_stiffness(element_unknowns)
 
+    @abstractmethod
+    def compute_system_mass(self, M, lump=True, **kwargs):
+        """
+        Compute the system mass matrix based on the provided solution vector.
+
+        Parameters:
+            M: The mass matrix to be assembled.
+            lump: Whether to use lumped mass matrix (default is True).
+            **kwargs: Optional keyword arguments.
+        """
+        pass
+
     def add_nodal_loads_to_residual(self, f, system_unknowns, nodal_loads):
         """
         Add the nodal loads to the residual vector.

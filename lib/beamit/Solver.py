@@ -334,7 +334,7 @@ class DynamicSolver(Solver):
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         self.reset_system()
         self.system.assemble_residual(self.f, self.solution, nodal_loads=nodal_loads)
-        self.system.assemble_mass(self.M, self.solution)
+        self.system.assemble_mass(self.M)
         self.acceleration = self.linear_system_solver(self.M, self.f)
         # update the system attributes
         self.system.update(self.solution)
@@ -517,7 +517,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # initialize the stable time step size
         self.stable_time_step = None
         # compute the lumped mass
-        self.system.assemble_mass(self.M, self.solution)
+        self.system.assemble_mass(self.M)
         self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
 
     def compute_system_frequencies(self):

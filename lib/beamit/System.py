@@ -101,15 +101,15 @@ class System:
         # the following function in the respective weak form
         self.weak_form.add_nodal_loads_to_residual(f, solution, nodal_loads)
 
-    def assemble_mass(self, M, solution):
+    def assemble_mass(self, M, **kwargs):
         """
         Assemble the mass matrix for the system.
 
         Parameters:
             M: The mass matrix to be assembled.
-            solution: The current solution vector.
+            **kwargs: Optional keyword arguments.
         """
-        self.weak_form.compute_system_mass(M, solution)
+        self.weak_form.compute_system_mass(M, **kwargs)
 
     def assemble(self, A, f, solution, nodal_loads, element_loads=None):
         """
