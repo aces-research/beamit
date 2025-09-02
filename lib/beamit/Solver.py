@@ -575,60 +575,46 @@ class ExplicitNewmarkSolver(DynamicSolver):
         """
         # create the Dirichlet and Neumann dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
+        # compute the solution increment in the current step
+        solution_increment = np.zeros_like(self.solution)
+        solution_increment[Dirichlet_dofs] += np.reshape(
+            self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
+        # NOTE: The update equations for rotational dofs (also in the case of multiplicative 
+        # updates) can be the same as the translational dofs as per Marino et al., CMAME, 2019 
+        # and Krysl et al., IJNME. 2005.
+        solution_increment[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (
+            ((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
+        ######### Update the solution #########
         if (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_ADD_ROT):
-            ############# For the Dirichlet dofs #############
-            # generate the Dirichlet solution vector
-            Dirichlet_solution = np.reshape(self.bcvalues, [self.system.nequations, 1])[
-                Dirichlet_dofs]
-            solution_prev_Dirichlet = copy.deepcopy(
-                self.solution[Dirichlet_dofs])
-            velocity_prev_Dirichlet = copy.deepcopy(self.velocity[Dirichlet_dofs])
-            self.solution[Dirichlet_dofs] += Dirichlet_solution
-            self.velocity[Dirichlet_dofs] = (
-                self.solution[Dirichlet_dofs] - solution_prev_Dirichlet)/dt
-            self.acceleration[Dirichlet_dofs] = (
-                self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
-            ############# For the Neumann dofs #############
-            solution_increment_neumann = (dt*self.velocity[Neumann_dofs]) + (
-                ((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
-            self.solution[Neumann_dofs] += solution_increment_neumann
-            self.velocity[Neumann_dofs] += ((dt/2.0)
-                                            * self.acceleration[Neumann_dofs])
+            # perform additive update for translations and rotations
+            self.solution += solution_increment
         elif (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_MUL_ROT):
-            # previous velocity of Dirichlet dofs
-            velocity_prev_Dirichlet = copy.deepcopy(
-                self.velocity[Dirichlet_dofs])
-            ######### Update the solution #########
-            # compute the solution increment in the current step
-            solution_increment = np.zeros_like(self.solution)
-            solution_increment[Dirichlet_dofs] += np.reshape(
-                self.bcvalues, [self.system.nequations, 1])[Dirichlet_dofs]
-            # NOTE: The update equations for rotational dofs can be the same as the translational 
-            # dofs as per Marino et al., CMAME, 2019 and Krysl et al., IJNME. 2005.
-            solution_increment[Neumann_dofs] += (dt*self.velocity[Neumann_dofs]) + (
-                ((dt**2.0)/2.0)*self.acceleration[Neumann_dofs])
             # perform additive update for translations
             self.solution[self.translational_dof_indices] += \
                 solution_increment[self.translational_dof_indices]
             # perform multiplicative update for rotations
             self.system.weak_form.update_rotational_solution(
                 self.solution, solution_increment)
-            ######### Update the velocity and acceleration (Dirichlet dofs) #########
-            # NOTE: The following equations might be incorrect for angular velocities of
-            # Dirichlet dofs. This is still fine if we have homogeneous Dirichlet boundary
-            # conditions. In the case of inhomogeneous Dirichlet boundary conditions, these
-            # relations need to be modified!!!
-            # for Dirichlet dofs
-            self.velocity[Dirichlet_dofs] = solution_increment[Dirichlet_dofs]/dt
-            self.acceleration[Dirichlet_dofs] = (
-                self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
-            # for Neumann dofs
-            self.velocity[Neumann_dofs] += ((dt/2.0)
-                                            * self.acceleration[Neumann_dofs])
         else:
             raise NotImplementedError(
                 "Solution update type %s is not implemented in the Explicit Newmark solver." %
                 self.system.weak_form.solution_update_type.name)
+        # update the internal variables in the weak form
+        self.system.weak_form.update_internal_variables(solution_increment)
+        ######### Update the velocity and acceleration (only of Dirichlet dofs) #########
+        # NOTE: The following equations might be incorrect for angular velocities of
+        # Dirichlet dofs in the case of multiplicative rotation updates. This is still 
+        # fine if we have homogeneous Dirichlet boundary conditions. In the case of 
+        # inhomogeneous Dirichlet boundary conditions, these relations need to be modified!!!
+        # for Dirichlet dofs
+        velocity_prev_Dirichlet = copy.deepcopy(
+            self.velocity[Dirichlet_dofs])
+        self.velocity[Dirichlet_dofs] = solution_increment[Dirichlet_dofs]/dt
+        self.acceleration[Dirichlet_dofs] = (
+            self.velocity[Dirichlet_dofs] - velocity_prev_Dirichlet)/dt
+        # for Neumann dofs
+        self.velocity[Neumann_dofs] += ((dt/2.0)
+                                        * self.acceleration[Neumann_dofs])
 
     def __update_state(self, dt, accelerations_neumann):
         """
@@ -670,7 +656,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         _, Neumann_dofs = self.create_dof_arrays()
         # generate the nodal load vector
         nodal_loads = np.zeros([self.system.nequations, 1])
-        nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+        nodal_loads[Neumann_dofs] += np.reshape(
+            self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         # the PREDICTOR
         self.__initialize_state(dt)
         # assemble the residual
