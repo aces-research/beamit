@@ -981,6 +981,117 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
                 f[global_element_dofs_right_node[int(
                     dofs/2):dofs]] += internal_moments[1, ...]
 
+    def __compute_element_rotational_mass(self, e, dt, element_angular_velocities):
+        """
+        Compute the rotational mass matrix of an element based on the provided unknowns
+
+        Parameters:
+            e: The element index.
+            dt: The time step size.
+            element_angular_velocities: The angular velocities of the element.
+        Returns:
+            M_el_rot: The rotational mass matrix of the element.
+            r_el_rot: The rotational inertia vector of the element.
+        """
+        # get the shape functions
+        N = self.function_space.shape_functions
+        Nt = np.transpose(N, axes=(0, 2, 1))
+        # inertia tensor
+        C_rho = np.zeros(
+            [self.function_space.Q, self.function_space.dim, self.function_space.dim])
+        C_rho[:, 0, 0] = self.material.rho * self.material.I_T
+        C_rho[:, 1, 1] = self.material.rho * self.material.I
+        C_rho[:, 2, 2] = self.material.rho * self.material.I_minor
+        # transformed inertia tensor
+        element_orientations = self.orientation[e, :, :]
+        element_orientations_tensor = quaternion.as_rotation_matrix(
+            quaternion.from_rotation_vector(element_orientations))
+        C_rho_transformed = np.matmul(element_orientations_tensor, np.matmul(
+            C_rho, np.transpose(element_orientations_tensor, axes=(0, 2, 1))))
+        ########## rotational mass ##########
+        # first part of the rotational mass integrand
+        rotational_mass_integrand = np.matmul(Nt, np.matmul(
+            C_rho_transformed, N))
+        # second part of the rotational mass integrand
+        rot_mass_second_part_aux = np.matmul(
+            C_rho_transformed, np.matmul(N, element_angular_velocities))
+        rot_mass_second_part_aux = skew_symmetric_matrices(
+            rot_mass_second_part_aux[..., 0])
+        rotational_mass_integrand -= 0.50 * dt * np.matmul(Nt, np.matmul(
+            rot_mass_second_part_aux, N))
+        # third part of the rotational mass integrand
+        rot_mass_third_part_aux = np.matmul(
+            N, element_angular_velocities)
+        rot_mass_third_part_aux = skew_symmetric_matrices(
+            rot_mass_third_part_aux[..., 0])
+        rot_mass_third_part_aux = np.matmul(
+            rot_mass_third_part_aux, C_rho_transformed)
+        rotational_mass_integrand += 0.50 * dt * np.matmul(Nt, np.matmul(
+            rot_mass_third_part_aux, N))
+        # NOTE: Here we are not adding the term to the mass matrix which involves the angular
+        # acceleration as that term will be small due to (dt/2) extra prefactor and the initial
+        # angular acceleration at the start of a time step is zero anyways. We probably have to
+        # implement that term if we are using this mass matrix within the context of an implicit
+        # time integration scheme.
+        M_el_rot = np.sum(rotational_mass_integrand *
+                          self.function_space.JxW, axis=0, keepdims=False)
+        ########## rotational inertia ##########
+        rot_inertia_aux1 = np.matmul(N, element_angular_velocities)
+        rot_inertia_aux2 = skew_symmetric_matrices(rot_inertia_aux1[..., 0])
+        rot_inertia_aux2 = np.matmul(rot_inertia_aux2, np.matmul(
+            C_rho_transformed, rot_inertia_aux1))
+        rotational_inertia_integrand = np.matmul(Nt, rot_inertia_aux2)
+        f_el_rot = np.sum(rotational_inertia_integrand *
+                          self.function_space.JxW, axis=0, keepdims=False)
+        return M_el_rot, f_el_rot
+
+    def compute_system_mass(self, M, lump=True, **kwargs):
+        """
+        Compute the system mass matrix.
+
+        Parameters:
+            M: The mass matrix to be assembled.
+            lump: If True, apply lumping to the mass matrix.
+            **kwargs: Optional keyword arguments.
+        """
+        # get the shape functions
+        N = self.function_space.shape_functions
+        Nt = np.transpose(N, axes=(0, 2, 1))
+        # element translational mass matrix
+        translational_mass_integrand = self.material.rho*self.material.A * \
+            np.matmul(Nt, N)
+        M_el_trans = np.sum(translational_mass_integrand *
+                            self.function_space.JxW, axis=0, keepdims=False)
+        # get additional parameters from kwargs
+        dt = kwargs.get("dt", 0.0)
+        system_velocities = kwargs.get("system_velocities", np.zeros(
+            [self.function_space.N*self.function_space.dof, 1]))
+        residual_vector = kwargs.get("residual_vector", None)
+        # container to store element mass matrix
+        M_el = np.zeros(
+                [self.function_space.dof*self.function_space.npel,
+                 self.function_space.dof*self.function_space.npel])
+        for i in range(0, self.function_space.E):
+            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
+            # compute the element rotational mass matrix and rotational inertia vector
+            M_el_rot, f_el_rot = self.__compute_element_rotational_mass(
+                i, dt, system_velocities[global_element_dofs[self.function_space.local_rotational_dofs]])
+            # reinitialize element mass matrix and add contributions
+            M_el.fill(0.0)
+            M_el[np.ix_(self.function_space.local_translational_dofs,
+                         self.function_space.local_translational_dofs)] += M_el_trans
+            M_el[np.ix_(self.function_space.local_rotational_dofs,
+                         self.function_space.local_rotational_dofs)] += M_el_rot
+            # apply lumping if needed (based on row sum technique)
+            if (lump):
+                M_el = np.diag(np.sum(M_el, axis=1))
+            # assemble the element mass to the global mass matrix
+            M[np.ix_(global_element_dofs, global_element_dofs)] += M_el
+            # add the element rotational inertia contribution to the residual vector
+            if (residual_vector is not None):
+                residual_vector[global_element_dofs[self.function_space.local_rotational_dofs]
+                                ] -= f_el_rot
+
 class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactWeakFormCG):
 
     def __init__(self, function_space, material, betaP, betaT):
