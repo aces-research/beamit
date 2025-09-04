@@ -22,7 +22,7 @@ H = 0.00635
 # number of elements
 Nel = 100
 # applied load
-IMPULSE = 1.09E03
+IMPULSE = 1.78E03
 VELOCITY = IMPULSE / (rho * H)
 # spatial tolerance
 SPATIAL_TOLERANCE = 1.0E-10
@@ -105,4 +105,3 @@ if __name__ == "__main__":
         if (time_steps % vtk_dump == 0):
             output_file = "./VTK/output-" + str(time_steps)
             PostProcess.write_output_vtk(output_file, system)
-
