@@ -6,6 +6,8 @@ from scipy.sparse import csc_matrix
 import sys
 import copy
 from beamit.WeakForm.Utils import SolutionUpdateType
+from beamit.WeakForm.ShearFlexibleGeometricallyExactWeakForm import \
+    ShearFlexibleGeometricallyExactWeakFormCG, ShearFlexibleGeometricallyExactWeakFormDG
 
 class Solver(ABC):
 
@@ -663,6 +665,13 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # assemble the residual
         self.system.assemble_residual(
             self.f, self.solution, nodal_loads, element_loads=None, update_internal=True)
+        # reassemble the mass matrix if weak form is ShearFlexibleGeometricallyExactWeakFormCG 
+        # or ShearFlexibleGeometricallyExactWeakFormDG
+        if ((type(self.system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG) or
+            (type(self.system.weak_form) == ShearFlexibleGeometricallyExactWeakFormDG)):
+            self.system.assemble_mass(
+                self.M, lump=True, dt=dt, system_velocities=self.velocity, residual_vector=self.f)
+            self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
         accelerations_neumann = self.f[Neumann_dofs]/self.lumpedMass[Neumann_dofs]
