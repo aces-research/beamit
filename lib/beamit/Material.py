@@ -209,7 +209,7 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             orientation_tensor_right_interface, orientation_tensor_left_interface.T)
         psi_jump_interface = quaternion.as_rotation_vector(
             quaternion.from_rotation_matrix(orientation_tensor_diff_interface))
-        psi_jump_interface = psi_jump_interface.reshape(3, 1) # reshaping to (3, 1) from (3,)
+        psi_jump_interface = psi_jump_interface.reshape([3, 1]) # reshaping to (3, 1) from (3,)
         # torsional jump at the interface
         torsional_jump_interface = np.sum(
             psi_jump_interface * cohesive_boundary_normal_interface, axis=0, keepdims=True)
@@ -261,10 +261,10 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             fcoh = (fmax/delta_max)*delta
         return fcoh
 
-    def compute_cohesive_forces(self, r_left_interface, r_right_interface, psi_left_interface, 
-                                psi_right_interface, delta_max):
+    def compute_cohesive_forces_and_moments(self, r_left_interface, r_right_interface, 
+                                            psi_left_interface, psi_right_interface, delta_max):
         """
-        Compute the cohesive forces at the interface.
+        Compute the cohesive forces and moments at the interface.
 
         Parameters:
             r_left_interface: Position vector at the left side of the interface
@@ -274,7 +274,11 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             delta_max: Current maximum effective separation at the interface
         Returns:
             cohesive_forces: Cohesive forces at the interface
+            cohesive_moments: Cohesive moments at the interface
         """
+        # expect the shapes of orientation vectors to be (3, 1)
+        if ((psi_left_interface.shape != (3, 1)) or (psi_right_interface.shape != (3, 1))):
+            raise ValueError("The shape of the orientation vectors should be (3, 1).")
         # effective separation at the interface
         delta = self.compute_effective_separation(
             r_left_interface, r_right_interface, psi_left_interface, psi_right_interface)
@@ -291,42 +295,6 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
         # shear jumps at the interface
         shear_jump_vector_interface = r_jump_interface - \
             (axial_jump_interface * cohesive_boundary_normal_interface)
-        # compute the cohesive forces
-        if (delta == 0.0):  # avoid division by zero
-            return np.zeros([3, 1])
-        # the axial part
-        cohesive_forces = (fcoh / delta) * axial_jump_interface * \
-            cohesive_boundary_normal_interface
-        # the shear part
-        cohesive_forces += (fcoh / delta) * (self.alpha1**2) * \
-            shear_jump_vector_interface
-        return cohesive_forces
-
-    def compute_cohesive_moments(self, r_left_interface, r_right_interface, psi_left_interface, 
-                                 psi_right_interface, delta_max):
-        """
-        Compute the cohesive moments at the interface.
-
-        Parameters:
-            r_left_interface: Position vector at the left side of the interface
-            r_right_interface: Position vector at the right side of the interface
-            psi_left_interface: Orientation vector at the left side of the interface
-            psi_right_interface: Orientation vector at the right side of the interface
-            delta_max: Current maximum effective separation at the interface
-        Returns:
-            cohesive_moments: Cohesive moments at the interface
-        """
-        # expect the shapes of orientation vectors to be (3, 1)
-        if ((psi_left_interface.shape != (3, 1)) or (psi_right_interface.shape != (3, 1))):
-            raise ValueError("The shape of the orientation vectors should be (3, 1).")
-        # effective separation at the interface
-        delta = self.compute_effective_separation(
-            r_left_interface, r_right_interface, psi_left_interface, psi_right_interface)
-        # effective cohesive force at the interface
-        fcoh = self.__compute_effective_cohesive_force(delta, delta_max)
-        # cohesive boundary normal at the interface
-        cohesive_boundary_normal_interface = self.compute_cohesive_boundary_normal(
-            psi_left_interface, psi_right_interface)
         # rotation jump at the interface
         orientation_tensor_left_interface = quaternion.as_rotation_matrix(
             quaternion.from_rotation_vector(psi_left_interface.flatten()))
@@ -336,23 +304,29 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             orientation_tensor_right_interface, orientation_tensor_left_interface.T)
         psi_jump_interface = quaternion.as_rotation_vector(
             quaternion.from_rotation_matrix(orientation_tensor_diff_interface))
-        psi_jump_interface = psi_jump_interface.reshape(3, 1) # reshaping to (3, 1) from (3,)
+        psi_jump_interface = psi_jump_interface.reshape([3, 1]) # reshaping to (3, 1) from (3,)
         # torsional jump at the interface
         torsional_jump_interface = np.sum(
             psi_jump_interface * cohesive_boundary_normal_interface, axis=0, keepdims=True)
         # bending jumps at the interface
         bending_jump_vector_interface = psi_jump_interface - \
             (torsional_jump_interface * cohesive_boundary_normal_interface)
-        # compute the cohesive moments
+        # compute the cohesive forces and moments
         if (delta == 0.0):  # avoid division by zero
-            return np.zeros([3, 1])
+            return np.zeros((3, 1)), np.zeros((3, 1))
+        # the axial part
+        cohesive_forces = (fcoh / delta) * axial_jump_interface * \
+            cohesive_boundary_normal_interface
+        # the shear part
+        cohesive_forces += (fcoh / delta) * (self.alpha1**2) * \
+            shear_jump_vector_interface
         # the torsional part
         cohesive_moments = (fcoh / delta) * ((self.alpha2 * self.non_dim_par)**2) * \
             torsional_jump_interface * cohesive_boundary_normal_interface
         # the bending part
         cohesive_moments += (fcoh / delta) * ((self.alpha3 * self.non_dim_par)**2) * \
             bending_jump_vector_interface
-        return cohesive_moments
+        return cohesive_forces, cohesive_moments
 
 class TFKLMaterial(ShearFlexibleMaterial):
 
