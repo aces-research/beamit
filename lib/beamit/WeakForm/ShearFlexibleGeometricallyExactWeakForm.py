@@ -2,6 +2,7 @@ import numpy as np
 import quaternion
 from beamit.WeakForm.WeakForm import WeakForm
 from beamit.WeakForm.Utils import SolutionUpdateType, skew_symmetric_matrices
+from beamit import Material
 
 
 # Flag to indicate the use of multiplicative rotation updates.
@@ -1114,12 +1115,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # container to store dof jumps at the element boundaries
         self.dof_jumps_boundaries = np.zeros(
             [self.function_space.E, 2*self.function_space.dof])
-        # NOTE: We are using the self.curvature_nodes container to store the curvature at the 
-        # boundaries of the elements since we have two nodes per element which are the left and right 
-        # nodes. So instead of creating a new container, we are reusing the curvature_nodes container 
-        # to store the curvature at the boundaries of the elements which is needed in the DG weak 
-        # form to compute the moments at the element interfaces. This will not work if we have more
-        # than two nodes per element i.e. for higher order elements.
+        # store internal variables (of CZM) at all the interfaces
+        # first column = binary parameter to indicate damage status at the interface
+        # (0.0 -> damage 'not' initiated, 1.0 -> damage initiated)
+        # second column = binary parameter to enable/disable DG and CZM terms in the interface jump forces
+        # (0.0 -> DG terms are active, 1.0 -> CZM terms are active)
+        # third column = maximum effective separation at an interface in the entire loading history
+        self.internal_variables = np.zeros([self.function_space.E-1, 3])
 
     def __get_dof_jumps_at_element_boundaries(self, e, system_dof_values):
         """
@@ -1335,6 +1337,91 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_internal_forces[dofspel+dofs+int(dofs/2):2*dofspel] += \
                 element_lifting_moments[int(dofs/2):dofs]
         return element_internal_forces
+
+    def __compute_CZM_interface_forces(self, r_left_interface, r_right_interface,
+                                       psi_left_interface, psi_right_interface, 
+                                       forces_left_interface, forces_right_interface, 
+                                       moments_left_interface, moments_right_interface, 
+                                       element_internal_variables, update_internal):
+        """
+        Compute the cohesive zone model (CZM) interface forces and moments.
+
+        Parameters:
+            r_left_interface: The position vector at the left interface.
+            r_right_interface: The position vector at the right interface.
+            psi_left_interface: The orientation vector at the left interface.
+            psi_right_interface: The orientation vector at the right interface.
+            forces_left_interface: The forces at the left interface.
+            forces_right_interface: The forces at the right interface.
+            moments_left_interface: The moments at the left interface.
+            moments_right_interface: The moments at the right interface.
+            element_internal_variables: The internal variables at the interface.
+            update_internal: If True, update the internal variables in the weak form.
+        Returns:
+            cohesive_forces: The cohesive forces at the interface (if applicable).
+            cohesive_moments: The cohesive moments at the interface (if applicable).
+        """
+        # initialize cohesive forces and moments
+        cohesive_forces = np.zeros([self.function_space.dim, 1])
+        cohesive_moments = np.zeros([self.function_space.dim, 1])
+        # perform CZM checks and calculations in the case of a cohesive interface material
+        if ((isinstance(self.material, (Material.ShearFlexibleCohesiveInterfaceMaterial))) and update_internal):
+            # just after damage initiation or damage not yet initiated
+            if (element_internal_variables[0:1, 2:3] == 0.0):
+                # just after damage initiation
+                if (element_internal_variables[0:1, 0:1] == 1.0):
+                    # effective separation at the interface
+                    delta = self.material.compute_effective_separation(r_left_interface,
+                                                                       r_right_interface,
+                                                                       psi_left_interface,
+                                                                       psi_right_interface)
+                    if (delta == 0.0):  # fall back to DG terms
+                        element_internal_variables[0:1, 1:2] = 0.0
+                    else:  # perform CZM calculations
+                        element_internal_variables[0:1, 1:2] = 1.0
+                        # evaluate cohesive forces and moments according to the TSL
+                        cohesive_forces, cohesive_moments = \
+                            self.material.compute_cohesive_forces_and_moments(
+                                r_left_interface, r_right_interface, psi_left_interface, 
+                                psi_right_interface, delta_max=element_internal_variables[0:1, 2:3])
+                        if (update_internal):
+                            # update the maximum effective separation
+                            new_delta_max = self.material.compute_effective_maximum_separation(
+                                delta, delta_max=element_internal_variables[0:1, 2:3])
+                            element_internal_variables[0:1, 2:3] = new_delta_max
+                # damage not yet initiated
+                # evaluate the damage initiation criterion
+                elif (self.material.evaluate_damage_initiation_criterion(
+                        psi_left_interface, psi_right_interface, forces_left_interface, 
+                        forces_right_interface, moments_left_interface, moments_right_interface)):
+                    # damage just initiated at the interface
+                    element_internal_variables[0:1, 0:1] = 1.0
+                    # keep the DG terms active immediately after damage initiation (since delta = 0.0)
+                    element_internal_variables[0:1, 1:2] = 0.0
+                else:  # no damage at the interface
+                    element_internal_variables[0:1, 1:2] = 0.0
+            # damage already initiated at the interface (loading | unloading | damage after recontact)
+            else:
+                # effective separation at the interface
+                delta = self.material.compute_effective_separation(r_left_interface, 
+                                                                   r_right_interface, 
+                                                                   psi_left_interface, 
+                                                                   psi_right_interface)
+                if (delta == 0.0):  # fall back to DG terms
+                    element_internal_variables[0:1, 1:2] = 0.0
+                else:  # perform CZM calculations
+                    element_internal_variables[0:1, 1:2] = 1.0
+                    # evaluate cohesive forces and moments according to the TSL
+                    cohesive_forces, cohesive_moments = \
+                        self.material.compute_cohesive_forces_and_moments(
+                            r_left_interface, r_right_interface, psi_left_interface, 
+                            psi_right_interface, delta_max=element_internal_variables[0:1, 2:3])
+                    if (update_internal):
+                        # update the maximum effective separation
+                        new_delta_max = self.material.compute_effective_maximum_separation(
+                            delta, delta_max=element_internal_variables[0:1, 2:3])
+                        element_internal_variables[0:1, 2:3] = new_delta_max
+        return cohesive_forces, cohesive_moments
 
     def compute_system_residual(self, f, system_unknowns, element_loads, update_internal):
         """
