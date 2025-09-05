@@ -13,8 +13,8 @@ class ShearFlexibleMaterial:
             E: Elastic modulus of the material
             nu: Poisson's ratio of the material
             A: Area of the beam cross section
-            I: Area moment of inertia about the major axis
-            I_minor: Area moment of inertia about the minor axis
+            I: Area moment of inertia about the major (Y) axis
+            I_minor: Area moment of inertia about the minor (Z) axis
         """
         self.rho = rho
         self.E = E
@@ -76,6 +76,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
     def compute_effective_unit_tangent(self, rp_left_interface, rp_right_interface):
         """
         Compute the effective unit tangent ("normal to the cohesive boundary") at an interface.
+
         Parameters:
             rp_left_interface: Tangent vector at the left side of the interface
             rp_right_interface: Tangent vector at the right side of the interface
@@ -92,6 +93,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
                                 moments_right_interface):
         """
         Compute the effective force at an interface.
+
         Parameters:
             rp_left_interface: Tangent vector at the left side of the interface
             rp_right_interface: Tangent vector at the right side of the interface
@@ -125,6 +127,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
                                              moments_left_interface, moments_right_interface):
         """
         Evaluate the damage initiation criterion at an interface.
+
         Parameters:
             rp_left_interface: Tangent vector at the left side of the interface
             rp_right_interface: Tangent vector at the right side of the interface
@@ -149,6 +152,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
                                      tangent_jumps_DI=np.zeros([3, 1])):
         """
         Compute the effective separation at the interface (across the "cohesive boundary").
+
         Parameters:
             r_left_interface: Position vector at the left side of the interface
             r_right_interface: Position vector at the right side of the interface
@@ -176,6 +180,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
                                  rp_right_interface, position_jumps_DI=np.zeros([3, 1])):
         """
         Compute the axial separation at the interface.
+
         Parameters:
             r_left_interface: Position vector at the left side of the interface
             r_right_interface: Position vector at the right side of the interface
@@ -197,6 +202,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
     def compute_effective_maximum_separation(self, delta, delta_max):
         """
         Compute the "new" (updated) maximum effective separation at the interface.
+
         Parameters:
             delta: Effective separation at the interface
             delta_max: Current maximum effective separation at the interface
@@ -211,9 +217,10 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
             new_delta_max = delta_max
         return new_delta_max
 
-    def compute_effective_cohesive_force(self, delta, delta_max, effective_force_DI=None):
+    def __compute_effective_cohesive_force(self, delta, delta_max, effective_force_DI=None):
         """
         Compute the effective cohesive force at the interface according to a linear TSL.
+
         Parameters:
             delta: Effective separation at the interface
             delta_max: Current maximum effective separation at the interface
@@ -239,6 +246,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
                                       tangent_jumps_DI=np.zeros([3, 1])):
         """
         Compute the cohesive axial forces at the interface.
+
         Parameters:
             r_left_interface: Position vector at the left side of the interface
             r_right_interface: Position vector at the right side of the interface
@@ -255,7 +263,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
         delta = self.compute_effective_separation(
             r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI, tangent_jumps_DI)
         # effective cohesive force at the interface
-        fcoh = self.compute_effective_cohesive_force(
+        fcoh = self.__compute_effective_cohesive_force(
             delta, delta_max, effective_force_DI)
         # effective unit tangent at the interface
         effective_unit_tangent_interface = self.compute_effective_unit_tangent(
@@ -264,6 +272,8 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
         tensile_jump = np.maximum(self.compute_axial_separation(
             r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI), 0.0)
         # compute the cohesive axial forces
+        if (delta == 0.0):  # avoid division by zero
+            return np.zeros([3, 1])
         cohesive_axial_forces = (fcoh/delta)*tensile_jump * \
             effective_unit_tangent_interface
         return cohesive_axial_forces
@@ -271,6 +281,7 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
     def compute_cohesive_bending_moments(self, r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, delta_max, effective_force_DI=None, position_jumps_DI=np.zeros([3, 1]), tangent_jumps_DI=np.zeros([3, 1])):
         """
         Compute the cohesive bending moments at the interface.
+
         Parameters:
             r_left_interface: Position vector at the left side of the interface
             r_right_interface: Position vector at the right side of the interface
@@ -287,33 +298,13 @@ class TFKLCohesiveInterfaceMaterial(TFKLMaterial):
         delta = self.compute_effective_separation(
             r_left_interface, r_right_interface, rp_left_interface, rp_right_interface, position_jumps_DI, tangent_jumps_DI)
         # effective cohesive force at the interface
-        fcoh = self.compute_effective_cohesive_force(
+        fcoh = self.__compute_effective_cohesive_force(
             delta, delta_max, effective_force_DI)
         # tangent jump at the interface
         rp_jump_interface = rp_right_interface - rp_left_interface - tangent_jumps_DI
         # compute the cohesive bending moments
+        if (delta == 0.0):  # avoid division by zero
+            return np.zeros([3, 1])
         cohesive_bending_moments = (
             fcoh/delta)*((self.alpha*self.R)**2.0)*rp_jump_interface
         return cohesive_bending_moments
-
-    def compute_effective_cohesive_force_derivative(self, delta, delta_max, effective_force_DI=None):
-        """
-        Compute the derivative of the effective cohesive force w.r.t the effective separation.
-        Parameters:
-            delta: Effective separation at the interface
-            delta_max: Current maximum effective separation at the interface
-            effective_force_DI: Effective cohesive force at damage initiation (default is None, which means it will be set to critical force)
-        Returns:
-            dfcoh_ddelta: Derivative of the effective cohesive force w.r.t the effective separation
-        """
-        # set the effective force to critical effective force in case of no input
-        if (effective_force_DI == None):
-            effective_force_DI = self.fc
-        if (delta >= self.delta_c): # complete damage
-            dfcoh_ddelta = 0.0
-        elif (delta >= delta_max): # loading
-            dfcoh_ddelta = -effective_force_DI/self.delta_c
-        else: # unloading
-            fmax = effective_force_DI*(1.0-(delta_max/self.delta_c))
-            dfcoh_ddelta = fmax/delta_max
-        return dfcoh_ddelta
