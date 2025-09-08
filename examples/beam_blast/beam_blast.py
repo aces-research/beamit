@@ -19,8 +19,12 @@ L = 0.2032
 W = 0.0254
 # height of the beam
 H = 0.00635
+# cohesive strength
+Sc = 375.0E06
+# fracture energy
+Gc = 1.0
 # number of elements
-Nel = 100
+Nel = 64
 # applied load
 IMPULSE = 1.78E03
 VELOCITY = IMPULSE / (rho * H)
@@ -35,8 +39,8 @@ vtk_dump = 1000
 if __name__ == "__main__":
 
     # physical information (material parameters)
-    material = Material.ShearFlexibleMaterial(
-        rho, E, nu, A=W*H, I=(W*H**3)/12, I_minor=(H*W**3)/12)
+    material = Material.ShearFlexibleCohesiveInterfaceMaterial(
+        rho, E, nu, A=W*H, I=(W*H**3)/12, I_minor=(H*W**3)/12, Sc=Sc, Gc=Gc)
 
     # geometric information (domain, no. of elements)
     function_space = FunctionSpace.ShearFlexibleGeometricallyExactFunctionSpace(
