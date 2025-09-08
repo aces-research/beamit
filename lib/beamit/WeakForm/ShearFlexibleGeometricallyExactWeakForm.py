@@ -1069,46 +1069,62 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_internal_forces[0:dofspel] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[dofs:dofs+int(dofs/2)] -= \
-                element_lifting_forces[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_forces[int(dofs/2):dofs]
             element_internal_forces[dofspel:dofspel+int(dofs/2)] += \
-                element_lifting_forces[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_forces[int(dofs/2):dofs]
             # add lifting moments
             element_internal_forces[dofs+int(dofs/2):dofspel] -= \
-                element_lifting_moments[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_moments[int(dofs/2):dofs]
             element_internal_forces[dofspel+int(dofs/2):dofspel+dofs] += \
-                element_lifting_moments[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_moments[int(dofs/2):dofs]
         elif (e == self.function_space.E-1):  # for the right most element
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
-                element_lifting_forces[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_forces[0:int(dofs/2)]
             element_internal_forces[dofs:dofs+int(dofs/2)] += \
-                element_lifting_forces[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_forces[0:int(dofs/2)]
             # add lifting moments
             element_internal_forces[int(dofs/2):dofs] -= \
-                element_lifting_moments[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_moments[0:int(dofs/2)]
             element_internal_forces[dofs+int(dofs/2):dofspel] += \
-                element_lifting_moments[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_moments[0:int(dofs/2)]
         else:  # for the intermediate elements
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
-                element_lifting_forces[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_forces[0:int(dofs/2)]
             element_internal_forces[dofs:dofs+int(dofs/2)] += \
-                element_lifting_forces[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_forces[0:int(dofs/2)]
             element_internal_forces[dofspel:dofspel+int(dofs/2)] -= \
-                element_lifting_forces[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_forces[int(dofs/2):dofs]
             element_internal_forces[dofspel+dofs:dofspel+dofs+int(dofs/2)] += \
-                element_lifting_forces[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_forces[int(dofs/2):dofs]
             # add lifting moments
             element_internal_forces[int(dofs/2):dofs] -= \
-                element_lifting_moments[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_moments[0:int(dofs/2)]
             element_internal_forces[dofs+int(dofs/2):dofspel] += \
-                element_lifting_moments[0:int(dofs/2)]
+                (1.0 - self.internal_variables[e-1:e, 1:2]) * \
+                    element_lifting_moments[0:int(dofs/2)]
             element_internal_forces[dofspel+int(dofs/2):dofspel+dofs] -= \
-                element_lifting_moments[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_moments[int(dofs/2):dofs]
             element_internal_forces[dofspel+dofs+int(dofs/2):2*dofspel] += \
-                element_lifting_moments[int(dofs/2):dofs]
+                (1.0 - self.internal_variables[e:e+1, 1:2]) * \
+                    element_lifting_moments[int(dofs/2):dofs]
         return element_internal_forces
 
     def __compute_CZM_interface_forces(self, r_left_interface, r_right_interface,
@@ -1247,6 +1263,32 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # current element (= left (-)) and next element (= right (+))
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
             global_element_dofs_right = self.function_space.global_connectivity[i+1:i+2].flatten()
+            element_unknowns_left = system_unknowns[global_element_dofs_left]
+            element_unknowns_right = system_unknowns[global_element_dofs_right]
+            # compute the forces and moments for the left and right elements
+            nodal_orientations_left = element_unknowns_left[
+                self.function_space.local_rotational_dofs].reshape(-1, self.function_space.dim)
+            nodal_orientations_right = element_unknowns_right[
+                self.function_space.local_rotational_dofs].reshape(-1, self.function_space.dim)
+            nodal_curvatures_left = np.stack(
+                [self.curvature_nodes[2*i, :], self.curvature_nodes[2*i+1, :]], axis=0)
+            nodal_curvatures_right = np.stack(
+                [self.curvature_nodes[2*(i+1), :], self.curvature_nodes[2*(i+1)+1, :]], axis=0)
+            forces_left, moments_left = self._compute_internal_forces_and_moments(
+                i, element_unknowns_left, nodal_orientations_left, 
+                nodal_curvatures_left, location="Nodes")
+            forces_right, moments_right = self._compute_internal_forces_and_moments(
+                i+1, element_unknowns_right, nodal_orientations_right, 
+                nodal_curvatures_right, location="Nodes")
+            # get the dofs at the left and right sides of the interface
+            r_left_interface = element_unknowns_left[self.function_space.local_translational_dofs[
+                self.function_space.dim:]]
+            r_right_interface = element_unknowns_right[self.function_space.local_translational_dofs[
+                0:self.function_space.dim]]
+            psi_left_interface = element_unknowns_left[self.function_space.local_rotational_dofs[
+                self.function_space.dim:]]
+            psi_right_interface = element_unknowns_right[self.function_space.local_rotational_dofs[
+                0:self.function_space.dim]]
             # penalty terms
             penalty_forces = self.betaP * \
                 ((self.material.E*self.material.A) / self.function_space.elL) * \
@@ -1257,13 +1299,35 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (self.dof_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
                     self.function_space.dim:]
             f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface), penalty_forces)
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
+                    np.transpose(N_left_interface), penalty_forces)
             f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
-                np.matmul(np.transpose(N_left_interface), penalty_moments)
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
+                    np.transpose(N_left_interface), penalty_moments)
             f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface), penalty_forces)
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
+                    np.transpose(N_right_interface), penalty_forces)
             f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
-                np.matmul(np.transpose(N_right_interface), penalty_moments)
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
+                    np.transpose(N_right_interface), penalty_moments)
+            # CZM terms
+            cohesive_forces, cohesive_moments = self.__compute_CZM_interface_forces(
+                r_left_interface, r_right_interface, psi_left_interface, psi_right_interface,
+                forces_left[1, ...], forces_right[0, ...], 
+                moments_left[1, ...], moments_right[0, ...], 
+                self.internal_variables[i:i+1, :], update_internal)
+            f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
+                self.internal_variables[i:i+1, 1:2] * np.matmul(
+                    np.transpose(N_left_interface), cohesive_forces)
+            f[global_element_dofs_left[self.function_space.local_rotational_dofs]] += \
+                self.internal_variables[i:i+1, 1:2] * np.matmul(
+                    np.transpose(N_left_interface), cohesive_moments)
+            f[global_element_dofs_right[self.function_space.local_translational_dofs]] -= \
+                self.internal_variables[i:i+1, 1:2] * np.matmul(
+                    np.transpose(N_right_interface), cohesive_forces)
+            f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
+                self.internal_variables[i:i+1, 1:2] * np.matmul(
+                    np.transpose(N_right_interface), cohesive_moments)
 
     def __update_unknowns_for_perturbation(self, e, perturbed_system_unknowns, 
                                            perturbed_solution_increments):
@@ -1414,36 +1478,44 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             # left-left terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] += \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_left_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_left_interface), N_left_interface))
             A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_left_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_left_interface), N_left_interface))
             # left-right terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_translational_dofs])] -= \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_right_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_left_interface), N_right_interface))
             A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_left_interface), N_right_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_left_interface), N_right_interface))
             # right-left terms
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_left_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_right_interface), N_left_interface))
             A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
                      global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_left_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_right_interface), N_left_interface))
             # right-right terms
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_translational_dofs])] += \
-                (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_right_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_right_interface), N_right_interface))
             A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
                      global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                    np.matmul(np.transpose(N_right_interface), N_right_interface))
+                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
+                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
+                     np.matmul(np.transpose(N_right_interface), N_right_interface))

@@ -74,8 +74,10 @@ def write_output_vtk(output_file, system):
         else:
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x, pos_y, pos_z
         # write damage status output for a cohesive interface material
-        if (isinstance(system.weak_form.material, (Material.TFKLCohesiveInterfaceMaterial))):
-            damage_values = system.weak_form.internal_variables[:, 2:3] / system.weak_form.material.delta_c
+        if (isinstance(system.weak_form.material, Material.TFKLCohesiveInterfaceMaterial) or
+            isinstance(system.weak_form.material, Material.ShearFlexibleCohesiveInterfaceMaterial)):
+            damage_values = \
+                system.weak_form.internal_variables[:, 2:3] / system.weak_form.material.delta_c
             damage_status[1::2][:-1] = damage_values.flatten()
             damage_status[2::2] = damage_values.flatten()
             # replace the damage status at fully cracked interfaces with 1.0
