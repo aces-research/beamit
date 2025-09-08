@@ -108,10 +108,22 @@ class EulerBernoulliWeakFormCG(WeakForm):
         _, _, Nxixi_right_node, Nxixixi_right_node = self.function_space.compute_hermite_shapes(1.0)
         Nxx_right_node = Nxixi_right_node*((1.0/self.function_space.jacobian)**2.0)
         Nxxx_right_node = Nxixixi_right_node*((1.0/self.function_space.jacobian)**3.0)
-        for i in range(0, self.function_space.E):
+        for i in range(0, self.function_space.E): # loop over the elements
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
+            global_element_dofs_left_node = global_element_dofs[0:dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
+            # forces at the left node
+            ux_left_node = np.matmul(phix_left_node, element_unknowns)
+            wxx_left_node = np.matmul(Nxx_left_node, element_unknowns)
+            wxxx_left_node = np.matmul(Nxxx_left_node, element_unknowns)
+            axial_force_left_node = self.material.E*self.material.A*ux_left_node
+            shear_force_left_node = -self.material.E*self.material.I*wxxx_left_node
+            bending_moment_left_node = -self.material.E*self.material.I*wxx_left_node
+            f[global_element_dofs_left_node[0:1]] += axial_force_left_node
+            f[global_element_dofs_left_node[1:2]] += shear_force_left_node
+            f[global_element_dofs_left_node[2:3]] += bending_moment_left_node
+            # forces at the right node
             ux_right_node = np.matmul(phix_right_node, element_unknowns)
             wxx_right_node = np.matmul(Nxx_right_node, element_unknowns)
             wxxx_right_node = np.matmul(Nxxx_right_node, element_unknowns)
@@ -121,18 +133,6 @@ class EulerBernoulliWeakFormCG(WeakForm):
             f[global_element_dofs_right_node[0:1]] += axial_force_right_node
             f[global_element_dofs_right_node[1:2]] += shear_force_right_node
             f[global_element_dofs_right_node[2:3]] += bending_moment_right_node
-            # Assuming the elements are connected like a simple chain!!!
-            if (i == 0): # only for the first element
-                global_element_dofs_left_node = global_element_dofs[0:dofs]
-                ux_left_node = np.matmul(phix_left_node, element_unknowns)
-                wxx_left_node = np.matmul(Nxx_left_node, element_unknowns)
-                wxxx_left_node = np.matmul(Nxxx_left_node, element_unknowns)
-                axial_force_left_node = self.material.E*self.material.A*ux_left_node
-                shear_force_left_node = -self.material.E*self.material.I*wxxx_left_node
-                bending_moment_left_node = -self.material.E*self.material.I*wxx_left_node
-                f[global_element_dofs_left_node[0:1]] += axial_force_left_node
-                f[global_element_dofs_left_node[1:2]] += shear_force_left_node
-                f[global_element_dofs_left_node[2:3]] += bending_moment_left_node
 
 
 class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
@@ -331,52 +331,3 @@ class EulerBernoulliWeakFormDG(EulerBernoulliWeakFormCG):
                     np.matmul(np.transpose(self.N_right_interface), self.N_right_interface)) + \
                 (self.beta*((self.material.E*self.material.I)/self.function_space.elL) * \
                     np.matmul(np.transpose(self.Nx_right_interface), self.Nx_right_interface))
-
-    # Function to compute the system nodal forces
-    # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
-        """
-        Compute the system nodal forces based on the provided unknowns and element loads.
-
-        Parameters:
-            f: The force vector to be assembled.
-            system_unknowns: The unknowns of the system.
-            element_loads: The distributed loads on the elements.
-        """
-        dofs = self.function_space.dof
-        dofspel = self.function_space.dof*self.function_space.npel
-        _, phixi_left_node = self.function_space.compute_lagrange_shapes(-1.0)
-        phix_left_node = phixi_left_node*(1.0/self.function_space.jacobian)
-        _, _, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_hermite_shapes(-1.0)
-        Nxx_left_node = Nxixi_left_node*((1.0/self.function_space.jacobian)**2.0)
-        Nxxx_left_node = Nxixixi_left_node*((1.0/self.function_space.jacobian)**3.0)
-        _, phixi_right_node = self.function_space.compute_lagrange_shapes(1.0)
-        phix_right_node = phixi_right_node*(1.0/self.function_space.jacobian)
-        _, _, Nxixi_right_node, Nxixixi_right_node = self.function_space.compute_hermite_shapes(1.0)
-        Nxx_right_node = Nxixi_right_node*((1.0/self.function_space.jacobian)**2.0)
-        Nxxx_right_node = Nxixixi_right_node*((1.0/self.function_space.jacobian)**3.0)
-        for i in range(0, self.function_space.E): # loop over the elements
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            global_element_dofs_left_node = global_element_dofs[0:dofs]
-            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
-            # forces at the left node
-            ux_left_node = np.matmul(phix_left_node, element_unknowns)
-            wxx_left_node = np.matmul(Nxx_left_node, element_unknowns)
-            wxxx_left_node = np.matmul(Nxxx_left_node, element_unknowns)
-            axial_force_left_node = self.material.E*self.material.A*ux_left_node
-            shear_force_left_node = -self.material.E*self.material.I*wxxx_left_node
-            bending_moment_left_node = -self.material.E*self.material.I*wxx_left_node
-            f[global_element_dofs_left_node[0:1]] += axial_force_left_node
-            f[global_element_dofs_left_node[1:2]] += shear_force_left_node
-            f[global_element_dofs_left_node[2:3]] += bending_moment_left_node
-            # forces at the right node
-            ux_right_node = np.matmul(phix_right_node, element_unknowns)
-            wxx_right_node = np.matmul(Nxx_right_node, element_unknowns)
-            wxxx_right_node = np.matmul(Nxxx_right_node, element_unknowns)
-            axial_force_right_node = self.material.E*self.material.A*ux_right_node
-            shear_force_right_node = -self.material.E*self.material.I*wxxx_right_node
-            bending_moment_right_node = -self.material.E*self.material.I*wxx_right_node
-            f[global_element_dofs_right_node[0:1]] += axial_force_right_node
-            f[global_element_dofs_right_node[1:2]] += shear_force_right_node
-            f[global_element_dofs_right_node[2:3]] += bending_moment_right_node

@@ -31,7 +31,7 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         # NOTE: The curvature at the nodes is not used in the weak form, but it is needed for
         # post-processing (to compute the internal moments).
         self.curvature_nodes = np.zeros(
-            [self.function_space.N, self.function_space.dim])
+            [self.function_space.E*self.function_space.npel, self.function_space.dim])
 
     @staticmethod
     def _compute_transformation_matrix(orientation):
@@ -321,29 +321,16 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             incremental_rotation_tensor_right_node = \
                 quaternion.as_rotation_matrix(
                     quaternion.from_rotation_vector(dtheta_right_node))
-            if (self.function_space.discretization_type == "CG"):  # for CG discretization
-                if (i == 0):  # only for the first element
-                    # update the curvature at the left node
-                    self.curvature_nodes[0, :] = np.matmul(
-                        incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
-                        np.matmul(incremental_rotation_tensor_left_node, 
-                                  self.curvature_nodes[0, :][..., None])[..., 0]
-                # update the curvature at the right node
-                self.curvature_nodes[i+1, :] = np.matmul(
-                    incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
-                    np.matmul(incremental_rotation_tensor_right_node, 
-                              self.curvature_nodes[i+1, :][..., None])[..., 0]
-            elif (self.function_space.discretization_type == "DG"):  # for DG discretization
-                # update the curvature at the left node
-                self.curvature_nodes[2*i, :] = np.matmul(
-                    incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
-                    np.matmul(incremental_rotation_tensor_left_node,
-                              self.curvature_nodes[2*i, :][..., None])[..., 0]
-                # update the curvature at the right node
-                self.curvature_nodes[2*i+1, :] = np.matmul(
-                    incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
-                    np.matmul(incremental_rotation_tensor_right_node,
-                              self.curvature_nodes[2*i+1, :][..., None])[..., 0]
+            # update the curvature at the left node
+            self.curvature_nodes[2*i, :] = np.matmul(
+                incremental_transformation_matrix_left_node, dtheta_prime_left_node[..., None])[..., 0] + \
+                np.matmul(incremental_rotation_tensor_left_node,
+                            self.curvature_nodes[2*i, :][..., None])[..., 0]
+            # update the curvature at the right node
+            self.curvature_nodes[2*i+1, :] = np.matmul(
+                incremental_transformation_matrix_right_node, dtheta_prime_right_node[..., None])[..., 0] + \
+                np.matmul(incremental_rotation_tensor_right_node,
+                            self.curvature_nodes[2*i+1, :][..., None])[..., 0]
 
     def _compute_internal_forces_and_moments(self, e, element_unknowns, element_orientations, 
                                              element_curvatures, location="Quads"):
@@ -753,33 +740,20 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             nodal_orientations = element_unknowns[self.function_space.local_rotational_dofs].reshape(
                 -1, self.function_space.dim)
             nodal_curvatures = np.stack(
-                [self.curvature_nodes[i, :], self.curvature_nodes[i+1, :]], axis=0)
+                [self.curvature_nodes[2*i, :], self.curvature_nodes[2*i+1, :]], axis=0)
             # compute the internal forces and moments at the nodes
             internal_forces, internal_moments = self._compute_internal_forces_and_moments(
                 i, element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
-            if (self.function_space.discretization_type == "CG"):  # for CG discretization
-                if (i == 0):  # only for the first element
-                    # assemble the internal forces at the left node
-                    f[global_element_dofs_left_node[0:int(
-                        dofs/2)]] += internal_forces[0, ...]
-                    f[global_element_dofs_left_node[int(
-                        dofs/2):dofs]] += internal_moments[0, ...]
-                # assemble the internal forces at the right node
-                f[global_element_dofs_right_node[0:int(
-                    dofs/2)]] += internal_forces[1, ...]
-                f[global_element_dofs_right_node[int(
-                    dofs/2):dofs]] += internal_moments[1, ...]
-            elif (self.function_space.discretization_type == "DG"):  # for DG discretization
-                # assemble the internal forces at the left node
-                f[global_element_dofs_left_node[0:int(
-                    dofs/2)]] += internal_forces[0, ...]
-                f[global_element_dofs_left_node[int(
-                    dofs/2):dofs]] += internal_moments[0, ...]
-                # assemble the internal forces at the right node
-                f[global_element_dofs_right_node[0:int(
-                    dofs/2)]] += internal_forces[1, ...]
-                f[global_element_dofs_right_node[int(
-                    dofs/2):dofs]] += internal_moments[1, ...]
+            # assemble the internal forces at the left node
+            f[global_element_dofs_left_node[0:int(
+                dofs/2)]] += internal_forces[0, ...]
+            f[global_element_dofs_left_node[int(
+                dofs/2):dofs]] += internal_moments[0, ...]
+            # assemble the internal forces at the right node
+            f[global_element_dofs_right_node[0:int(
+                dofs/2)]] += internal_forces[1, ...]
+            f[global_element_dofs_right_node[int(
+                dofs/2):dofs]] += internal_moments[1, ...]
 
     def __compute_element_rotational_mass(self, e, dt, element_angular_velocities):
         """

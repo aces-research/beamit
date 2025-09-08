@@ -19,7 +19,8 @@ def write_output_vtk(output_file, system):
     internal_forces = system.internal_forces
     discretization_type = system.weak_form.function_space.discretization_type
     # convert the fields to 3D state for post-processing
-    if (isinstance(system.weak_form, (EulerBernoulliWeakFormCG))):
+    if (isinstance(system.weak_form, EulerBernoulliWeakFormCG) or 
+        isinstance(system.weak_form, EulerBernoulliWeakFormDG)):
         # add zeros to the Y and Z coordinates
         nodes = np.append(nodes, np.zeros([nodes.shape[0], 2]), axis=1)
         # add displacements at the appropriate location
@@ -32,7 +33,7 @@ def write_output_vtk(output_file, system):
         axial_forces = internal_forces[:, 0:1]
         shear_forces = internal_forces[:, 1:2]
         bending_moments = internal_forces[:, 2:3]
-        internal_forces = np.zeros([nodes.shape[0], 6])
+        internal_forces = np.zeros([internal_forces.shape[0], 6])
         internal_forces[:, 0:1] = axial_forces
         internal_forces[:, 1:2] = shear_forces
         internal_forces[:, 5:6] = bending_moments
@@ -46,11 +47,9 @@ def write_output_vtk(output_file, system):
                                     internal_forces[:, 4:5].flatten(), internal_forces[:, 5:6].flatten()
     n_el = system.weak_form.function_space.E
     npel = system.weak_form.function_space.npel
-    # co-ordinate, displacement, force, and interface damage status arrays for writing to the VTK file
+    # co-ordinate, displacement, and interface damage status arrays for writing to the VTK file
     x_plot, y_plot, z_plot = np.zeros(npel*n_el), np.zeros(npel*n_el), np.zeros(npel*n_el)
     disp_x_plot, disp_y_plot, disp_z_plot = np.zeros(npel*n_el), np.zeros(npel*n_el), np.zeros(npel*n_el)
-    internal_loads_x_plot, internal_loads_y_plot, internal_loads_z_plot = np.zeros(npel*n_el), np.zeros(npel*n_el), np.zeros(npel*n_el)
-    internal_moments_x_plot, internal_moments_y_plot, internal_moments_z_plot = np.zeros(npel*n_el), np.zeros(npel*n_el), np.zeros(npel*n_el)
     damage_status = np.zeros(npel*n_el)
     if (discretization_type == "CG"):
         # considering the connectivity to be like a chain!!!
@@ -67,12 +66,6 @@ def write_output_vtk(output_file, system):
                 disp_x_plot[2*i], disp_x_plot[(2*i)+1] = pos_x[i], pos_x[i+1]
                 disp_y_plot[2*i], disp_y_plot[(2*i)+1] = pos_y[i], pos_y[i+1]
                 disp_z_plot[2*i], disp_z_plot[(2*i)+1] = pos_z[i], pos_z[i+1]
-            internal_loads_x_plot[2*i], internal_loads_x_plot[(2*i)+1], internal_moments_x_plot[2*i], internal_moments_x_plot[(2*i)+1] = \
-                internal_loads_x[i], internal_loads_x[i+1], internal_moments_x[i], internal_moments_x[i+1]
-            internal_loads_y_plot[2*i], internal_loads_y_plot[(2*i)+1], internal_moments_y_plot[2*i], internal_moments_y_plot[(2*i)+1] = \
-                internal_loads_y[i], internal_loads_y[i+1], internal_moments_y[i], internal_moments_y[i+1]
-            internal_loads_z_plot[2*i], internal_loads_z_plot[(2*i)+1], internal_moments_z_plot[2*i], internal_moments_z_plot[(2*i)+1] = \
-                internal_loads_z[i], internal_loads_z[i+1], internal_moments_z[i], internal_moments_z[i+1]
     elif (discretization_type == "DG"):
         x_plot, y_plot, z_plot = x, y, z
         if ((type(system.weak_form) == TFKLGeometricallyExactWeakFormDG) or
@@ -80,17 +73,15 @@ def write_output_vtk(output_file, system):
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x - x, pos_y - y, pos_z - z
         else:
             disp_x_plot, disp_y_plot, disp_z_plot = pos_x, pos_y, pos_z
-        internal_loads_x_plot, internal_loads_y_plot, internal_loads_z_plot = internal_loads_x, internal_loads_y, internal_loads_z
-        internal_moments_x_plot, internal_moments_y_plot, internal_moments_z_plot = internal_moments_x, internal_moments_y, internal_moments_z
         # write damage status output for a cohesive interface material
         if (isinstance(system.weak_form.material, (Material.TFKLCohesiveInterfaceMaterial))):
-            damage_values = system.weak_form.internal_variables[:,2:3]/system.weak_form.material.delta_c
+            damage_values = system.weak_form.internal_variables[:, 2:3] / system.weak_form.material.delta_c
             damage_status[1::2][:-1] = damage_values.flatten()
             damage_status[2::2] = damage_values.flatten()
             # replace the damage status at fully cracked interfaces with 1.0
             damage_status[damage_status > 1.0] = 1.0
     linesToVTK(output_file, x_plot, y_plot, z_plot, pointData = {"displacements": (disp_x_plot, disp_y_plot, disp_z_plot), \
-                                                    "forces": (internal_loads_x_plot, internal_loads_y_plot, internal_loads_z_plot), \
-                                                    "moments": (internal_moments_x_plot, internal_moments_y_plot, internal_moments_z_plot), \
+                                                    "forces": (internal_loads_x, internal_loads_y, internal_loads_z), \
+                                                    "moments": (internal_moments_x, internal_moments_y, internal_moments_z), \
                                                     "damage": damage_status})
     print("\nOutput file is generated.")

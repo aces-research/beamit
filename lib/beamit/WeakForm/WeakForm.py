@@ -57,6 +57,18 @@ class WeakForm(ABC):
                   ] += self.compute_element_internal_stiffness(element_unknowns)
 
     @abstractmethod
+    def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
+        """
+        Compute the system nodal forces based on the provided unknowns and element loads.
+
+        Parameters:
+            f: The force vector to be assembled.
+            system_unknowns: The unknowns of the system.
+            element_loads: The distributed loads on the elements.
+        """
+        pass
+
+    @abstractmethod
     def compute_system_mass(self, M, lump=True, **kwargs):
         """
         Compute the system mass matrix based on the provided solution vector.

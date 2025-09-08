@@ -65,7 +65,8 @@ class System:
             self.state[:, 0:3] = self.weak_form.function_space.nodes
         # the internal forces of the system
         self.internal_forces = np.zeros(
-            [self.weak_form.function_space.N, self.weak_form.function_space.dof])
+            [self.weak_form.function_space.E*self.weak_form.function_space.npel, 
+             self.weak_form.function_space.dof])
         # the number of equations
         self.nequations = self.weak_form.function_space.N*self.weak_form.function_space.dof
 
@@ -136,12 +137,9 @@ class System:
             solution: The new solution vector.
         """
         # update the state of the system
-        self.state = np.reshape(solution, [self.weak_form.function_space.N, \
-                                self.weak_form.function_space.dof])
+        self.state = np.reshape(solution, self.state.shape)
         # update the internal forces
-        internal_force_vector = np.zeros([self.nequations, 1])
+        internal_force_vector = np.zeros([self.internal_forces.size, 1])
         self.weak_form.compute_system_nodal_forces(
             internal_force_vector, solution, element_loads=None)
-        self.internal_forces = np.reshape(internal_force_vector, [
-                                          self.weak_form.function_space.N, 
-                                          self.weak_form.function_space.dof])
+        self.internal_forces = np.reshape(internal_force_vector, self.internal_forces.shape)

@@ -184,7 +184,7 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
     # Computed by approaching every node from the left side!!!
     def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
         """
-        Compute the system nodal forces based on the provided unknowns and element loads information.
+        Compute the system nodal forces based on the provided unknowns and element loads.
 
         Parameters:
             f: The force vector to be assembled.
@@ -201,39 +201,32 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
         Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
         Npp_right_node = Nxixi_right_node*((1.0/self.function_space.jacobian)**2.0)
         Nppp_right_node = Nxixixi_right_node*((1.0/self.function_space.jacobian)**3.0)
-        for i in range(0, self.function_space.E):
+        for i in range(0, self.function_space.E): # loop over the elements
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             element_unknowns = system_unknowns[global_element_dofs]
+            global_element_dofs_left_node = global_element_dofs[0:dofs]
             global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
+            rp_left_node = np.matmul(Np_left_node, element_unknowns)
             rp_right_node = np.matmul(Np_right_node, element_unknowns)
+            rpp_left_node = np.matmul(Npp_left_node, element_unknowns)
             rpp_right_node = np.matmul(Npp_right_node, element_unknowns)
+            rppp_left_node = np.matmul(Nppp_left_node, element_unknowns)
             rppp_right_node = np.matmul(Nppp_right_node, element_unknowns)
-            rp_right_node_L2 = np.linalg.norm(rp_right_node, ord=2, axis=0, keepdims=True) 
-            t1_right_node, _, _, _, t5_right_node = self._compute_residual_vectors(
-                rp_right_node, rpp_right_node, rppp_right_node)
-            # forces at the right node
+            rp_left_node_L2 = np.linalg.norm(rp_left_node, ord=2, axis=0, keepdims=True)
+            rp_right_node_L2 = np.linalg.norm(rp_right_node, ord=2, axis=0, keepdims=True)
+            t1_left_node, _, _, _, t5_left_node = self._compute_residual_vectors(rp_left_node, rpp_left_node, rppp_left_node)
+            t1_right_node, _, _, _, t5_right_node = self._compute_residual_vectors(rp_right_node, rpp_right_node, rppp_right_node)
+            # forces at the nodes
             if (element_loads == None): # No element loads
+                forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
                 forces_right_node = (self.material.E*self.material.A*t1_right_node) + (self.material.E*self.material.I*t5_right_node)
-            # moments at the right node
+            # moments at the nodes
+            moments_left_node = self.material.E*self.material.I*(np.cross(rp_left_node, rpp_left_node, axis=0)/(rp_left_node_L2**2.0))
             moments_right_node = self.material.E*self.material.I*(np.cross(rp_right_node, rpp_right_node, axis=0)/(rp_right_node_L2**2.0))
+            f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
+            f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
             f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
             f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
-            # Assuming the elements are connected like a simple chain!!!
-            if (i == 0): # only for the first element
-                global_element_dofs_left_node = global_element_dofs[0:dofs]
-                rp_left_node = np.matmul(Np_left_node, element_unknowns)
-                rpp_left_node = np.matmul(Npp_left_node, element_unknowns)
-                rppp_left_node = np.matmul(Nppp_left_node, element_unknowns)
-                rp_left_node_L2 = np.linalg.norm(rp_left_node, ord=2, axis=0, keepdims=True)
-                t1_left_node, _, _, _, t5_left_node = self._compute_residual_vectors(
-                    rp_left_node, rpp_left_node, rppp_left_node)
-                # forces at the left node
-                if (element_loads == None): # No element loads
-                    forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
-                # moments at the left node
-                moments_left_node = self.material.E*self.material.I*(np.cross(rp_left_node, rpp_left_node, axis=0)/(rp_left_node_L2**2.0))
-                f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
-                f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
 
     # Function to compute the system mass
     def compute_system_mass(self, M, lump=True, **kwargs):
@@ -662,51 +655,3 @@ class TFKLGeometricallyExactWeakFormDG(TFKLGeometricallyExactWeakFormCG):
             A[np.ix_(global_element_dofs_right, global_element_dofs_left)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_left_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_left_interface)))
             A[np.ix_(global_element_dofs_left, global_element_dofs_right)] -= 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_left_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_left_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_left_interface), dt3dd_right_interface)))
             A[np.ix_(global_element_dofs_right, global_element_dofs_right)] += 0.50*(1.0-self.internal_variables[i:i+1, 1:2])*((self.material.E*self.material.A*np.matmul(np.transpose(N_right_interface), dt1dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(N_right_interface), dt5dd_right_interface)) + (self.material.E*self.material.I*np.matmul(np.transpose(Np_right_interface), dt3dd_right_interface)))
-
-    # Function to compute the system nodal forces
-    # Computed by approaching every node from the left side!!!
-    def compute_system_nodal_forces(self, f, system_unknowns, element_loads):
-        """
-        Compute the system nodal forces based on the provided unknowns and element loads.
-
-        Parameters:
-            f: The force vector to be assembled.
-            system_unknowns: The unknowns of the system.
-            element_loads: The distributed loads on the elements.
-        """
-        dofs = self.function_space.dof
-        dofspel = self.function_space.dof*self.function_space.npel
-        _, Nxi_left_node, Nxixi_left_node, Nxixixi_left_node = self.function_space.compute_shapes(-1.0)
-        Np_left_node = Nxi_left_node*(1.0/self.function_space.jacobian)
-        Npp_left_node = Nxixi_left_node*((1.0/self.function_space.jacobian)**2.0)
-        Nppp_left_node = Nxixixi_left_node*((1.0/self.function_space.jacobian)**3.0)
-        _, Nxi_right_node, Nxixi_right_node, Nxixixi_right_node = self.function_space.compute_shapes(1.0)
-        Np_right_node = Nxi_right_node*(1.0/self.function_space.jacobian)
-        Npp_right_node = Nxixi_right_node*((1.0/self.function_space.jacobian)**2.0)
-        Nppp_right_node = Nxixixi_right_node*((1.0/self.function_space.jacobian)**3.0)
-        for i in range(0, self.function_space.E): # loop over the elements
-            global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
-            element_unknowns = system_unknowns[global_element_dofs]
-            global_element_dofs_left_node = global_element_dofs[0:dofs]
-            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
-            rp_left_node = np.matmul(Np_left_node, element_unknowns)
-            rp_right_node = np.matmul(Np_right_node, element_unknowns)
-            rpp_left_node = np.matmul(Npp_left_node, element_unknowns)
-            rpp_right_node = np.matmul(Npp_right_node, element_unknowns)
-            rppp_left_node = np.matmul(Nppp_left_node, element_unknowns)
-            rppp_right_node = np.matmul(Nppp_right_node, element_unknowns)
-            rp_left_node_L2 = np.linalg.norm(rp_left_node, ord=2, axis=0, keepdims=True)
-            rp_right_node_L2 = np.linalg.norm(rp_right_node, ord=2, axis=0, keepdims=True)
-            t1_left_node, _, _, _, t5_left_node = self._compute_residual_vectors(rp_left_node, rpp_left_node, rppp_left_node)
-            t1_right_node, _, _, _, t5_right_node = self._compute_residual_vectors(rp_right_node, rpp_right_node, rppp_right_node)
-            # forces at the nodes
-            if (element_loads == None): # No element loads
-                forces_left_node = (self.material.E*self.material.A*t1_left_node) + (self.material.E*self.material.I*t5_left_node)
-                forces_right_node = (self.material.E*self.material.A*t1_right_node) + (self.material.E*self.material.I*t5_right_node)
-            # moments at the nodes
-            moments_left_node = self.material.E*self.material.I*(np.cross(rp_left_node, rpp_left_node, axis=0)/(rp_left_node_L2**2.0))
-            moments_right_node = self.material.E*self.material.I*(np.cross(rp_right_node, rpp_right_node, axis=0)/(rp_right_node_L2**2.0))
-            f[global_element_dofs_left_node[0:int(dofs/2)]] += forces_left_node
-            f[global_element_dofs_left_node[int(dofs/2):dofs]] += moments_left_node
-            f[global_element_dofs_right_node[0:int(dofs/2)]] += forces_right_node
-            f[global_element_dofs_right_node[int(dofs/2):dofs]] += moments_right_node
