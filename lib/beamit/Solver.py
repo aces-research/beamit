@@ -521,6 +521,12 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # compute the lumped mass
         self.system.assemble_mass(self.M)
         self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
+        # damping factor
+        self.__damping_factor = 0.0
+        # energy metrics of the system
+        self.kinetic_energy = 0.0
+        self.internal_energy = 0.0
+        self.damping_energy = 0.0
 
     def compute_system_frequencies(self):
         """
@@ -556,6 +562,15 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # get the maximum frequency of the system
         max_sys_freq = sys_freqs[sys_freqs.argmax()]
         self.stable_time_step = time_factor*(2.0/(max_sys_freq.real))
+
+    def activate_damping(self, damping_factor):
+        """
+        Activate damping in the solver.
+
+        Parameters:
+            damping_factor: The damping factor (should be << 1.0).
+        """
+        self.__damping_factor = damping_factor
 
     def set_boundary_conditions(self, bctypes, bcvalues):
         """
@@ -617,6 +632,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # for Neumann dofs
         self.velocity[Neumann_dofs] += ((dt/2.0)
                                         * self.acceleration[Neumann_dofs])
+        return solution_increment
 
     def __update_state(self, dt, accelerations_neumann):
         """
@@ -661,17 +677,29 @@ class ExplicitNewmarkSolver(DynamicSolver):
         nodal_loads[Neumann_dofs] += np.reshape(
             self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         # the PREDICTOR
-        self.__initialize_state(dt)
+        solution_increment = self.__initialize_state(dt)
         # assemble the residual
-        self.system.assemble_residual(
-            self.f, self.solution, nodal_loads, element_loads=None, update_internal=True)
-        # reassemble the mass matrix if weak form is ShearFlexibleGeometricallyExactWeakFormCG 
+        self.system.weak_form.compute_system_residual(
+            self.f, self.solution, element_loads=None, update_internal=True) # internal forces
+        self.internal_energy += np.sum(-1.0 * self.f * solution_increment)
+        self.system.weak_form.add_nodal_loads_to_residual(self.f, self.solution, nodal_loads) # external forces
+        # reassemble the mass matrix if weak form is ShearFlexibleGeometricallyExactWeakFormCG
         # or ShearFlexibleGeometricallyExactWeakFormDG
         if ((type(self.system.weak_form) == ShearFlexibleGeometricallyExactWeakFormCG) or
             (type(self.system.weak_form) == ShearFlexibleGeometricallyExactWeakFormDG)):
             self.system.assemble_mass(
                 self.M, lump=True, dt=dt, system_velocities=self.velocity, residual_vector=self.f)
             self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
+        # add damping forces to stabilize the system
+        damping_forces = (self.__damping_factor *
+                          (self.lumpedMass / dt)) * self.velocity
+        # compute the damping and kinetic energies
+        self.damping_energy += np.sum(damping_forces * self.velocity * dt)
+        self.kinetic_energy += 0.50 * np.sum(self.lumpedMass * (self.velocity**2.0))
+        if (self.damping_energy / (abs(self.internal_energy) + self.kinetic_energy + 1.0E-20) > 0.10):
+            sys.exit("\nError: Damping energy is more than 10 percent of the total energy. " \
+                     "Reduce the damping factor.")
+        self.f -= damping_forces
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
         accelerations_neumann = self.f[Neumann_dofs]/self.lumpedMass[Neumann_dofs]
