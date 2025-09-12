@@ -49,11 +49,11 @@ plt.rc("font", size=20)
 plt.rc("text", usetex=True)
 plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
 plt.scatter(reference_load_displacement_x[:, 0], reference_load_displacement_x[:, 1],
-            label=r"\bf{u}$_{1}$: Simo", color='black', marker='^', s=100)
+            label=r"\bf{u}$_{1}$: Simo et al.", color='black', marker='^', s=100)
 plt.scatter(reference_load_displacement_y[:, 0], reference_load_displacement_y[:, 1],
-            label=r"\bf{u}$_{2}$: Simo", color='blue', marker='x', s=100)
+            label=r"\bf{u}$_{2}$: Simo et al.", color='blue', marker='x', s=100)
 plt.scatter(reference_load_displacement_z[:, 0], reference_load_displacement_z[:, 1],
-            label=r"\bf{u}$_{3}$: Simo", color='green', marker='s', s=100)
+            label=r"\bf{u}$_{3}$: Simo et al.", color='green', marker='s', s=100)
 plt.plot(applied_load, tip_displacement_x,
          label=r"\bf{u}$_{1}$: Present", color='black', linewidth=3.0)
 plt.plot(applied_load, tip_displacement_y,
