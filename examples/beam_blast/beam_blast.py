@@ -10,7 +10,7 @@ import copy
 # density of the material
 rho = 2693.0
 # elastic modulus of beam
-E = 68.9E9
+E = 68.9E09
 # Poisson's ratio of beam
 nu = 0.343
 # length of beam
@@ -26,15 +26,15 @@ Gc = 1.0
 # number of elements
 Nel = 64
 # applied load
-IMPULSE = 1.78E03
+IMPULSE = 100.0
 VELOCITY = IMPULSE / (rho * H)
 # spatial tolerance
 SPATIAL_TOLERANCE = 1.0E-10
 
 # the time steps and output
-dt = 1.0E-08
-final_time = 2.0E-03
-vtk_dump = 1000
+dt = 1.0E-07
+final_time = 1.0E-03
+vtk_dump = 10
 
 if __name__ == "__main__":
 
