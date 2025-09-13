@@ -328,10 +328,10 @@ class DynamicSolver(Solver):
         """
         self.solution = copy.deepcopy(np.reshape(initial_solution, [self.system.nequations, 1]))
         self.velocity = copy.deepcopy(np.reshape(initial_velocity, [self.system.nequations, 1]))
+        print("\nWARNING: Set boundary conditions before this step to ensure correct "
+              "computation of initial accelerations!")
         # compute initial accelerations
-        Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
-        if (Dirichlet_dofs.size == 0):
-            sys.exit("\nSet the boundary conditions before the initial conditions.")
+        _, Neumann_dofs = self.create_dof_arrays()
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         self.reset_system()
