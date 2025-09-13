@@ -1065,7 +1065,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         element_lifting_moments = np.sum(
             lifting_moments_integrand*self.function_space.JxW, axis=0, keepdims=False)
         # assemble the internal forces
+        # get the max effective separation from the material
+        delta_c = np.inf
+        if (isinstance(self.material, Material.ShearFlexibleCohesiveInterfaceMaterial)):
+            delta_c = self.material.delta_c
         if (e == 0):  # for the left most element
+            element_bulk_internal_forces[dofs:dofspel] *= 0.0 if (
+                self.internal_variables[e:e+1, 2:3] == delta_c) else 1.0
             element_internal_forces[0:dofspel] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[dofs:dofs+int(dofs/2)] -= \
@@ -1082,6 +1088,8 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (1.0 - self.internal_variables[e:e+1, 1:2]) * \
                     element_lifting_moments[int(dofs/2):dofs]
         elif (e == self.function_space.E-1):  # for the right most element
+            element_bulk_internal_forces[0:dofs] *= 0.0 if (
+                self.internal_variables[e-1:e, 2:3] == delta_c) else 1.0
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
@@ -1098,6 +1106,9 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (1.0 - self.internal_variables[e-1:e, 1:2]) * \
                     element_lifting_moments[0:int(dofs/2)]
         else:  # for the intermediate elements
+            element_bulk_internal_forces[0:dofspel] *= 0.0 if (
+                self.internal_variables[e-1:e, 2:3] == delta_c and 
+                self.internal_variables[e:e+1, 2:3] == delta_c) else 1.0
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
