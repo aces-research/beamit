@@ -247,7 +247,8 @@ class TFKLGeometricallyExactWeakFormCG(WeakForm):
             sum_all_entries = np.sum(M_el_trans)
             sum_diag_entries = np.sum(np.diag(M_el_trans))
             diag_elements = (sum_all_entries / sum_diag_entries) * np.diag(M_el_trans)
-            M_el_trans = np.zeros([self.function_space.npel*self.function_space.dof, self.function_space.npel*self.function_space.dof])
+            M_el_trans = np.zeros([self.function_space.npel*self.function_space.dof,
+                                  self.function_space.npel*self.function_space.dof])
             np.fill_diagonal(M_el_trans, diag_elements)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()

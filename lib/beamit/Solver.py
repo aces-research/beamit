@@ -97,8 +97,8 @@ class Solver(ABC):
         """
         Reset the linear system matrices and vectors.
         """
-        self.A = np.zeros([self.system.nequations, self.system.nequations])
-        self.f = np.zeros([self.system.nequations, 1])
+        self.A.fill(0.0)
+        self.f.fill(0.0)
 
     def create_dof_arrays(self):
         """
@@ -316,7 +316,7 @@ class DynamicSolver(Solver):
         Reset the dynamic linear system matrices and vectors.
         """
         super().reset_system()
-        self.M = np.zeros([self.system.nequations, self.system.nequations])
+        self.M.fill(0.0)
 
     def set_initial_conditions(self, initial_solution, initial_velocity):
         """
@@ -542,7 +542,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
             sys.exit("\nDirichlet boundary conditions are not found.")
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
         residual = np.zeros([self.system.nequations, 1])
-        self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
+        self.system.assemble(stiffness, residual, self.solution, nodal_loads=np.zeros([self.system.nequations, 1]))
         eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)],
                                     self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
         # compute the complex valued Eigen frequencies of the system
