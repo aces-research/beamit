@@ -521,8 +521,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # compute the lumped mass
         self.system.assemble_mass(self.M)
         self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
-        # damping coefficient
-        self.__damping = 0.0
+        # damping factor
+        self.__damping_factor = 0.0
 
     def compute_system_frequencies(self):
         """
@@ -559,14 +559,14 @@ class ExplicitNewmarkSolver(DynamicSolver):
         max_sys_freq = sys_freqs[sys_freqs.argmax()]
         self.stable_time_step = time_factor*(2.0/(max_sys_freq.real))
 
-    def activate_damping(self, damping):
+    def activate_damping(self, damping_factor):
         """
         Activate damping in the solver.
 
         Parameters:
-            damping: The damping coefficient.
+            damping_factor: The damping factor.
         """
-        self.__damping = damping
+        self.__damping_factor = damping_factor
 
     def set_boundary_conditions(self, bctypes, bcvalues):
         """
@@ -643,10 +643,6 @@ class ExplicitNewmarkSolver(DynamicSolver):
             (self.system.weak_form.solution_update_type == SolutionUpdateType.ADD_TNS_MUL_ROT)):
             # update the velocity and acceleration of Neumann Dofs
             self.acceleration[Neumann_dofs] = accelerations_neumann
-            # add mass proportional damping
-            self.acceleration[Neumann_dofs] -= self.__damping * \
-                self.velocity[Neumann_dofs]
-            self.acceleration[Neumann_dofs] /= (1.0 + (0.50 * self.__damping * dt))
             self.velocity[Neumann_dofs] += ((dt/2.0)
                                             * self.acceleration[Neumann_dofs])
         else:
@@ -688,6 +684,9 @@ class ExplicitNewmarkSolver(DynamicSolver):
             self.system.assemble_mass(
                 self.M, lump=True, dt=dt, system_velocities=self.velocity, residual_vector=self.f)
             self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
+        # add damping forces to the residual
+        self.f -= (self.__damping_factor *
+                   (self.lumpedMass / dt)) * self.velocity
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
         accelerations_neumann = self.f[Neumann_dofs]/self.lumpedMass[Neumann_dofs]
