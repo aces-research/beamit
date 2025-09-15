@@ -24,7 +24,7 @@ Sc = 375.0E06
 # fracture energy
 Gc = 1.0
 # number of elements
-Nel = 64
+Nel = 100
 # applied load
 IMPULSE = 100.0
 VELOCITY = IMPULSE / (rho * H)
