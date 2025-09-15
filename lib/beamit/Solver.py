@@ -334,10 +334,13 @@ class DynamicSolver(Solver):
         _, Neumann_dofs = self.create_dof_arrays()
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
+        # assemble the mass matrix and residual vector
         self.reset_system()
+        mass = np.zeros([self.system.nequations, self.system.nequations])
+        self.system.assemble_mass(mass, lump=False)
         self.system.assemble_residual(self.f, self.solution, nodal_loads=nodal_loads)
-        self.system.assemble_mass(self.M)
-        self.acceleration = self.linear_system_solver(self.M, self.f)
+        # solve for the initial accelerations
+        self.acceleration = self.linear_system_solver(mass, self.f)
         # update the system attributes
         self.system.update(self.solution)
 
@@ -357,6 +360,8 @@ class ImplicitNewmarkSolver(DynamicSolver):
         # constants for the Newmark time integration scheme
         self.beta = 0.25
         self.gamma = 0.50
+        # compute the consistent mass
+        self.system.assemble_mass(self.M, lump=False)
 
     def __initialize_state(self, dt):
         """
@@ -433,7 +438,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
         c1 = 1.0/(self.beta*dt)
         c2 = (1.0/(2.0*self.beta)) - 1.0
         # reset the system before solving
-        self.reset_system()
+        Solver.reset_system()
         # create the Dirichlet and Neumann global dof arrays
         Dirichlet_dofs, Neumann_dofs = self.create_dof_arrays()
         # If Dirichlet boundary conditions are not available
@@ -456,7 +461,6 @@ class ImplicitNewmarkSolver(DynamicSolver):
         for i in range(0, Nmax):
             # assemble the stiffness matrix and force vector
             self.system.assemble(self.A, self.f, self.solution, nodal_loads = nodal_loads)
-            # YET TO ADD ROTATIONAL INERTIA RELATED UPDATES IN THIS SOLVER!
             # mass matrix contribution to the left hand side matrix
             self.A += c0*self.M
             # inertial force contribution to the right hand side vector
@@ -501,7 +505,7 @@ class ImplicitNewmarkSolver(DynamicSolver):
                 return
             else:
                 # reset the linear system
-                self.reset_system()
+                Solver.reset_system()
         # if the solver did not converge
         sys.exit("\nSolver did not converge after %d iterations." % (Nmax))
 
@@ -519,8 +523,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         # initialize the stable time step size
         self.stable_time_step = None
         # compute the lumped mass
-        self.system.assemble_mass(self.M)
-        self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
+        self.system.assemble_mass(self.M, lump=True)
+        self.lumped_mass = (np.diag(self.M)).reshape([-1, 1])
         # damping factor
         self.__damping_factor = 0.0
 
@@ -539,7 +543,8 @@ class ExplicitNewmarkSolver(DynamicSolver):
         stiffness = np.zeros([self.system.nequations, self.system.nequations])
         residual = np.zeros([self.system.nequations, 1])
         self.system.assemble(stiffness, residual, self.solution, nodal_loads = np.zeros([self.system.nequations, 1]))
-        eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)], self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
+        eig_vals, _ = sp.linalg.eig(stiffness[np.ix_(Neumann_dofs, Neumann_dofs)],
+                                    self.M[np.ix_(Neumann_dofs, Neumann_dofs)])
         # compute the complex valued Eigen frequencies of the system
         eig_freqs = np.sqrt(eig_vals)
         if (not (((eig_freqs.real > 0.0).all()) and ((eig_freqs.imag >= 0.0).all()))):
@@ -683,13 +688,13 @@ class ExplicitNewmarkSolver(DynamicSolver):
             self.M.fill(0.0)
             self.system.assemble_mass(
                 self.M, lump=True, dt=dt, system_velocities=self.velocity, residual_vector=self.f)
-            self.lumpedMass = (np.diag(self.M)).reshape([-1, 1])
-        # add damping forces to the residual
+            self.lumped_mass = (np.diag(self.M)).reshape([-1, 1])
+        # add mass proportional damping forces to the residual
         self.f -= (self.__damping_factor *
-                   (self.lumpedMass / dt)) * self.velocity
+                   (self.lumped_mass / dt)) * self.velocity
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
-        accelerations_neumann = self.f[Neumann_dofs]/self.lumpedMass[Neumann_dofs]
+        accelerations_neumann = self.f[Neumann_dofs]/self.lumped_mass[Neumann_dofs]
         self.__update_state(dt, accelerations_neumann)
         # update the system attributes
         self.system.update(self.solution)
