@@ -2,9 +2,7 @@ from beamit import FunctionSpace
 from beamit import Material
 from beamit import System
 from beamit import Solver
-from beamit import PostProcess
 import numpy as np
-import os
 import copy
 
 def run_analysis(load_case):
@@ -121,17 +119,6 @@ def run_analysis(load_case):
                 elif ((abs(x_coord - L/2.0) <= SPATIAL_TOLERANCE) and (y_coord <= SPATIAL_TOLERANCE) and (z_coord <= SPATIAL_TOLERANCE)):
                     bcvalues[i, 1] = PERTURB_FORCE
 
-
-    # create a VTK directory or clear it
-    if not os.path.isdir("VTK"):
-        os.mkdir("VTK")
-    else:
-        for item in os.listdir("VTK"):
-            os.remove(os.path.join("VTK", item))
-    
-    # write the initial displacements
-    PostProcess.write_output_vtk("./VTK/output-0", system)
-
     # incremental computation of the load path
     if (load_case == 3):
         for i in range(0, load_steps):
@@ -142,16 +129,12 @@ def run_analysis(load_case):
             solver.set_boundary_conditions(bctypes, bcvalues)
             # solve the nonlinear static problem and update the system 
             solver.solve(Nmax = 20, tol = 1.0E-03)
-            if ((i+1) % save_step == 0):
-                output_file = "./VTK/output-" + str(i+1)
-                PostProcess.write_output_vtk(output_file, system)
     else:
         # apply the boundary conditions
         get_BCs(bctypes, bcvalues, load_case)
         solver.set_boundary_conditions(bctypes, bcvalues)
         # solve the nonlinear static problem and update the system 
         solver.solve(Nmax = 20, tol = 1.0E-03)
-        PostProcess.write_output_vtk("./VTK/output-1", system)
 
     # asserts for the different load cases
     if (load_case == 0): # SIMPLY SUPPORTED BEAM WITH POINT LOAD
