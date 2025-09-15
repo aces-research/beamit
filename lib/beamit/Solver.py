@@ -114,17 +114,7 @@ class Solver(ABC):
         Dirichlet_dofs = global_dofs[(bctypes_vec == 1).flatten()]
         return Dirichlet_dofs, Neumann_dofs
 
-    def apply_static_condensation(self, Neumann_dofs):
-        """
-        Apply the Dirichlet boundary conditions by static condensation.
-
-        Parameters:
-            Neumann_dofs: The global dof indices for Neumann boundary conditions.
-        """
-        self.A = self.A[np.ix_(Neumann_dofs, Neumann_dofs)]
-        self.f = self.f[Neumann_dofs]
-
-    def linear_system_solver(self, A, f, solver_type=None, precon_type=None, tol=1.0E-06, 
+    def linear_system_solver(self, A, f, solver_type=None, precon_type=None, tol=1.0E-06,
                              maxiter=None):
         """
         Solve the linear system Ax = f using different methods.
@@ -237,14 +227,16 @@ class NewtonRaphsonSolver(Solver):
         self.system.assemble_residual(initial_residual, self.solution, nodal_loads)
         self.initial_residual_norm = np.linalg.norm(initial_residual[Neumann_dofs], ord=2)
         # handle the case when initial residual norm is a very small number
-        self.initial_residual_norm = 1.0 if self.initial_residual_norm < 1.0E-20 else self.initial_residual_norm
+        self.initial_residual_norm = 1.0 if (
+            self.initial_residual_norm < 1.0E-20) else self.initial_residual_norm
         # Newton-Raphson iterations
         for i in range(0, Nmax):
             # assemble the linear system
             self.system.assemble(self.A, self.f, self.solution, nodal_loads=nodal_loads)
             # forces to be applied after static condensation of Dirichlet dofs
             if (i == 0): # in the first iteration
-                static_condensation_forces = np.matmul(self.A[np.ix_(Neumann_dofs, Dirichlet_dofs)], Dirichlet_solution)
+                static_condensation_forces = np.matmul(
+                    self.A[np.ix_(Neumann_dofs, Dirichlet_dofs)], Dirichlet_solution)
                 # add the Dirichlet solution to the overall solution vector
                 solution_increment = np.zeros([self.system.nequations, 1])
                 solution_increment[Dirichlet_dofs] = Dirichlet_solution
@@ -252,8 +244,9 @@ class NewtonRaphsonSolver(Solver):
             else: # after the first iteration
                 static_condensation_forces = np.zeros([Neumann_dofs.shape[0], 1])
             # apply the Dirichlet BCs
-            self.apply_static_condensation(Neumann_dofs)
-            log_det_A = np.linalg.slogdet(self.A)[1]
+            A_condensed = self.A[np.ix_(Neumann_dofs, Neumann_dofs)]
+            f_condensed = self.f[Neumann_dofs]
+            log_det_A = np.linalg.slogdet(A_condensed)[1]
             # checks in the first iteration
             if (i == 0):
                 # not enough fixity in the system
@@ -269,7 +262,7 @@ class NewtonRaphsonSolver(Solver):
             # solve the linear system
             solution_increment = np.zeros([self.system.nequations, 1])
             solution_increment[Neumann_dofs] = self.linear_system_solver(
-                self.A, (self.f)-static_condensation_forces, solver_type=LSsolver, 
+                A_condensed, f_condensed-static_condensation_forces, solver_type=LSsolver,
                 precon_type=LSprecon, tol=LStol, maxiter=LSmaxiter)
             # update the overall solution vector
             self.__update_solution(solution_increment)
@@ -335,12 +328,12 @@ class DynamicSolver(Solver):
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
         # assemble the mass and residual
-        self.reset_system()
         mass = np.zeros([self.system.nequations, self.system.nequations])
+        residual = np.zeros([self.system.nequations, 1])
         self.system.assemble_mass(mass, lump=True)
-        self.system.assemble_residual(self.f, self.solution, nodal_loads=nodal_loads)
+        self.system.assemble_residual(residual, self.solution, nodal_loads=nodal_loads)
         # solve for the initial accelerations
-        self.acceleration = self.f / np.diag(mass).reshape([-1, 1])
+        self.acceleration = residual / np.diag(mass).reshape([-1, 1])
         # update the system attributes
         self.system.update(self.solution)
 
@@ -529,7 +522,7 @@ class ExplicitNewmarkSolver(DynamicSolver):
                    (self.lumped_mass / dt)) * self.velocity
         # the CORRECTOR
         # solve the semi-discrete SOE for accelerations of the Neumann Dofs
-        accelerations_neumann = self.f[Neumann_dofs]/self.lumped_mass[Neumann_dofs]
+        accelerations_neumann = self.f[Neumann_dofs] / self.lumped_mass[Neumann_dofs]
         self.__update_state(dt, accelerations_neumann)
         # update the system attributes
         self.system.update(self.solution)
