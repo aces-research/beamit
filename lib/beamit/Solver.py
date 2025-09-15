@@ -334,13 +334,13 @@ class DynamicSolver(Solver):
         _, Neumann_dofs = self.create_dof_arrays()
         nodal_loads = np.zeros([self.system.nequations, 1])
         nodal_loads[Neumann_dofs] += np.reshape(self.bcvalues, [self.system.nequations, 1])[Neumann_dofs]
-        # assemble the mass matrix and residual vector
+        # assemble the mass and residual
         self.reset_system()
         mass = np.zeros([self.system.nequations, self.system.nequations])
-        self.system.assemble_mass(mass, lump=False)
+        self.system.assemble_mass(mass, lump=True)
         self.system.assemble_residual(self.f, self.solution, nodal_loads=nodal_loads)
         # solve for the initial accelerations
-        self.acceleration = self.linear_system_solver(mass, self.f)
+        self.acceleration = self.f / np.diag(mass).reshape([-1, 1])
         # update the system attributes
         self.system.update(self.solution)
 
