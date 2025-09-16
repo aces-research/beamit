@@ -86,13 +86,11 @@ This software has been developed by:
 
 ## License
 
+This code is licensed under an MIT License - you are free to use, modify, and distribute it under the terms of that license. See [LICENSE](LICENSE) for details.
+
 Copyright notice:
 
-This code is licensed under an MIT License - you are free to use, modify, 
-and distribute it under the terms of that license.
-See [LICENSE](LICENSE) for details.
-
-Technische Universiteit Delft hereby disclaims all copyright interest in the program “” written by the Author(s).
+Technische Universiteit Delft hereby disclaims all copyright interest in the program “Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach” written by the Author(s).
 
 Henri Werij, Dean of Faculty of Aerospace Engineering, Technische Universiteit Delft.
 
@@ -108,15 +106,13 @@ Henri Werij, Dean of Faculty of Aerospace Engineering, Technische Universiteit D
 
 - Kota, S. K., Kumar, S., & Giovanardi, B. (2025). [A discontinuous Galerkin/cohesive zone model approach for the computational modeling of fracture in geometrically exact slender beams](https://link.springer.com/article/10.1007/s00466-024-02521-0). Computational Mechanics, 75(2), 595-612.
 
-- **The above paper will be replaced with my PhD thesis.**
+- *The above paper will be replaced with my PhD thesis.*
 
 ## Cite this repository
 
-**How to cite this repository:** S. K. Kota, B. Giovanardi, 2025, 
+**How to cite this repository:** S. K. Kota, B. Giovanardi., 2025. Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach. 4TU.ResearchData. Software. 
 
-Data and Code for Unmanned Aerial Vehicles airspeed estimation using propeller feedback. 4TU.ResearchData. Software. 
-
-https://doi.org/10.4121/8bcecbac-5478-4595-b629-4378feac6dcb
+*Place the 4TU research data link here.*
 
 ## Would you like to contribute?
 
