@@ -731,12 +731,15 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
         """
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
+        internal_force_dofs = np.arange(
+            0, self.function_space.E*self.function_space.npel*dofs, 1, dtype=np.int64)
         for i in range(0, self.function_space.E):
             global_element_dofs = self.function_space.global_connectivity[i:i+1].flatten()
             # NOTE: Here we assume that there are only two nodes per element!!!
-            global_element_dofs_left_node = global_element_dofs[0:dofs]
-            global_element_dofs_right_node = global_element_dofs[dofs:dofspel]
             element_unknowns = system_unknowns[global_element_dofs]
+            internal_force_element_dofs = internal_force_dofs[i*dofspel:(i+1)*dofspel]
+            internal_force_element_dofs_left_node = internal_force_element_dofs[0:dofs]
+            internal_force_element_dofs_right_node = internal_force_element_dofs[dofs:dofspel]
             nodal_orientations = element_unknowns[self.function_space.local_rotational_dofs].reshape(
                 -1, self.function_space.dim)
             nodal_curvatures = np.stack(
@@ -745,14 +748,14 @@ class ShearFlexibleGeometricallyExactWeakFormCG(WeakForm):
             internal_forces, internal_moments = self._compute_internal_forces_and_moments(
                 i, element_unknowns, nodal_orientations, nodal_curvatures, location="Nodes")
             # assemble the internal forces at the left node
-            f[global_element_dofs_left_node[0:int(
+            f[internal_force_element_dofs_left_node[0:int(
                 dofs/2)]] += internal_forces[0, ...]
-            f[global_element_dofs_left_node[int(
+            f[internal_force_element_dofs_left_node[int(
                 dofs/2):dofs]] += internal_moments[0, ...]
             # assemble the internal forces at the right node
-            f[global_element_dofs_right_node[0:int(
+            f[internal_force_element_dofs_right_node[0:int(
                 dofs/2)]] += internal_forces[1, ...]
-            f[global_element_dofs_right_node[int(
+            f[internal_force_element_dofs_right_node[int(
                 dofs/2):dofs]] += internal_moments[1, ...]
 
     def __compute_element_rotational_mass(self, e, dt, element_angular_velocities):
