@@ -1,3 +1,8 @@
+# !/usr/bin/env python3
+#
+# Copyright (c) 2025, the beamit authors, all rights reserved.
+#
+
 from abc import ABC, abstractmethod
 import numpy as np
 import scipy as sp

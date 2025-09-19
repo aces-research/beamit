@@ -1,3 +1,8 @@
+# !/usr/bin/env python3
+#
+# Copyright (c) 2025, the beamit authors, all rights reserved.
+#
+
 import numpy as np
 from beamit.WeakForm.WeakForm import WeakForm
 from beamit import Material
