@@ -1,7 +1,0 @@
-scipy==1.15.3
-numpy==2.2.6
-numpy-quaternion==2024.0.8
-pyevtk==1.6.0
-pytest==8.3.5
-pyvista==0.45.0
-matplotlib==3.10.0
