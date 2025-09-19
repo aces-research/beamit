@@ -1,6 +1,15 @@
-# Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach
+# Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach <br> [![Run Tests](https://github.com/saikubairkota/beamit/actions/workflows/ci.yml/badge.svg)](https://github.com/saikubairkota/beamit/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- *Write description of the code*
+This repository provides the code for computational modeling of large deformations and fracture in 3D beams. It uses 
+the geometrically exact beam formulation (Simo et al., 1986) and its torsion-free Kirchhoff-Love variant (Meier, 2016) 
+for beam large deformations, along with a discontinuous Galerkin/Cohesive Zone Model (**DG/CZM**) approach for fracture.
+
+**Assumptions / Notes**:
+
+- The code works for *single beams only*. If your structure is a spaghetti of beams, sorry, not supported yet.
+- Beams are assumed to be *initially straight and parallel to the x-axis*. Curvy or rebellious beams are not allowed.
+- Beam elements are *connected end-to-end (like a simple chain), with exactly two nodes per element*. So complex beam networks cannot be modeled.
+- If your beam passes all the above "tests", you can go ahead and use the code!
 
 ## Requirements
 
@@ -25,12 +34,12 @@ source venv/bin/activate
 # Windows (PowerShell):
 venv\Scripts\Activate.ps1
 
-# 3. Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+# 3. Install dependencies and library (in editable mode)
+python -m pip install --upgrade pip
+pip install -e .
 
 # 4. Verify installation (optional):
-pytest -v tests
+python -m pytest -v tests
 ```
 
 ## Structure
