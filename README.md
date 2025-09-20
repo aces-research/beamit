@@ -139,9 +139,7 @@ Henri Werij, Dean of Faculty of Aerospace Engineering, Technische Universiteit D
 
 ## Cite this repository
 
-**How to cite this repository:** S. K. Kota, B. Giovanardi., 2025. Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach. 4TU.ResearchData. Software. 
-
-*Place the 4TU research data link here.*
+**How to cite this repository:** S. K. Kota, B. Giovanardi., 2025. Computational modeling of fracture in geometrically exact beams based on the DG/CZM approach. 4TU.ResearchData. Software. https://doi.org/10.4121/11b0b61a-0e81-4187-a0f6-5b64c79ccfba
 
 ## Would you like to contribute?
 
