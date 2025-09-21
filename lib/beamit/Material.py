@@ -165,11 +165,16 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
         Returns:
             True if the damage initiation criterion is satisfied, False otherwise.
         """
-        effective_force_interface = self.compute_effective_force(
+        effective_force_left_interface = self.compute_effective_force(
             psi_left_interface, psi_right_interface, forces_left_interface,
-            forces_right_interface, moments_left_interface, moments_right_interface)
-        # if the effective force at the interface satisfies the damage initiation criterion
-        if (effective_force_interface/self.fc >= 1.0):
+            forces_left_interface, moments_left_interface, moments_left_interface)
+        effective_force_right_interface = self.compute_effective_force(
+            psi_left_interface, psi_right_interface, forces_right_interface,
+            forces_right_interface, moments_right_interface, moments_right_interface)
+        # if the effective force at the interface (on both sides) satisfies the damage 
+        # initiation criterion
+        if ((effective_force_left_interface / self.fc >= 1.0) and
+            (effective_force_right_interface / self.fc >= 1.0)):
             return True
         else:
             return False
