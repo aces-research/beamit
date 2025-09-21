@@ -20,7 +20,7 @@ a = 1.0
 # moment of inertia
 I = (a**4) / 12.0
 # number of elements
-Nel = 10
+Nel = 8
 # applied loads and tolerances
 INITIAL_TIP_MOMENT = (-1.0 * E * I * np.pi) / (4.0 * L)
 TIP_LOAD = 2000.0
@@ -117,7 +117,7 @@ def run_arc_segment_simulation(discretization_type):
                 bcvalues[n, 2] = load_level * TIP_LOAD
         solver.modify_boundary_condition_values(bcvalues)
         # solve the problem and update the system
-        solver.solve(Nmax=100, tol=1.0E-07)
+        solver.solve(Nmax=100, tol=1.0E-06)
         if ((i+1) % vtk_dump == 0):
             output_file = f"{output_dir}/output-" + str(i+2)
             PostProcess.write_output_vtk(output_file, system)
