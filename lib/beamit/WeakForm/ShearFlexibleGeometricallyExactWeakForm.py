@@ -926,11 +926,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             right_element_dof_values = system_dof_values[right_element_dofs]
             dof_jumps_boundaries[dofs:] = right_element_dof_values[0:dofs] - \
                 element_dof_values[dofs:]
+            dof_jumps_boundaries[dofs:] *= (1.0 - self.internal_variables[e:e+1, 1:2])
         elif (e == self.function_space.E-1):  # for right most element
             left_element_dofs = self.function_space.global_connectivity[e-1:e].flatten()
             left_element_dof_values = system_dof_values[left_element_dofs]
             dof_jumps_boundaries[0:dofs] = element_dof_values[0:dofs] - \
                 left_element_dof_values[dofs:]
+            dof_jumps_boundaries[0:dofs] *= (1.0 - self.internal_variables[e-1:e, 1:2])
         else:  # for intermediate elements
             left_element_dofs = self.function_space.global_connectivity[e-1:e].flatten()
             left_element_dof_values = system_dof_values[left_element_dofs]
@@ -940,6 +942,8 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 left_element_dof_values[dofs:]
             dof_jumps_boundaries[dofs:] = right_element_dof_values[0:dofs] - \
                 element_dof_values[dofs:]
+            dof_jumps_boundaries[0:dofs] *= (1.0 - self.internal_variables[e-1:e, 1:2])
+            dof_jumps_boundaries[dofs:] *= (1.0 - self.internal_variables[e:e+1, 1:2])
         return dof_jumps_boundaries
 
     def _update_element_internal_variables(self, e, system_unknowns_increment):
@@ -1073,13 +1077,7 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         element_lifting_moments = np.sum(
             lifting_moments_integrand*self.function_space.JxW, axis=0, keepdims=False)
         # assemble the internal forces
-        # get the max effective separation from the material
-        delta_c = np.inf
-        if (isinstance(self.material, Material.ShearFlexibleCohesiveInterfaceMaterial)):
-            delta_c = self.material.delta_c
         if (e == 0):  # for the left most element
-            element_bulk_internal_forces[dofs:dofspel] *= 0.0 if (
-                self.internal_variables[e:e+1, 2:3] == delta_c) else 1.0
             element_internal_forces[0:dofspel] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[dofs:dofs+int(dofs/2)] -= \
@@ -1096,8 +1094,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (1.0 - self.internal_variables[e:e+1, 1:2]) * \
                     element_lifting_moments[int(dofs/2):dofs]
         elif (e == self.function_space.E-1):  # for the right most element
-            element_bulk_internal_forces[0:dofs] *= 0.0 if (
-                self.internal_variables[e-1:e, 2:3] == delta_c) else 1.0
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
@@ -1114,9 +1110,6 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (1.0 - self.internal_variables[e-1:e, 1:2]) * \
                     element_lifting_moments[0:int(dofs/2)]
         else:  # for the intermediate elements
-            element_bulk_internal_forces[0:dofspel] *= 0.0 if (
-                self.internal_variables[e-1:e, 2:3] == delta_c and 
-                self.internal_variables[e:e+1, 2:3] == delta_c) else 1.0
             element_internal_forces[dofs:(dofs+dofspel)] += element_bulk_internal_forces
             # add lifting forces
             element_internal_forces[0:int(dofs/2)] -= \
