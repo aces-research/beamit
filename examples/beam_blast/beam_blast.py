@@ -33,7 +33,7 @@ SPATIAL_TOLERANCE = 1.0E-10
 
 # the time steps and output
 dt = 1.0E-08
-final_time = 1.0E-03
+final_time = 1.50E-03
 vtk_dump = 100
 
 if __name__ == "__main__":
