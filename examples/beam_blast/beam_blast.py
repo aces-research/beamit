@@ -26,7 +26,7 @@ Gc = 1.0
 # number of elements
 Nel = 200
 # applied load
-IMPULSE = 100.0
+IMPULSE = 400.0
 VELOCITY = IMPULSE / (rho * H)
 # spatial tolerance
 SPATIAL_TOLERANCE = 1.0E-10
