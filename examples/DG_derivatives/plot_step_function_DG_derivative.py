@@ -72,12 +72,14 @@ if __name__ == '__main__':
     # expect lists of polynomial orders and number of plot points
     polynomial_orders = eval(sys.argv[1])
     fig = plt.figure(figsize=(8.32, 6.24))
-    plt.rc('font', **{'size': 12})
+    plt.rc("font", size=20)
+    plt.rc("text", usetex=True)
+    plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
     for i in range(len(polynomial_orders)):
         plot_positions, DG_gradients = evaluate_step_function_DG_gradients(Le, polynomial_orders[i], number_plot_points=100)
-        plt.plot(plot_positions, DG_gradients, label="k = "+str(polynomial_orders[i]))
-    plt.xlabel("x")
-    plt.ylabel("$D^{DG}u$")
+        plt.plot(plot_positions, DG_gradients, label=r"$k = "+str(polynomial_orders[i])+r"$", linewidth=2)
+    plt.xlabel(r"$x$")
+    plt.ylabel(r"$\partial^{DG}_xu$")
     plt.legend()
     plt.show()
     fig.savefig("StepFunctionDGDerivatives.png", dpi=300)
