@@ -2,7 +2,7 @@
 
 This repository provides the code for computational modeling of large deformations and fracture in 3D beams. It uses 
 the geometrically exact beam formulation (Simo et al., 1986) and its torsion-free Kirchhoff-Love variant (Meier, 2016) 
-for beam large deformations, along with a discontinuous Galerkin/Cohesive Zone Model (DG/CZM) approach for fracture.
+for beam large deformations, along with a Discontinuous Galerkin/Cohesive Zone Model (DG/CZM) approach for fracture.
 
 **Assumptions / Notes**:
 
@@ -33,6 +33,8 @@ python -m venv venv
 source venv/bin/activate
 # Windows (PowerShell):
 venv\Scripts\Activate.ps1
+# Windows (Git Bash):
+source venv/Scripts/activate
 
 # 3. Install dependencies and library (in editable mode)
 python -m pip install --upgrade pip
@@ -46,43 +48,79 @@ python -m pytest -v tests
 
 ```
 .
-├── examples
-│   ├── arc_segment_out_of_plane_load
-│   ├── beam_blast
-│   ├── beam_buckling
-│   ├── DG_derivatives
-│   ├── double_clamped_beam_fracture
-│   ├── euler_bernoulli_dynamic_bending
-│   ├── euler_bernoulli_dynamic_tension
-│   ├── pure_bending_3d
-│   ├── released_spaghetti_fracture
-│   └── spall_problem
-├── lib
-│   └── beamit
-│       ├── FunctionSpace.py
-│       ├── Material.py
-│       ├── PostProcess.py
-│       ├── Solver.py
-│       ├── System.py
-│       └── WeakForm
-│           ├── EulerBernoulliWeakForm.py
-│           ├── ShearFlexibleGeometricallyExactWeakForm.py
-│           ├── TFKLGeometricallyExactWeakForm.py
-│           ├── Utils.py
-│           └── WeakForm.py
 ├── LICENSE
 ├── README.md
-├── requirements.txt
+├── examples
+│   ├── DG_derivatives
+│   │   └── plot_step_function_DG_derivative.py
+│   ├── arc_segment_out_of_plane_load
+│   │   ├── arc_segment_out_of_plane_load.py
+│   │   ├── postprocess.py
+│   │   └── simo_et_al_1986
+│   │       ├── u1.txt
+│   │       ├── u2.txt
+│   │       └── u3.txt
+│   ├── beam_blast
+│   │   ├── beam_blast.py
+│   │   ├── plot_displacement_history.py
+│   │   └── shell_reference_data
+│   │       └── displacement_history_shell_400Pas.txt
+│   ├── beam_buckling
+│   │   └── beam_buckling.py
+│   ├── double_clamped_beam_fracture
+│   │   ├── double_clamped_beam_fracture.py
+│   │   └── post_process.py
+│   ├── euler_bernoulli_dynamic_bending
+│   │   └── euler_bernoulli_dynamic_bending.py
+│   ├── euler_bernoulli_dynamic_tension
+│   │   └── euler_bernoulli_dynamic_tension.py
+│   ├── helical_coil_fracture
+│   │   └── helical_coil_fracture.py
+│   ├── pure_bending_3d
+│   │   ├── postprocess.py
+│   │   └── pure_bending_3d.py
+│   ├── released_spaghetti_fracture
+│   │   └── released_spaghetti_fracture.py
+│   └── spall_problem
+│       ├── post_process.py
+│       └── spall_problem.py
+├── lib
+│   └── beamit
+│       ├── FunctionSpace.py
+│       ├── Material.py
+│       ├── PostProcess.py
+│       ├── Solver.py
+│       ├── System.py
+│       ├── WeakForm
+│       │   ├── EulerBernoulliWeakForm.py
+│       │   ├── ShearFlexibleGeometricallyExactWeakForm.py
+│       │   ├── TFKLGeometricallyExactWeakForm.py
+│       │   ├── Utils.py
+│       │   ├── WeakForm.py
+│       │   └── __init__.py
+│       └── __init__.py
+├── pyproject.toml
+├── setup.cfg
+├── setup.py
 └── tests
-    ├── euler-bernoulli
     ├── SFGE-beam-CG
+    │   └── sfge_single_element_tests.py
     ├── TFKL-beam-CG
-    └── TFKL-beam-DG
+    │   ├── main.py
+    │   └── straight_beam.py
+    ├── TFKL-beam-DG
+    │   ├── beamDG_circle.py
+    │   └── beamDG_point_load.py
+    ├── euler-bernoulli
+    │   ├── dynamic_tests.py
+    │   ├── eb_single_element_tests.py
+    │   └── static_tests.py
+    └── pytest.ini
 ```
 
 - The `examples/` directory contains various examples demonstrating the capabilities of the library.
 - The `lib/beamit/` directory contains the main library code, organized into modules for different functionalities.
-  - `FunctionSpace.py`: Defines the mathematical utilities such as shape functions and numerical integration for CG and DG discretizations of beams.
+  - `FunctionSpace.py`: Defines the mathematical utilities such as shape functions and numerical integration for Continuous Galerkin (CG) and Discontinuous Galerkin (DG) discretizations of beams.
   - `Material.py`: Contains material models for beams with related constitutive computations.
   - `PostProcess.py`: Provides functions for post-processing and visualizing simulation results.
   - `Solver.py`: Implements the solvers for static and dynamic problems, including Newton-Raphson solver and explicit Newmark time integration scheme.
@@ -106,7 +144,22 @@ python beam_buckling.py
 
 - The simulation will take some time to complete, depending on the complexity of the example and your system's performance.
 
-- The results of the simulation will be saved in a `VTK` folder within the example directory in `*.vtu` format, which can be visualized using a software like [ParaView](https://www.paraview.org/). If you are using ParaView, we recommend you to increase the line width of the beam and enable "Render Lines as Tubes" for better visibility.
+- The results of the simulation will be saved in a `VTK` folder within the example directory in `*.vtu` format, which can be visualized using a software like [ParaView](https://www.paraview.org/) (version **5.10.0 or later**). If you are using ParaView, we recommend you to increase the line width of the beam and enable *Render Lines as Tubes* for better visibility.
+
+- **DG derivative example:**
+
+  In the `examples/DG_derivatives` directory, the script `plot_step_function_DG_derivative.py` demonstrates the DG derivative of a step function. You can run it as follows:
+
+  ```bash
+  cd examples/DG_derivatives
+  python plot_step_function_DG_derivative.py "[1, 2, 4]"
+  ```
+
+  where the input is a list of integers specifying the polynomial orders used for approximating the DG derivative operator.
+
+- **Pure bending 3D example:**
+
+  Running `examples/pure_bending_3d/pure_bending_3d.py` generates `VTK-CG` and `VTK-DG` directories with outputs for `CG` and `DG` discretizations, respectively. Each directory contains subfolders named `8els`, `16els`, `32els`, `64els`, and `128els`, corresponding to simulations with different numbers of elements. These subfolders contain the `*.vtu` files for visualization and post-processing.
 
 ## Authors
 
@@ -135,7 +188,7 @@ Henri Werij, Dean of Faculty of Aerospace Engineering, Technische Universiteit D
 
 - Kota, S. K., Kumar, S., & Giovanardi, B. (2025). [A discontinuous Galerkin/cohesive zone model approach for the computational modeling of fracture in geometrically exact slender beams](https://link.springer.com/article/10.1007/s00466-024-02521-0). Computational Mechanics, 75(2), 595-612.
 
-- *The above paper will be replaced with my PhD thesis.*
+- Kota S. K. (2025). Computational modeling of fracture in truss architected materials under impact loading. Dissertation (TU Delft), Delft University of Technology. *to be published*
 
 ## Cite this repository
 
