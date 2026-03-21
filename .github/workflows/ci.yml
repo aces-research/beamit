@@ -3,8 +3,14 @@ name: Run Tests
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'lib/beamit/**'
+      - 'tests/**'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'lib/beamit/**'
+      - 'tests/**'
 
 jobs:
   test:

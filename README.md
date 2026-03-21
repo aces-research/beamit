@@ -20,7 +20,7 @@ for beam large deformations, along with a Discontinuous Galerkin/Cohesive Zone M
 
 ## Installation
 
-Run the following commands in your terminal (or PowerShell on Windows):
+Run the following commands in your terminal (or PowerShell/Git Bash on Windows):
 
 ```bash
 # 1. Clone the repository
@@ -148,7 +148,7 @@ python beam_buckling.py
 
 - **DG derivative example:**
 
-  In the `examples/DG_derivatives` directory, the script `plot_step_function_DG_derivative.py` demonstrates the DG derivative of a step function. You can run it as follows:
+  In the `examples/DG_derivatives` directory, the script `plot_step_function_DG_derivative.py` demonstrates the DG derivative approximation of a step function. You can run it as follows:
 
   ```bash
   cd examples/DG_derivatives
