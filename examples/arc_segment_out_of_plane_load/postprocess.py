@@ -45,25 +45,25 @@ reference_load_displacement_z = np.loadtxt("./simo_et_al_1986/u3.txt")
 
 # plot the results
 fig = plt.figure(figsize=(10.98, 9.0))
-plt.rc("font", size=20)
+plt.rc("font", size=28)
 plt.rc("text", usetex=True)
 plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
 plt.scatter(reference_load_displacement_x[:, 0], reference_load_displacement_x[:, 1],
-            label=r"\bf{u}$_{1}$: Simo et al.", color='black', marker='^', s=100)
+            label=r"\bf{u}$_{1}$: Simo et al.", color='black', marker='^', s=200)
 plt.scatter(reference_load_displacement_y[:, 0], reference_load_displacement_y[:, 1],
-            label=r"\bf{u}$_{2}$: Simo et al.", color='blue', marker='x', s=100)
+            label=r"\bf{u}$_{2}$: Simo et al.", color='blue', marker='x', s=200)
 plt.scatter(reference_load_displacement_z[:, 0], reference_load_displacement_z[:, 1],
-            label=r"\bf{u}$_{3}$: Simo et al.", color='green', marker='s', s=100)
+            label=r"\bf{u}$_{3}$: Simo et al.", color='green', marker='s', s=200)
 plt.plot(applied_load, tip_displacement_x,
-         label=r"\bf{u}$_{1}$: Present", color='black', linewidth=3.0)
+         label=r"\bf{u}$_{1}$: Present", color='black', linewidth=5.0)
 plt.plot(applied_load, tip_displacement_y,
-         label=r"\bf{u}$_{2}$: Present", linestyle='-.', color='blue', linewidth=3.0)
+         label=r"\bf{u}$_{2}$: Present", linestyle='-.', color='blue', linewidth=5.0)
 plt.plot(applied_load, tip_displacement_z,
-         label=r"\bf{u}$_{3}$: Present", linestyle='--', color='green', linewidth=3.0)
+         label=r"\bf{u}$_{3}$: Present", linestyle='--', color='green', linewidth=5.0)
 plt.xlabel(r"\bf{Load} $(N)$")
 plt.ylabel(r"\bf{Tip displacement} $(m)$")
 ymax = max(abs(plt.ylim()[0]), abs(plt.ylim()[1]))
 plt.ylim(-ymax, ymax)
 plt.grid()
-plt.legend(ncol=2, loc='center right')
+plt.legend(ncol=2, loc='center right', fontsize=20)
 fig.savefig("LoadVsDisplacement.png", dpi=300)

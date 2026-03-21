@@ -84,23 +84,23 @@ if __name__ == "__main__":
     
     # compute the position error norms
     element_lengths_CG, error_norms_CG = compute_position_error_norms(
-        "./VTK-CG")
+        "./VTK-actual/VTK-CG")
     element_lengths_DG, error_norms_DG = compute_position_error_norms(
-        "./VTK-DG")
+        "./VTK-actual/VTK-DG")
 
     # plot the results
     fig = plt.figure(figsize=(10.98, 9.0))
-    plt.rc("font", size=21)
+    plt.rc("font", size=28)
     plt.rc("text", usetex=True)
     plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
-    plt.loglog(element_lengths_CG, error_norms_CG, linewidth=3.0, markersize=10,
+    plt.loglog(element_lengths_CG, error_norms_CG, linewidth=6.0, markersize=15,
             color='green', marker='o', label=r"\bf{CG}")
-    plt.loglog(element_lengths_DG, error_norms_DG, linewidth=3.0, markersize=10,
+    plt.loglog(element_lengths_DG, error_norms_DG, linewidth=3.0, markersize=15,
                color='blue', marker='x', label=r"\bf{DG}")
-    plt.loglog(element_lengths_CG, (element_lengths_CG**2.0), color='black', linestyle='-.',
+    plt.loglog(element_lengths_CG, (element_lengths_CG**2.0), color='black', linestyle='--',
             linewidth=3.0, label=r"$2^{nd}\:\:order$")
     plt.xlabel(r"\bf{Mesh size} $(h)$")
     plt.ylabel(r"\bf{Relative error} $(||e||^{\:2}_{\:rel})$")
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.grid(True, which='both', linestyle='-', linewidth=1.0)
     plt.legend()
     fig.savefig("ConvergencePlots.png", dpi=300)

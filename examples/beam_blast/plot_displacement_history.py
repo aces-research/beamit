@@ -43,13 +43,13 @@ reference_shell_data = np.loadtxt("shell_reference_data/displacement_history_she
 
 # plot the displacement history
 fig = plt.figure(figsize=(10.98, 9.0))
-plt.rc("font", size=20)
+plt.rc("font", size=28)
 plt.rc("text", usetex=True)
 plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
 plt.plot(time_array * 1.0E3, displacement_array * 1.0E3, color='blue', linestyle='-', 
-         linewidth=3.0, label=r"\bf{Present}")
-plt.scatter(reference_shell_data[0::100, 0] * 1.0E3, reference_shell_data[0::100, 1] * 1.0E3, 
-            color='red', marker='o', s=25, label=r"\bf{Talamini et al. (\emph{Shell})}")
+         linewidth=5.0, label=r"\bf{Present}")
+plt.scatter(reference_shell_data[0::200, 0] * 1.0E3, reference_shell_data[0::200, 1] * 1.0E3, 
+            color='red', marker='o', s=100, label=r"\bf{Talamini et al. (\emph{Shell})}")
 plt.xlabel(r"\bf{Time (ms)}")
 plt.ylabel(r"\bf{Mid span displacement Z (mm)}")
 plt.grid()
