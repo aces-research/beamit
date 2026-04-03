@@ -902,7 +902,8 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # second column = binary parameter to enable/disable DG and CZM terms in the interface jump forces
         # (0.0 -> DG terms are active, 1.0 -> CZM terms are active)
         # third column = maximum effective separation at an interface in the entire loading history
-        self.internal_variables = np.zeros([self.function_space.E-1, 3])
+        # fourth column = effective force at an interface
+        self.internal_variables = np.zeros([self.function_space.E-1, 4])
 
     def __get_dof_jumps_at_element_boundaries(self, e, system_dof_values):
         """
@@ -1322,6 +1323,11 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             f[global_element_dofs_right[self.function_space.local_rotational_dofs]] -= \
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
                     np.transpose(N_right_interface), penalty_moments)
+            # update the effective force at the interface
+            if (isinstance(self.material, (Material.ShearFlexibleCohesiveInterfaceMaterial))):
+                self.internal_variables[i:i+1, 3:4] = self.material.compute_effective_force(
+                    psi_left_interface, psi_right_interface, forces_left[1, ...],
+                    forces_right[0, ...], moments_left[1, ...], moments_right[0, ...])
             # CZM terms
             cohesive_forces, cohesive_moments = self.__compute_CZM_interface_forces(
                 r_left_interface, r_right_interface, psi_left_interface, psi_right_interface,
