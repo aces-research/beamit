@@ -212,8 +212,14 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             quaternion.from_rotation_vector(psi_right_interface.flatten()))
         orientation_tensor_diff_interface = np.matmul(
             orientation_tensor_right_interface, orientation_tensor_left_interface.T)
-        psi_jump_interface = quaternion.as_rotation_vector(
-            quaternion.from_rotation_matrix(orientation_tensor_diff_interface))
+        quat_jump_interface = quaternion.from_rotation_matrix(orientation_tensor_diff_interface)
+        # NOTE: quaternion.from_rotation_matrix does not guarantee a non-negative scalar part.
+        # Since q and -q represent the SAME rotation (double cover of SO(3)) but give VERY
+        # DIFFERENT (and for -q, geometrically wrong/large-angle) rotation vectors via
+        # as_rotation_vector, we must select the representative with non-negative scalar part.
+        if (quat_jump_interface.w < 0.0):
+            quat_jump_interface = -quat_jump_interface
+        psi_jump_interface = quaternion.as_rotation_vector(quat_jump_interface)
         psi_jump_interface = psi_jump_interface.reshape([3, 1]) # reshaping to (3, 1) from (3,)
         # torsional jump at the interface
         torsional_jump_interface = np.sum(
@@ -307,8 +313,14 @@ class ShearFlexibleCohesiveInterfaceMaterial(ShearFlexibleMaterial):
             quaternion.from_rotation_vector(psi_right_interface.flatten()))
         orientation_tensor_diff_interface = np.matmul(
             orientation_tensor_right_interface, orientation_tensor_left_interface.T)
-        psi_jump_interface = quaternion.as_rotation_vector(
-            quaternion.from_rotation_matrix(orientation_tensor_diff_interface))
+        quat_jump_interface = quaternion.from_rotation_matrix(orientation_tensor_diff_interface)
+        # NOTE: quaternion.from_rotation_matrix does not guarantee a non-negative scalar part.
+        # Since q and -q represent the SAME rotation (double cover of SO(3)) but give VERY
+        # DIFFERENT (and for -q, geometrically wrong/large-angle) rotation vectors via
+        # as_rotation_vector, we must select the representative with non-negative scalar part.
+        if (quat_jump_interface.w < 0.0):
+            quat_jump_interface = -quat_jump_interface
+        psi_jump_interface = quaternion.as_rotation_vector(quat_jump_interface)
         psi_jump_interface = psi_jump_interface.reshape([3, 1]) # reshaping to (3, 1) from (3,)
         # torsional jump at the interface
         torsional_jump_interface = np.sum(

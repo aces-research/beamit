@@ -894,7 +894,26 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
         # DG rotation jump penalty parameter
         self.betaT = betaT
         # container to store dof jumps at the element boundaries
+        # NOTE: For the translational dofs, this stores the *absolute* (total) jump computed
+        # directly from the current nodal positions (system_unknowns), since positions are
+        # additive dofs. For the rotational dofs however, this container stores the jump of the
+        # *incremental* rotation update (system_unknowns_increment), NOT the total rotational
+        # jump, since rotations are tracked incrementally (via multiplicative/quaternion
+        # composition) and only incremental rotations can be safely interpolated (see Section
+        # 4.3.1 of the dissertation). This incremental rotation jump is what is required by the
+        # DG derivative operator used in the curvature update (Table 4.2).
         self.dof_jumps_boundaries = np.zeros(
+            [self.function_space.E, 2*self.function_space.dof])
+        # container to store the *absolute* (total) rotational dof jumps at the element
+        # boundaries, based on the current total nodal rotation vectors. This is distinct from
+        # the incremental rotational jump stored in self.dof_jumps_boundaries, and is required
+        # for the interior-penalty stabilization terms, which (unlike the DG derivative operator)
+        # need a persistent measure of the total rotational mismatch between neighboring elements
+        # rather than the jump of the latest increment. Using the incremental jump for the
+        # stabilization terms is incorrect, since that value does not persist/accumulate across
+        # iterations (and can be transiently zeroed/corrupted by internal perturbation loops used
+        # to compute the numerical stiffness), unlike the total (absolute) jump.
+        self.total_rotational_jumps_boundaries = np.zeros(
             [self.function_space.E, 2*self.function_space.dof])
         # store internal variables (of CZM) at all the interfaces
         # first column = binary parameter to indicate damage status at the interface
@@ -958,16 +977,61 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             e: The index of the element.
             system_unknowns_increment: The increment in the system unknowns.
         """
-        # update the orientation and curvature at quadrature points
-        super()._update_element_internal_variables(
-            e, system_unknowns_increment)
         ############# update the boundary dof jumps #############
         # NOTE: Here we only update the rotational dof jumps. The translational dof jumps are
         # updated through a different method in stiffness and residual assembly methods.
+        # NOTE: This must be done *before* updating the orientation/curvature below, since that
+        # update relies on the DG derivative operator, which in turn uses the (rotational) dof
+        # jumps at the element boundaries. Using a stale jump value (i.e. computing it *after*
+        # the orientation/curvature update) means the curvature update would incorrectly use the
+        # jump from the previous call instead of the one corresponding to the current increment.
         element_dof_increment_jumps_boundaries = self.__get_dof_jumps_at_element_boundaries(
             e, system_unknowns_increment)
         self.dof_jumps_boundaries[e, self.function_space.local_rotational_dofs] = \
             element_dof_increment_jumps_boundaries[self.function_space.local_rotational_dofs, 0]
+        # update the orientation and curvature at quadrature points
+        super()._update_element_internal_variables(
+            e, system_unknowns_increment)
+
+    @staticmethod
+    def __compute_total_rotational_jump(psi_first, psi_second):
+        """
+        Compute the *total* (absolute) rotational jump between two total nodal rotation vectors,
+        following the same convention as "first - second" for an additive quantity.
+
+        NOTE: Unlike translational (position) dofs, which are additive and for which a simple
+        vector subtraction gives a geometrically meaningful jump, rotations are NOT additive: the
+        rotation vectors psi_first and psi_second parametrize elements of SO(3), and a naive vector
+        subtraction psi_first - psi_second is only a good approximation of the "rotational
+        mismatch" between them for SMALL rotations. For general (possibly large) rotations, the
+        rotational jump must instead be computed as the rotation vector of the *relative* rotation
+        tensor Λ_first @ Λ_second^T (see e.g. Material.py's compute_effective_separation, which
+        follows the same convention, and Eq. (4.3) of the dissertation).
+
+        Parameters:
+            psi_first: The first total nodal rotation vector, shape (3,).
+            psi_second: The second total nodal rotation vector, shape (3,).
+        Returns:
+            psi_jump: The rotation vector of the relative rotation Λ_first @ Λ_second^T, shape (3,).
+        """
+        orientation_tensor_first = quaternion.as_rotation_matrix(
+            quaternion.from_rotation_vector(psi_first))
+        orientation_tensor_second = quaternion.as_rotation_matrix(
+            quaternion.from_rotation_vector(psi_second))
+        orientation_tensor_diff = np.matmul(
+            orientation_tensor_first, orientation_tensor_second.T)
+        quat_diff = quaternion.from_rotation_matrix(orientation_tensor_diff)
+        # NOTE: quaternion.from_rotation_matrix does not guarantee returning the quaternion with
+        # positive scalar (real) part. Since q and -q represent the EXACT SAME rotation (the
+        # quaternion double cover of SO(3)), but as_rotation_vector(q) and as_rotation_vector(-q)
+        # give VERY DIFFERENT rotation vectors (one with a small angle, the other with an angle
+        # close to 2*pi, pointing in roughly the opposite direction) whenever the rotation angle is
+        # small, we must explicitly select the quaternion with non-negative scalar part to get the
+        # correct, small-angle-consistent rotation vector representation of the jump.
+        if (quat_diff.w < 0.0):
+            quat_diff = -quat_diff
+        psi_jump = quaternion.as_rotation_vector(quat_diff)
+        return psi_jump
 
     def __update_element_position_jumps(self, e, system_unknowns):
         """
@@ -984,6 +1048,34 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             e, system_unknowns)
         self.dof_jumps_boundaries[e, self.function_space.local_translational_dofs] = \
             element_dof_jumps_boundaries[self.function_space.local_translational_dofs, 0]
+        # also update the *absolute* (total) rotational dof jumps at the element boundaries,
+        # required for the interior penalty stabilization terms (see NOTE in __init__). This MUST
+        # be computed via the proper (multiplicative) rotational jump definition, NOT via naive
+        # vector subtraction (see NOTE in __compute_total_rotational_jump), since the latter is
+        # only valid for small rotations and introduces a persistent (mesh-independent) modeling
+        # error at large rotations, which does not vanish under mesh refinement.
+        dofs = self.function_space.dof
+        rot = self.function_space.local_rotational_dofs
+        dim = self.function_space.dim
+        global_element_dofs = self.function_space.global_connectivity[e:e+1].flatten()
+        element_dof_values = system_unknowns[global_element_dofs]
+        damage_flag = self.internal_variables
+        if (e > 0):
+            left_element_dofs = self.function_space.global_connectivity[e-1:e].flatten()
+            left_element_dof_values = system_unknowns[left_element_dofs]
+            psi_own = element_dof_values[rot[0:dim], 0]
+            psi_left_neighbor = left_element_dof_values[rot[dim:2*dim], 0]
+            psi_jump_left = self.__compute_total_rotational_jump(psi_own, psi_left_neighbor)
+            self.total_rotational_jumps_boundaries[e, rot[0:dim]] = \
+                psi_jump_left * (1.0 - damage_flag[e-1:e, 1:2].flatten())
+        if (e < self.function_space.E-1):
+            right_element_dofs = self.function_space.global_connectivity[e+1:e+2].flatten()
+            right_element_dof_values = system_unknowns[right_element_dofs]
+            psi_right_neighbor = right_element_dof_values[rot[0:dim], 0]
+            psi_own = element_dof_values[rot[dim:2*dim], 0]
+            psi_jump_right = self.__compute_total_rotational_jump(psi_right_neighbor, psi_own)
+            self.total_rotational_jumps_boundaries[e, rot[dim:2*dim]] = \
+                psi_jump_right * (1.0 - damage_flag[e:e+1, 1:2].flatten())
 
     def __update_system_position_jumps(self, system_unknowns):
         """
@@ -1307,9 +1399,12 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 ((self.material.E*self.material.A) / self.function_space.elL) * \
                 (self.dof_jumps_boundaries[i:i+1, self.function_space.local_translational_dofs].T)[
                     self.function_space.dim:]
+            # NOTE: the stabilization term needs the *total* (absolute) rotational jump, not
+            # the incremental rotational jump stored in self.dof_jumps_boundaries (which is only
+            # meant for the DG derivative/curvature update - see NOTE in __init__).
             penalty_moments = self.betaT * \
                 ((self.material.E*self.material.I) / self.function_space.elL) * \
-                (self.dof_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
+                (self.total_rotational_jumps_boundaries[i:i+1, self.function_space.local_rotational_dofs].T)[
                     self.function_space.dim:]
             f[global_element_dofs_left[self.function_space.local_translational_dofs]] += \
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * np.matmul(
@@ -1394,11 +1489,8 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             element_numerical_stiffness: The computed numerical stiffness matrix for the element.
         """
         perturbation_factor = 1.0e-05
-        np.random.seed(1234 + e)  # for reproducibility
-        std_dev_system_unknowns = 0.01 * \
-            np.maximum(np.abs(system_unknowns), 1.0e-03)
-        perturbation_magnitudes = perturbation_factor * np.abs(
-            np.random.normal(loc=system_unknowns, scale=std_dev_system_unknowns))
+        perturbation_magnitudes = perturbation_factor * \
+            np.maximum(np.abs(system_unknowns), 1.0e-02)
         # get the extended element dofs
         dofs = self.function_space.dof
         dofspel = self.function_space.dof*self.function_space.npel
@@ -1421,48 +1513,122 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             extended_element_dofs = np.append(
                 left_element_dofs_right_node, np.append(
                     global_element_dofs, right_element_dofs_left_node))
-        # perturb the element dofs individually to compute the numerical stiffness matrix
-        element_numerical_stiffness = np.zeros(
-            [extended_element_dofs.shape[0], extended_element_dofs.shape[0]])
-        perturbed_system_unknowns = system_unknowns.copy()
-        perturbed_solution_increments = np.zeros_like(system_unknowns)
-        for i in range(0, extended_element_dofs.shape[0]):
-            # reset the perturbed increments
-            perturbed_solution_increments.fill(0.0)
-            # perturb the i-th dof
-            perturbed_solution_increments[extended_element_dofs[i]] = \
-                perturbation_magnitudes[extended_element_dofs[i]]
-            ####### positively perturb the unknowns #######
-            perturbed_system_unknowns += \
-                perturbed_solution_increments
-            # update the internal variables for perturbation
-            self.__update_unknowns_for_perturbation(
-                e, perturbed_system_unknowns, perturbed_solution_increments)
-            # compute the element internal forces for the positive perturbation
-            element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
-                e, perturbed_system_unknowns[global_element_dofs], 
-                self.orientation[e, :, :], self.curvature[e, :, :])
-            ####### negatively perturb the unknowns #######
-            perturbed_system_unknowns -= \
-                2.0 * perturbed_solution_increments
-            # update the internal variables for perturbation
-            self.__update_unknowns_for_perturbation(
-                e, perturbed_system_unknowns, -2.0 * perturbed_solution_increments)
-            # compute the element internal forces for the negative perturbation
-            element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
-                e, perturbed_system_unknowns[global_element_dofs], 
-                self.orientation[e, :, :], self.curvature[e, :, :])
-            # compute the element numerical stiffness matrix
-            element_numerical_stiffness[:, i:i+1] += \
-                (element_internal_forces_positive_perturbation - \
-                 element_internal_forces_negative_perturbation) / \
-                (2.0 * perturbation_magnitudes[extended_element_dofs[i]])
-            ####### reset the unknowns and internal variables #######
-            perturbed_system_unknowns += \
-                perturbed_solution_increments
-            self.__update_unknowns_for_perturbation(
-                e, perturbed_system_unknowns, perturbed_solution_increments)
+
+        def central_difference(step_magnitudes):
+            """
+            Compute the central-difference element numerical stiffness using the given per-dof
+            step magnitudes.
+            """
+            stiffness = np.zeros(
+                [extended_element_dofs.shape[0], extended_element_dofs.shape[0]])
+            perturbed_system_unknowns = system_unknowns.copy()
+            perturbed_solution_increments = np.zeros_like(system_unknowns)
+            for i in range(0, extended_element_dofs.shape[0]):
+                # reset the perturbed increments
+                perturbed_solution_increments.fill(0.0)
+                # perturb the i-th dof
+                perturbed_solution_increments[extended_element_dofs[i]] = \
+                    step_magnitudes[extended_element_dofs[i]]
+                ####### positively perturb the unknowns #######
+                perturbed_system_unknowns += \
+                    perturbed_solution_increments
+                # update the internal variables for perturbation
+                self.__update_unknowns_for_perturbation(
+                    e, perturbed_system_unknowns, perturbed_solution_increments)
+                # compute the element internal forces for the positive perturbation
+                element_internal_forces_positive_perturbation = self.compute_element_internal_forces(
+                    e, perturbed_system_unknowns[global_element_dofs],
+                    self.orientation[e, :, :], self.curvature[e, :, :])
+                ####### negatively perturb the unknowns #######
+                perturbed_system_unknowns -= \
+                    2.0 * perturbed_solution_increments
+                # update the internal variables for perturbation
+                self.__update_unknowns_for_perturbation(
+                    e, perturbed_system_unknowns, -2.0 * perturbed_solution_increments)
+                # compute the element internal forces for the negative perturbation
+                element_internal_forces_negative_perturbation = self.compute_element_internal_forces(
+                    e, perturbed_system_unknowns[global_element_dofs],
+                    self.orientation[e, :, :], self.curvature[e, :, :])
+                # compute the element numerical stiffness matrix
+                stiffness[:, i:i+1] += \
+                    (element_internal_forces_positive_perturbation - \
+                     element_internal_forces_negative_perturbation) / \
+                    (2.0 * step_magnitudes[extended_element_dofs[i]])
+                ####### reset the unknowns and internal variables #######
+                perturbed_system_unknowns += \
+                    perturbed_solution_increments
+                self.__update_unknowns_for_perturbation(
+                    e, perturbed_system_unknowns, perturbed_solution_increments)
+            return stiffness
+
+        # NOTE: this central-difference stiffness has an O(h^2) truncation error, same as any
+        # standard central-difference scheme. This is NOT the cause of the load/time-step-dependent
+        # degradation of the Newton-Raphson convergence rate that this discretization used to
+        # exhibit (that degradation was empirically verified to be completely insensitive to the
+        # perturbation step size, ruling out truncation/roundoff error as the cause - see the fix
+        # for the interior-penalty stabilization term's rotational block in compute_system_stiffness
+        # for the actual root cause and fix, which was a missing rotation-increment sensitivity
+        # factor. Richardson extrapolation was tried here and confirmed empirically to make no
+        # difference whatsoever to the results, consistent with the bias not being a truncation
+        # error in this term).
+        element_numerical_stiffness = central_difference(perturbation_magnitudes)
         return extended_element_dofs, element_numerical_stiffness
+
+    def __compute_rotational_penalty_sensitivity(self, psi_left_own, psi_right_own):
+        """
+        Compute the sensitivity of the total rotational jump (as computed by
+        __compute_total_rotational_jump(psi_right_own, psi_left_own)) with respect to the Newton
+        solution_increment at the left element's own boundary node and the right element's own
+        boundary node.
+
+        NOTE: This sensitivity is computed via finite differences, perturbing the *increment* using
+        the EXACT SAME quaternion composition convention used by the real Newton solution update
+        (see update_rotational_solution: psi_new = Rotvec(quat(increment) * quat(psi_old))), NOT a
+        naive additive perturbation of psi. This correctly captures BOTH (a) the nonlinear
+        dependence of the (properly, multiplicatively defined) rotational jump on the nodal
+        rotation vectors psi, and (b) the nonlinear dependence of psi on the Newton
+        solution_increment (i.e. the same T(psi)^{-1} sensitivity discussed previously), in a
+        single, robust, and automatically-consistent computation - avoiding the need to separately
+        and correctly hand-derive each of these two nonlinear factors analytically.
+
+        Parameters:
+            psi_left_own: The current total rotation vector at the left element's own boundary
+                node, shape (3,).
+            psi_right_own: The current total rotation vector at the right element's own boundary
+                node, shape (3,).
+        Returns:
+            d_jump_d_left: (3, 3) matrix, d(rotational jump)/d(increment at left own node).
+            d_jump_d_right: (3, 3) matrix, d(rotational jump)/d(increment at right own node).
+        """
+        eps = 1.0e-6
+
+        def compose(increment, psi_old):
+            q_old = quaternion.from_rotation_vector(psi_old)
+            q_inc = quaternion.from_rotation_vector(increment)
+            q_new = q_inc * q_old
+            return quaternion.as_rotation_vector(q_new)
+
+        d_jump_d_left = np.zeros([3, 3])
+        d_jump_d_right = np.zeros([3, 3])
+        for k in range(3):
+            d = np.zeros(3)
+            d[k] = eps
+            psi_left_p = compose(d, psi_left_own)
+            jump_p = self.__compute_total_rotational_jump(psi_right_own, psi_left_p)
+            d[k] = -eps
+            psi_left_m = compose(d, psi_left_own)
+            jump_m = self.__compute_total_rotational_jump(psi_right_own, psi_left_m)
+            d_jump_d_left[:, k] = (jump_p - jump_m) / (2.0*eps)
+
+            d = np.zeros(3)
+            d[k] = eps
+            psi_right_p = compose(d, psi_right_own)
+            jump_p = self.__compute_total_rotational_jump(psi_right_p, psi_left_own)
+            d[k] = -eps
+            psi_right_m = compose(d, psi_right_own)
+            jump_m = self.__compute_total_rotational_jump(psi_right_m, psi_left_own)
+            d_jump_d_right[:, k] = (jump_p - jump_m) / (2.0*eps)
+        return d_jump_d_left, d_jump_d_right
 
     def compute_system_stiffness(self, A, system_unknowns, nodal_loads, element_loads):
         """
@@ -1493,16 +1659,13 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
             global_element_dofs_left = self.function_space.global_connectivity[i:i+1].flatten()
             global_element_dofs_right = self.function_space.global_connectivity[i+1:i+2].flatten()
             ############## penalty term tangents ##############
+            # translational (position) penalty terms: exactly linear in the nodal positions, so
+            # the standard N^T @ N form is an exact (not approximate) linearization.
             # left-left terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] += \
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * \
                     (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                     np.matmul(np.transpose(N_left_interface), N_left_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] += \
-                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
-                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
                      np.matmul(np.transpose(N_left_interface), N_left_interface))
             # left-right terms
             A[np.ix_(global_element_dofs_left[self.function_space.local_translational_dofs],
@@ -1510,30 +1673,46 @@ class ShearFlexibleGeometricallyExactWeakFormDG(ShearFlexibleGeometricallyExactW
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * \
                     (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
                      np.matmul(np.transpose(N_left_interface), N_right_interface))
-            A[np.ix_(global_element_dofs_left[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] -= \
-                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
-                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                     np.matmul(np.transpose(N_left_interface), N_right_interface))
             # right-left terms
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_left[self.function_space.local_translational_dofs])] -= \
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * \
                     (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
                      np.matmul(np.transpose(N_right_interface), N_left_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_left[self.function_space.local_rotational_dofs])] -= \
-                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
-                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
-                     np.matmul(np.transpose(N_right_interface), N_left_interface))
-            # right-right terms
+            # rotational penalty terms: the (properly, multiplicatively defined) rotational jump is
+            # a NONLINEAR function of the nodal rotation vectors psi, and psi is itself updated
+            # nonlinearly (via quaternion composition) w.r.t. the Newton solution_increment. Both
+            # nonlinearities are correctly and automatically captured by directly finite-
+            # differencing the rotational jump w.r.t. the (quaternion-composed) increment, rather
+            # than assuming the naive linear/identity-sensitivity form used for the translational
+            # penalty terms above (see __compute_rotational_penalty_sensitivity).
+            dim = self.function_space.dim
+            rot = self.function_space.local_rotational_dofs
+            psi_left_own = system_unknowns[global_element_dofs_left[rot[dim:2*dim]], 0]
+            psi_right_own = system_unknowns[global_element_dofs_right[rot[0:dim]], 0]
+            d_jump_d_left, d_jump_d_right = self.__compute_rotational_penalty_sensitivity(
+                psi_left_own, psi_right_own)
+            betaT_EI_h = self.betaT*((self.material.E*self.material.I)/self.function_space.elL)
+            damage_factor = (1.0 - self.internal_variables[i:i+1, 1:2]).item()
+            # left-left: d(f_stab_left[node2])/d(increment at left's own node2)
+            A[np.ix_(global_element_dofs_left[rot[dim:2*dim]],
+                     global_element_dofs_left[rot[dim:2*dim]])] -= \
+                damage_factor * betaT_EI_h * d_jump_d_left
+            # left-right: d(f_stab_left[node2])/d(increment at right's own node1)
+            A[np.ix_(global_element_dofs_left[rot[dim:2*dim]],
+                     global_element_dofs_right[rot[0:dim]])] -= \
+                damage_factor * betaT_EI_h * d_jump_d_right
+            # right-left: d(f_stab_right[node1])/d(increment at left's own node2)
+            A[np.ix_(global_element_dofs_right[rot[0:dim]],
+                     global_element_dofs_left[rot[dim:2*dim]])] += \
+                damage_factor * betaT_EI_h * d_jump_d_left
+            # right-right: d(f_stab_right[node1])/d(increment at right's own node1)
+            A[np.ix_(global_element_dofs_right[rot[0:dim]],
+                     global_element_dofs_right[rot[0:dim]])] += \
+                damage_factor * betaT_EI_h * d_jump_d_right
+            # right-right terms (translational only; rotational block handled above)
             A[np.ix_(global_element_dofs_right[self.function_space.local_translational_dofs],
                      global_element_dofs_right[self.function_space.local_translational_dofs])] += \
                 (1.0 - self.internal_variables[i:i+1, 1:2]) * \
                     (self.betaP*((self.material.E*self.material.A)/self.function_space.elL) *
-                     np.matmul(np.transpose(N_right_interface), N_right_interface))
-            A[np.ix_(global_element_dofs_right[self.function_space.local_rotational_dofs],
-                     global_element_dofs_right[self.function_space.local_rotational_dofs])] += \
-                (1.0 - self.internal_variables[i:i+1, 1:2]) * \
-                    (self.betaT*((self.material.E*self.material.I)/self.function_space.elL) *
                      np.matmul(np.transpose(N_right_interface), N_right_interface))
